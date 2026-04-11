@@ -17,12 +17,12 @@ const libraryNavBase: LibraryNavItem[] = [
 function libraryNavItemIsCurrent(item: LibraryNavItem, activePath: string): boolean {
   if (item.href === "#") return false;
   if (item.href === "/biblioteca/importar") {
-    return activePath === "/biblioteca/importar";
+    return activePath.startsWith("/biblioteca/importar");
   }
   if (item.href === "/biblioteca") {
     return (
       activePath === "/biblioteca" ||
-      (activePath.startsWith("/biblioteca/") && activePath !== "/biblioteca/importar")
+      (activePath.startsWith("/biblioteca/") && !activePath.startsWith("/biblioteca/importar"))
     );
   }
   if (item.href === "/") {

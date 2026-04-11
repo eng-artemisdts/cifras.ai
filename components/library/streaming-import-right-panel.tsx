@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { ChevronRight, Lightbulb, Link2, Lock } from "lucide-react";
-import { useCallback, useId, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -51,35 +51,24 @@ function PlatformMark({ src, className }: { src: string; className?: string }) {
 
 type RowBase = {
   id: StreamingPlatformId;
+  href: string;
   title: string;
   description: string;
   logoSrc: string;
   locked?: boolean;
 };
 
-function PlatformRow({
-  row,
-  selected,
-  onSelect,
-}: {
-  row: RowBase;
-  selected: StreamingPlatformId | null;
-  onSelect: (id: StreamingPlatformId) => void;
-}) {
-  const active = selected === row.id;
+function PlatformRow({ row }: { row: RowBase }) {
   const locked = row.locked === true;
 
   return (
-    <button
-      type="button"
-      disabled={locked}
-      onClick={() => !locked && onSelect(row.id)}
+    <Link
+      href={row.href}
       className={cn(
         "flex w-full items-center gap-4 rounded-[14px] border px-[18px] py-3.5 text-left transition-colors",
         locked
-          ? "cursor-not-allowed border-cifra-gold/40 opacity-95"
-          : "cursor-pointer border-white/[0.07] hover:border-cifra-teal/35",
-        active && !locked && "border-cifra-teal/50 bg-cifra-teal/5"
+          ? "border-cifra-gold/40 opacity-95 hover:border-cifra-gold/55"
+          : "border-white/[0.07] hover:border-cifra-teal/35 hover:bg-cifra-teal/4"
       )}
     >
       <PlatformMark src={row.logoSrc} />
@@ -95,33 +84,29 @@ function PlatformRow({
       ) : (
         <ChevronRight className="size-5 shrink-0 text-cifra-muted opacity-90" strokeWidth={1.75} aria-hidden />
       )}
-    </button>
+    </Link>
   );
 }
 
 export function StreamingImportRightPanel({ className }: { className?: string }) {
-  const fileId = useId();
-  const [origin, setOrigin] = useState<StreamingPlatformId | null>("youtube");
-
-  const onFileChange = useCallback(() => {
-    // Próximo passo: enviar áudio ao pipeline de IA.
-  }, []);
-
   const rows: RowBase[] = [
     {
       id: "youtube",
+      href: "/biblioteca/importar/youtube",
       title: "YouTube",
       description: "Vídeos, Shorts e playlists — link na etapa seguinte",
       logoSrc: platformLogo.youtube,
     },
     {
       id: "spotify",
+      href: "/biblioteca/importar/spotify",
       title: "Spotify",
       description: "Música, podcast ou playlist pública",
       logoSrc: platformLogo.spotify,
     },
     {
       id: "tiktok",
+      href: "/biblioteca/importar/tiktok",
       title: "TikTok",
       description: "Exclusivo Pro — faça upgrade para importar do TikTok.",
       logoSrc: platformLogo.tiktok,
@@ -129,6 +114,7 @@ export function StreamingImportRightPanel({ className }: { className?: string })
     },
     {
       id: "instagram",
+      href: "/biblioteca/importar/instagram",
       title: "Instagram Reels",
       description: "Exclusivo Pro — faça upgrade para importar Reels do Instagram.",
       logoSrc: platformLogo.instagram,
@@ -159,17 +145,16 @@ export function StreamingImportRightPanel({ className }: { className?: string })
           </div>
           <div className="flex flex-1 flex-col gap-3 px-[22px] pb-3.5 pt-[14px]">
             {rows.map((row) => (
-              <PlatformRow key={row.id} row={row} selected={origin} onSelect={setOrigin} />
+              <PlatformRow key={row.id} row={row} />
             ))}
           </div>
           <div className="flex shrink-0 justify-center border-t border-white/6 px-[22px] py-2">
-            <label
-              htmlFor={fileId}
-              className="cursor-pointer text-[12px] font-medium text-cifra-teal transition-colors hover:text-cifra-teal-hover"
+            <Link
+              href="/biblioteca/importar/arquivo"
+              className="text-[12px] font-medium text-cifra-teal transition-colors hover:text-cifra-teal-hover"
             >
               Pular · enviar arquivo do computador
-              <input id={fileId} type="file" accept="audio/*" className="sr-only" onChange={onFileChange} />
-            </label>
+            </Link>
           </div>
         </div>
 
