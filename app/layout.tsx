@@ -3,6 +3,7 @@ import { DM_Mono, DM_Serif_Display, Sora, Geist } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { buildRootMetadata, GoogleSiteSeo } from "@/components/seo/google-site-seo";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
@@ -24,11 +25,7 @@ const dmMono = DM_Mono({
   weight: ["400", "500"],
 });
 
-export const metadata: Metadata = {
-  title: "cifra.ai · Cifras e acordes com IA",
-  description:
-    "cifra.ai ajuda músicos e equipes a extrair, revisar e exportar cifras a partir de áudio e links — com uma interface moderna e fluxos pensados para o palco e para o produto.",
-};
+export const metadata: Metadata = buildRootMetadata();
 
 export default function RootLayout({
   children,
@@ -41,6 +38,7 @@ export default function RootLayout({
       className={cn("h-full", "antialiased", dmSerif.variable, sora.variable, dmMono.variable, "font-sans", geist.variable)}
     >
       <body className="min-h-full flex flex-col font-sans">
+        <GoogleSiteSeo />
         {process.env.NODE_ENV === "development" && (
           <Script
             src="https://unpkg.com/react-grab@0.1.31/dist/index.global.js"
