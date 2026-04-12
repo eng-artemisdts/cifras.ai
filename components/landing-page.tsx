@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AudioWaveform, Menu, Music2, Sparkles, X } from "lucide-react";
 
 import LightRays from "@/components/LightRays";
+import { SubscribePlanButton } from "@/components/billing/subscribe-plan-button";
 import { ArtemisFooterBrand } from "@/components/layout/artemis-footer-brand";
 
 const navLinks = [
@@ -315,12 +316,12 @@ export function LandingPage() {
                   <li>Relatórios agendados</li>
                   <li>Integrações principais</li>
                 </ul>
-                <Link
-                  href="/cadastro"
-                  className="mt-8 block rounded-lg border border-cifra-teal/50 bg-cifra-teal/10 py-3 text-center text-sm font-semibold text-cifra-teal transition-all duration-200 ease-out hover:border-cifra-teal hover:bg-cifra-teal/20 active:scale-[0.99] motion-reduce:active:scale-100"
+                <SubscribePlanButton
+                  plan="starter"
+                  className="mt-8 w-full rounded-lg border border-cifra-teal/50 bg-cifra-teal/10 py-3 text-center text-sm font-semibold text-cifra-teal transition-all duration-200 ease-out hover:border-cifra-teal hover:bg-cifra-teal/20 active:scale-[0.99] motion-reduce:active:scale-100"
                 >
                   Assinar
-                </Link>
+                </SubscribePlanButton>
               </div>
               <div className="relative flex flex-col rounded-2xl border-2 border-cifra-teal bg-cifra-surface-2 p-8 shadow-[0_0_40px_-10px_rgba(15,210,193,0.35)] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-6 motion-safe:delay-300 motion-safe:duration-700 motion-safe:fill-mode-both motion-safe:ease-out transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_0_48px_-8px_rgba(15,210,193,0.45)] motion-reduce:transition-none motion-reduce:hover:translate-y-0">
                 <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-cifra-teal px-3 py-1 text-xs font-semibold text-cifra-bg shadow-sm shadow-cifra-teal/40">
@@ -338,12 +339,12 @@ export function LandingPage() {
                   <li>SSO (SAML / OIDC)</li>
                   <li>Suporte prioritário</li>
                 </ul>
-                <Link
-                  href="/cadastro"
-                  className="mt-8 block rounded-lg bg-cifra-teal py-3 text-center text-sm font-semibold text-cifra-bg shadow-md shadow-cifra-teal/25 transition-all duration-200 ease-out hover:bg-cifra-teal-hover hover:shadow-lg hover:shadow-cifra-teal/35 active:scale-[0.99] motion-reduce:active:scale-100"
+                <SubscribePlanButton
+                  plan="pro"
+                  className="mt-8 w-full rounded-lg bg-cifra-teal py-3 text-center text-sm font-semibold text-cifra-bg shadow-md shadow-cifra-teal/25 transition-all duration-200 ease-out hover:bg-cifra-teal-hover hover:shadow-lg hover:shadow-cifra-teal/35 active:scale-[0.99] motion-reduce:active:scale-100"
                 >
                   Trial 14 dias
-                </Link>
+                </SubscribePlanButton>
               </div>
             </div>
           </div>

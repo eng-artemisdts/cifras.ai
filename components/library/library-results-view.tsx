@@ -1,4 +1,5 @@
 import { artistSuggestions, catalogTabs, musicCatalogCards } from "@/lib/library/mock-data";
+import type { BillingPlan } from "@/lib/billing/plan-types";
 import type { LibraryNavItem } from "@/lib/library/types";
 import { cn } from "@/lib/utils";
 
@@ -12,16 +13,17 @@ import { ResultsToolbar } from "./results-toolbar";
 export type LibraryResultsViewProps = {
   navItems: LibraryNavItem[];
   user?: LibraryTopNavUser | null;
+  billingPlan?: BillingPlan | null;
   className?: string;
 };
 
 /**
  * Página única de catálogo: abas, barra de resultados, grid de músicas e artistas sugeridos (só UI).
  */
-export function LibraryResultsView({ navItems, user, className }: LibraryResultsViewProps) {
+export function LibraryResultsView({ navItems, user, billingPlan, className }: LibraryResultsViewProps) {
   return (
     <div className={cn("flex min-h-dvh flex-col bg-cifra-bg text-cifra-text", className)}>
-      <LibraryTopNav items={navItems} user={user} />
+      <LibraryTopNav items={navItems} user={user} billingPlan={billingPlan ?? undefined} />
       <main className="flex flex-1 flex-col items-center pt-4">
         <CatalogTabBar tabs={catalogTabs} />
         <ResultsToolbar />

@@ -99,6 +99,9 @@ export function Auth0UserMenu({ user: serverUser, className }: Auth0UserMenuProp
                 <Menu.LinkItem href="/biblioteca" closeOnClick className={linkItemClass}>
                   Biblioteca
                 </Menu.LinkItem>
+                <Menu.LinkItem href="/conta/assinatura" closeOnClick className={linkItemClass}>
+                  Assinatura
+                </Menu.LinkItem>
               </Menu.Group>
               <Menu.Separator className="my-1 h-px bg-white/[0.06]" />
               <Menu.Group>

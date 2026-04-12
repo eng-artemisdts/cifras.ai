@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { LibraryImportAudioUploadView } from "@/components/library/library-import-audio-upload-view";
 import { getAuth0SessionCached } from "@/lib/auth0";
+import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-plan";
 import { libraryNavForPath } from "@/lib/library/mock-data";
 
 export const metadata: Metadata = {
@@ -20,10 +21,13 @@ export default async function BibliotecaImportarArquivoPage() {
       }
     : null;
 
+  const billingPlan = await resolveBillingPlanForSessionUser(session?.user ?? null);
+
   return (
     <LibraryImportAudioUploadView
       navItems={libraryNavForPath("/biblioteca/importar/arquivo")}
       user={user}
+      billingPlan={billingPlan}
     />
   );
 }

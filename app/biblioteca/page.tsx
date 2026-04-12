@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { LibraryHomeView } from "@/components/library/library-home-view";
 import { getAuth0SessionCached } from "@/lib/auth0";
+import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-plan";
 import { libraryNavForPath } from "@/lib/library/mock-data";
 
 export const metadata: Metadata = {
@@ -19,5 +20,13 @@ export default async function BibliotecaPage() {
       }
     : null;
 
-  return <LibraryHomeView navItems={libraryNavForPath("/biblioteca")} user={user} />;
+  const billingPlan = await resolveBillingPlanForSessionUser(session?.user ?? null);
+
+  return (
+    <LibraryHomeView
+      navItems={libraryNavForPath("/biblioteca")}
+      user={user}
+      billingPlan={billingPlan}
+    />
+  );
 }

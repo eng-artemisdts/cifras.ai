@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { LibraryImportProviderView } from "@/components/library/library-import-provider-view";
 import { getAuth0SessionCached } from "@/lib/auth0";
+import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-plan";
+import { hasProStreamingImports } from "@/lib/entitlements";
 import {
   isStreamingImportProviderSlug,
   streamingLinkImportConfig,
@@ -41,12 +43,20 @@ export default async function BibliotecaImportarProviderPage({ params }: PagePro
     : null;
 
   const config = streamingLinkImportConfig[provider];
+  const billingPlan = await resolveBillingPlanForSessionUser(session?.user ?? null);
+  const proEntitled = hasProStreamingImports(session?.user ?? null, billingPlan);
+
+  if (config.panel.requiresPro && !proEntitled) {
+    redirect("/biblioteca/importar");
+  }
 
   return (
     <LibraryImportProviderView
       config={config}
       navItems={libraryNavForPath(`/biblioteca/importar/${provider}`)}
       user={user}
+      billingPlan={billingPlan}
+      proEntitled={proEntitled}
     />
   );
 }

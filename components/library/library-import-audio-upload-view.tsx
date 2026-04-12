@@ -1,5 +1,6 @@
 import { AuthMarketingSidebar } from "@/components/layout/auth-marketing-sidebar";
 import type { AuthSidebarFeature } from "@/lib/auth-layout/types";
+import type { BillingPlan } from "@/lib/billing/plan-types";
 import type { LibraryNavItem } from "@/lib/library/types";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +13,7 @@ import { LibraryTopNav, type LibraryTopNavUser } from "./library-top-nav";
 export type LibraryImportAudioUploadViewProps = {
   navItems: LibraryNavItem[];
   user?: LibraryTopNavUser | null;
+  billingPlan?: BillingPlan | null;
   className?: string;
   /** Variante do modal «cifra já existe»; ver frame `vK9pq` no Pencil. */
   existingChordDialogLayout?: ExistingChordDialogLayout;
@@ -34,6 +36,7 @@ const importAudioUploadIntro =
 export function LibraryImportAudioUploadView({
   navItems,
   user,
+  billingPlan,
   className,
   existingChordDialogLayout,
 }: LibraryImportAudioUploadViewProps) {
@@ -56,7 +59,7 @@ export function LibraryImportAudioUploadView({
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-h-dvh lg:border-l lg:border-white/7">
-        <LibraryTopNav items={navItems} user={user} />
+        <LibraryTopNav items={navItems} user={user} billingPlan={billingPlan ?? undefined} />
         <ImportAudioUploadPanel
           className="min-h-0 min-w-0 w-full flex-1 overflow-auto px-5 py-1 md:px-10 md:pb-3 md:pt-1"
           existingChordDialogLayout={existingChordDialogLayout}

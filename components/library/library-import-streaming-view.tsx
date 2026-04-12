@@ -1,4 +1,5 @@
 import { AuthMarketingSidebar } from "@/components/layout/auth-marketing-sidebar";
+import type { BillingPlan } from "@/lib/billing/plan-types";
 import type { AuthSidebarFeature } from "@/lib/auth-layout/types";
 import type { LibraryNavItem } from "@/lib/library/types";
 import { cn } from "@/lib/utils";
@@ -10,6 +11,8 @@ import { StreamingImportRightPanel } from "./streaming-import-right-panel";
 export type LibraryImportStreamingViewProps = {
   navItems: LibraryNavItem[];
   user?: LibraryTopNavUser | null;
+  billingPlan: BillingPlan;
+  proStreamingUnlocked: boolean;
   className?: string;
 };
 
@@ -42,6 +45,8 @@ const importStreamingIntro =
 export function LibraryImportStreamingView({
   navItems,
   user,
+  billingPlan,
+  proStreamingUnlocked,
   className,
 }: LibraryImportStreamingViewProps) {
   return (
@@ -63,8 +68,11 @@ export function LibraryImportStreamingView({
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-h-dvh lg:border-l lg:border-white/7">
-        <LibraryTopNav items={navItems} user={user} />
-        <StreamingImportRightPanel className="mx-auto min-h-0 w-full max-w-2xl flex-1 overflow-auto px-5 py-1 md:px-8 md:pb-3 md:pt-1" />
+        <LibraryTopNav items={navItems} user={user} billingPlan={billingPlan} />
+        <StreamingImportRightPanel
+          proStreamingUnlocked={proStreamingUnlocked}
+          className="mx-auto min-h-0 w-full max-w-2xl flex-1 overflow-auto px-5 py-1 md:px-8 md:pb-3 md:pt-1"
+        />
         <LibraryPageFooter className="mt-0 shrink-0 border-t border-white/7" />
       </div>
     </div>

@@ -97,7 +97,6 @@ export async function postTrackIngestWithMeta(
   const form = new FormData();
   form.append("file", file, file.name);
   form.append("meta", JSON.stringify(song));
-  debugger
 
   const res = await fetchSchubertFromBrowser("tracks/ingest", {
     method: "POST",
