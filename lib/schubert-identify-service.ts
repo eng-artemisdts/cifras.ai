@@ -1,8 +1,13 @@
 import { bibliotecaCifraHref } from "@/lib/library/biblioteca-cifra-href";
 import { fetchSchubertFromBrowser } from "@/lib/schubert-api";
-import type { SchubertRecognizedSong, SchubertTrackIdentifyResponse } from "@/lib/schubert-identify-types";
+import type {
+  SchubertRecognizedSong,
+  SchubertTrackIdentifyResponse,
+  SchubertTrackIngestResponse,
+} from "@/lib/schubert-identify-types";
 
-const MAX_SCHUBERT_BYTES = 20 * 1024 * 1024;
+/** Alinhado ao limite AudD / `tracks/identify` na schubert-api (~10 MB). */
+const MAX_SCHUBERT_BYTES = 10 * 1024 * 1024;
 
 export class SchubertIdentifyError extends Error {
   constructor(
@@ -23,7 +28,7 @@ function isMp3(file: File): boolean {
 
 /**
  * Envia um MP3 ao endpoint `POST /tracks/identify` da Schubert API (reconhecimento + match na base).
- * Limite de 20 MB imposto pelo servidor Schubert.
+ * Limite de 10 MB imposto pelo servidor Schubert (AudD).
  */
 export async function identifyTrackFromMp3(file: File): Promise<SchubertTrackIdentifyResponse> {
   if (!isMp3(file)) {
@@ -35,7 +40,7 @@ export async function identifyTrackFromMp3(file: File): Promise<SchubertTrackIde
   }
   if (file.size > MAX_SCHUBERT_BYTES) {
     throw new SchubertIdentifyError(
-      "O ficheiro excede o limite de 20 MB para identificação.",
+      "O ficheiro excede o limite de 10 MB para identificação.",
       400,
       null,
     );
@@ -67,6 +72,56 @@ export async function identifyTrackFromMp3(file: File): Promise<SchubertTrackIde
   return json as SchubertTrackIdentifyResponse;
 }
 
+/**
+ * Envia o MP3 a `POST /tracks/ingest` com o campo multipart `meta` (JSON do `song` devolvido por `/tracks/identify`).
+ */
+export async function postTrackIngestWithMeta(
+  file: File,
+  song: SchubertRecognizedSong,
+): Promise<SchubertTrackIngestResponse> {
+  if (!isMp3(file)) {
+    throw new SchubertIdentifyError(
+      "A ingestão Schubert aceita apenas ficheiros MP3.",
+      400,
+      null,
+    );
+  }
+  if (file.size > MAX_SCHUBERT_BYTES) {
+    throw new SchubertIdentifyError(
+      "O ficheiro excede o limite de 10 MB para ingestão.",
+      400,
+      null,
+    );
+  }
+
+  const form = new FormData();
+  form.append("file", file, file.name);
+  form.append("meta", JSON.stringify(song));
+  debugger
+
+  const res = await fetchSchubertFromBrowser("tracks/ingest", {
+    method: "POST",
+    body: form,
+  });
+
+  const raw = await res.text();
+  let json: unknown = null;
+  if (raw) {
+    try {
+      json = JSON.parse(raw) as unknown;
+    } catch {
+      json = { raw };
+    }
+  }
+
+  if (!res.ok) {
+    const msg = formatUpstreamErrorMessage(json, res.statusText);
+    throw new SchubertIdentifyError(msg, res.status, json);
+  }
+
+  return json as SchubertTrackIngestResponse;
+}
+
 export type ChordFoundPreview = {
   songTitle: string;
   artistName: string;
@@ -95,7 +150,9 @@ export function mapSchubertMatchToChordPreview(
   return {
     songTitle,
     artistName,
-    coverImageUrl: null,
+    coverImageUrl: typeof song.cover_image_url === "string" && song.cover_image_url.trim()
+      ? song.cover_image_url.trim()
+      : null,
     chordHref,
   };
 }

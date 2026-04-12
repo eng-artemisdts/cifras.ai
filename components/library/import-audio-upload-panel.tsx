@@ -11,7 +11,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { DragEvent } from "react";
-import { useCallback, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+
+import type { SchubertRecognizedSong } from "@/lib/schubert-identify-types";
 
 import {
   ExistingChordFoundDialog,
@@ -20,6 +22,7 @@ import {
 import {
   identifyTrackFromMp3,
   mapSchubertMatchToChordPreview,
+  postTrackIngestWithMeta,
   SchubertIdentifyError,
   type ChordFoundPreview,
 } from "@/lib/schubert-identify-service";
@@ -32,6 +35,29 @@ function formatBytes(n: number) {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function QueueCoverThumb({ coverUrl }: { coverUrl: string | null | undefined }) {
+  const [broken, setBroken] = useState(false);
+  useEffect(() => {
+    setBroken(false);
+  }, [coverUrl]);
+  const showImg = Boolean(coverUrl?.trim()) && !broken;
+  return (
+    <div className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-md border border-white/10 bg-[#16162a]">
+      {showImg ? (
+        // eslint-disable-next-line @next/next/no-img-element -- URL dinâmica (Spotify / Apple)
+        <img
+          src={coverUrl!.trim()}
+          alt=""
+          className="size-full object-cover"
+          onError={() => setBroken(true)}
+        />
+      ) : (
+        <Music2 className="size-[18px] text-cifra-gold" strokeWidth={1.75} aria-hidden />
+      )}
+    </div>
+  );
 }
 
 export type QueuedFile = {
@@ -57,6 +83,8 @@ export function ImportAudioUploadPanel({
   const [existingChordOpen, setExistingChordOpen] = useState(false);
   const [chordPreview, setChordPreview] = useState<ChordFoundPreview | null>(null);
   const [identifyMessage, setIdentifyMessage] = useState<string | null>(null);
+  /** Metadados AudD quando a faixa é reconhecida mas ainda não existe cifra na base — para mostrar capa na fila. */
+  const [recognizedSong, setRecognizedSong] = useState<SchubertRecognizedSong | null>(null);
 
   const ingestLabel =
     queue.length === 0 ? "Nenhum arquivo ainda" : "1 arquivo · pronto para processar";
@@ -70,6 +98,7 @@ export function ImportAudioUploadPanel({
     const file = incoming[0];
     if (!file) return;
     setIdentifyMessage(null);
+    setRecognizedSong(null);
     setQueue([
       {
         id: `${file.name}-${file.size}-${Math.random().toString(36).slice(2, 9)}`,
@@ -79,28 +108,52 @@ export function ImportAudioUploadPanel({
   }, []);
 
   const removeFile = useCallback((id: string) => {
+    setRecognizedSong(null);
+    setIdentifyMessage(null);
     setQueue((prev) => prev.filter((q) => q.id !== id));
   }, []);
 
-  const clearQueue = useCallback(() => setQueue([]), []);
+  const clearQueue = useCallback(() => {
+    setRecognizedSong(null);
+    setIdentifyMessage(null);
+    setQueue([]);
+  }, []);
 
   const runDetection = useCallback(async () => {
     const item = queue[0];
     if (!item) return;
     setIdentifyMessage(null);
+    setRecognizedSong(null);
     setChordPreview(null);
     setExistingChordOpen(false);
     setDetecting(true);
     try {
       const res = await identifyTrackFromMp3(item.file);
+      let ingestNotice: string | null = null;
+      if (res.song) {
+        try {
+          await postTrackIngestWithMeta(item.file, res.song);
+        } catch (ingestErr) {
+          if (ingestErr instanceof SchubertIdentifyError) {
+            ingestNotice = `Aviso: ingestão não concluída (${ingestErr.message})`;
+          } else {
+            ingestNotice = "Aviso: ingestão não concluída (erro inesperado).";
+          }
+        }
+      }
       if (res.track && res.song) {
+        setRecognizedSong(null);
         setChordPreview(mapSchubertMatchToChordPreview(res.track, res.song));
+        if (ingestNotice) setIdentifyMessage(ingestNotice);
         setExistingChordOpen(true);
         return;
       }
       if (res.recognized && res.song) {
+        setRecognizedSong(res.song);
         setIdentifyMessage(
-          `Música reconhecida (${res.song.artist} — ${res.song.title})`
+          [ingestNotice, `Música reconhecida (${res.song.artist} — ${res.song.title})`]
+            .filter(Boolean)
+            .join("\n"),
         );
         return;
       }
@@ -153,7 +206,7 @@ export function ImportAudioUploadPanel({
         <div className="text-right">
           <p className="font-mono text-[10px] leading-tight text-cifra-teal">{ingestLabel}</p>
           <p className="mt-0.5 max-w-[min(100%,280px)] text-right font-mono text-[9px] leading-snug text-cifra-muted">
-            Identificação Schubert: apenas MP3 · máx. 20 MB
+            Identificação Schubert: apenas MP3 · máx. 10 MB
           </p>
         </div>
       </div>
@@ -247,11 +300,14 @@ export function ImportAudioUploadPanel({
                     key={q.id}
                     className="flex items-center gap-3 border-b border-white/6 bg-[#0c0c16] px-5 py-3"
                   >
-                    <Music2 className="size-[18px] shrink-0 text-cifra-gold" strokeWidth={1.75} aria-hidden />
+                    <QueueCoverThumb coverUrl={recognizedSong?.cover_image_url} />
                     <div className="min-w-0 flex-1 space-y-0.5">
                       <p className="truncate text-xs font-semibold text-cifra-text">{q.file.name}</p>
                       <p className="font-mono text-[10px] text-cifra-muted">
-                        {formatBytes(q.file.size)} · aguardando análise
+                        {formatBytes(q.file.size)}
+                        {recognizedSong
+                          ? ` · identificada: ${recognizedSong.artist} — ${recognizedSong.title}`
+                          : " · aguardando análise"}
                       </p>
                     </div>
                     <span className="shrink-0 rounded-md border border-cifra-teal/30 bg-cifra-teal/10 px-2.5 py-1 font-mono text-[9px] text-cifra-teal">

@@ -10,6 +10,7 @@ export type SchubertRecognizedSong = {
   spotify_track_id?: string;
   spotify_artist_ids: string[];
   duration_ms?: number;
+  cover_image_url?: string;
 };
 
 /** Resposta de `POST /tracks/identify`. */
@@ -18,4 +19,10 @@ export type SchubertTrackIdentifyResponse = {
   song: SchubertRecognizedSong | null;
   /** Presente quando `recognized` e existe `Track` na base Mongo. */
   track: Record<string, unknown> | null;
+};
+
+/** Resposta de `POST /tracks/ingest` (áudio + `meta` com o mesmo formato que `song`). */
+export type SchubertTrackIngestResponse = {
+  accepted: true;
+  song: SchubertRecognizedSong | null;
 };
