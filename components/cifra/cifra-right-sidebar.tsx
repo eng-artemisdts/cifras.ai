@@ -13,6 +13,14 @@ import { cn } from "@/lib/utils";
 export type CifraRightSidebarProps = {
   className?: string;
   trackTitle?: string;
+  /** Afinação original (texto livre), editável. */
+  originalTune: string;
+  onOriginalTuneChange: (value: string) => void;
+  /** Traste do capo (0–24). */
+  capoAt: number;
+  onCapoAtChange: (value: number) => void;
+  /** Cifra marcada como privada (Pro). */
+  isPrivate?: boolean;
   scrollModeAutomaticRef: RefObject<HTMLInputElement | null>;
   scrollModeSmartRef: RefObject<HTMLInputElement | null>;
   autoScrollBtnRef: RefObject<HTMLButtonElement | null>;
@@ -28,6 +36,11 @@ export type CifraRightSidebarProps = {
 export function CifraRightSidebar({
   className,
   trackTitle,
+  originalTune,
+  onOriginalTuneChange,
+  capoAt,
+  onCapoAtChange,
+  isPrivate,
   scrollModeAutomaticRef,
   scrollModeSmartRef,
   autoScrollBtnRef,
@@ -57,7 +70,53 @@ export function CifraRightSidebar({
               ? `Pré-visualização de «${trackTitle}» carregada da base Schubert.`
               : "Revisão salva na sua biblioteca."}
           </p>
+          {isPrivate ? (
+            <p className="pt-1">
+              <span className="inline-flex rounded-md border border-cifra-teal/35 bg-cifra-teal/10 px-2 py-0.5 font-mono text-[8px] font-semibold uppercase tracking-wider text-cifra-teal">
+                Privada
+              </span>
+            </p>
+          ) : null}
         </div>
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-white/6 bg-[#0c0c14] px-3 py-3">
+        <p className="font-mono text-[8px] font-normal uppercase tracking-[0.16em] text-cifra-muted">
+          Afinação e capo
+        </p>
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-[#7a7a98]">
+            Afinação original
+          </span>
+          <input
+            type="text"
+            value={originalTune}
+            onChange={(e) => onOriginalTuneChange(e.target.value)}
+            placeholder="ex.: E standard, DADGAD…"
+            autoComplete="off"
+            className="w-full rounded-md border border-cifra-border bg-cifra-bg px-2.5 py-2 text-[12px] text-cifra-text outline-none transition-colors placeholder:text-cifra-muted/70 focus-visible:border-cifra-teal/45 focus-visible:ring-1 focus-visible:ring-cifra-teal/30"
+          />
+        </label>
+        <label className="flex flex-col gap-1" htmlFor="cifra-capo-at">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-[#7a7a98]">
+            Capo (traste)
+          </span>
+          <span className="flex items-center gap-2">
+            <input
+              id="cifra-capo-at"
+              type="range"
+              min={0}
+              max={24}
+              step={1}
+              value={capoAt}
+              onChange={(e) => onCapoAtChange(Number(e.target.value))}
+              className="cifra-range cifra-range--sm h-3 min-w-0 flex-1"
+            />
+            <span className="w-8 shrink-0 text-right font-mono text-xs font-medium tabular-nums text-cifra-teal">
+              {capoAt}
+            </span>
+          </span>
+        </label>
       </div>
 
       <div className="h-px w-full bg-cifra-border" aria-hidden />

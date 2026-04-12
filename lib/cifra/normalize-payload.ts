@@ -14,11 +14,18 @@ export function normalizeDemoPayload(raw: MusicAiDemoPayload | null | undefined)
     sortSections(rawSections as MusicAiSection[]),
   );
   const rawChords = Array.isArray(payload.chords) ? payload.chords : [];
+  const capoRaw = Number.isFinite(payload.capo_at) ? Math.round(Number(payload.capo_at)) : 0;
   return {
     chords: clampChordEndsToSectionBoundaries(rawChords, sectionsSorted),
     lyrics: expandMergedLyricSegments(rawLyrics),
     sections: sectionsSorted,
     meta: payload.meta && typeof payload.meta === "object" ? payload.meta : {},
     chordTimeOffsetSec: Number.isFinite(payload.chordTimeOffsetSec) ? Number(payload.chordTimeOffsetSec) : 0,
+    ...(typeof payload.userId === "string" && payload.userId.trim()
+      ? { userId: payload.userId.trim() }
+      : {}),
+    original_tune: typeof payload.original_tune === "string" ? payload.original_tune : "",
+    capo_at: Math.min(24, Math.max(0, capoRaw)),
+    is_private: payload.is_private === true,
   };
 }

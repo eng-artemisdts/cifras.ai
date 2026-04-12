@@ -55,6 +55,14 @@ export type MusicAiDemoPayload = {
   sections?: MusicAiSection[];
   meta?: MusicAiMeta;
   chordTimeOffsetSec?: number;
+  /** `sub` Auth0 ou id interno de quem criou esta versão da cifra. */
+  userId?: string;
+  /** Texto livre (afinação original) — editável na sidebar. */
+  original_tune?: string;
+  /** Traste do capo (0 = sem capo). */
+  capo_at?: number;
+  /** Cifra visível só ao autor (Pro). */
+  is_private?: boolean;
 };
 
 export type TimedWord = {

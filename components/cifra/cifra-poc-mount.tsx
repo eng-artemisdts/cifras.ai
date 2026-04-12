@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { MusicAiDemoPayload } from "@/lib/cifra/musicai-types";
 import { startCifraRuntime } from "@/lib/engine/start-cifra-runtime";
@@ -22,6 +22,11 @@ export type CifraPocMountProps = {
  * Painel direito completo (Pencil `sideR`) com controlos de rolagem automática.
  */
 export function CifraPocMount({ trackKey, payload, trackTitle, className }: CifraPocMountProps) {
+  const [originalTune, setOriginalTune] = useState(() => payload.original_tune ?? "");
+  const [capoAt, setCapoAt] = useState(() =>
+    Number.isFinite(payload.capo_at) ? Math.min(24, Math.max(0, Math.round(Number(payload.capo_at)))) : 0,
+  );
+
   const scrollRootRef = useRef<HTMLDivElement>(null);
   const cifraRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -85,6 +90,13 @@ export function CifraPocMount({ trackKey, payload, trackTitle, className }: Cifr
     // eslint-disable-next-line react-hooks/exhaustive-deps -- só remontar quando a faixa (`trackKey`) muda; o payload do RSC pode ter nova referência por render.
   }, [trackKey]);
 
+  useEffect(() => {
+    setOriginalTune(payload.original_tune ?? "");
+    setCapoAt(
+      Number.isFinite(payload.capo_at) ? Math.min(24, Math.max(0, Math.round(Number(payload.capo_at)))) : 0,
+    );
+  }, [trackKey, payload.original_tune, payload.capo_at]);
+
   const titleFromPayload =
     typeof payload.meta?.name === "string" && payload.meta.name.trim()
       ? payload.meta.name.trim()
@@ -142,6 +154,11 @@ export function CifraPocMount({ trackKey, payload, trackTitle, className }: Cifr
 
         <CifraRightSidebar
           trackTitle={titleFromPayload}
+          originalTune={originalTune}
+          onOriginalTuneChange={setOriginalTune}
+          capoAt={capoAt}
+          onCapoAtChange={(n) => setCapoAt(Math.min(24, Math.max(0, Math.round(n))))}
+          isPrivate={payload.is_private === true}
           scrollModeAutomaticRef={scrollModeAutomaticRef}
           scrollModeSmartRef={scrollModeSmartRef}
           autoScrollBtnRef={autoScrollBtnRef}

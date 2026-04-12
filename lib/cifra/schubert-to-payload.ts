@@ -18,6 +18,10 @@ export type SchubertTrackJson = {
   sections?: MusicAiSection[];
   meta?: MusicAiMeta;
   chordTimeOffsetSec?: number;
+  userId?: string;
+  original_tune?: string;
+  capo_at?: number;
+  is_private?: boolean;
   artistId?: { name?: string; _id?: unknown } | string;
 };
 
@@ -59,6 +63,13 @@ export function schubertTrackToDemoPayload(
     chordTimeOffsetSec: Number.isFinite(track.chordTimeOffsetSec)
       ? Number(track.chordTimeOffsetSec)
       : 0,
+    ...(typeof track.userId === "string" && track.userId.trim()
+      ? { userId: track.userId.trim() }
+      : {}),
+    original_tune:
+      typeof track.original_tune === "string" ? track.original_tune : "",
+    capo_at: Number.isFinite(track.capo_at) ? Math.max(0, Math.round(Number(track.capo_at))) : 0,
+    is_private: track.is_private === true,
   };
 }
 
