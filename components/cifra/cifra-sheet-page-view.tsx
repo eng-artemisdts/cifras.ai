@@ -1,0 +1,73 @@
+import type { AuthMarketingSidebarProps } from "@/components/layout/auth-marketing-sidebar";
+import { AuthMarketingSidebar } from "@/components/layout/auth-marketing-sidebar";
+import type { LibraryNavItem } from "@/lib/library/types";
+import {
+  bibliotecaCifraSheetMarketingSidebar,
+} from "@/lib/library/cifra-sheet-marketing";
+
+export { bibliotecaCifraSheetMarketingSidebar } from "@/lib/library/cifra-sheet-marketing";
+
+import type { MusicAiDemoPayload } from "@/lib/cifra/musicai-types";
+
+import { CifraCenterChrome } from "./cifra-center-chrome";
+import { CifraPocMount } from "./cifra-poc-mount";
+import { CifraRightSidebar } from "./cifra-right-sidebar";
+import type { LibraryTopNavUser } from "@/components/library/library-top-nav";
+
+export type CifraSheetPageViewProps = {
+  navItems: LibraryNavItem[];
+  user?: LibraryTopNavUser | null;
+  trackKey: string;
+  title: string;
+  subtitle: string;
+  durationLabel?: string;
+  payload: MusicAiDemoPayload;
+  /**
+   * Conteúdo da `AuthMarketingSidebar` (mesmo padrão que `/login` e importação por áudio).
+   * Omitir usa o copy da biblioteca; mesclar parcialmente com `{ ...bibliotecaCifraSheetMarketingSidebar, titleLine1: "..." }`.
+   */
+  marketingSidebar?: Partial<AuthMarketingSidebarProps>;
+};
+
+/**
+ * Layout: sidebar de marketing (AuthMarketingSidebar) · centro · painel direito — como `LibraryImportAudioUploadView`.
+ */
+export function CifraSheetPageView({
+  navItems,
+  user,
+  trackKey,
+  title,
+  subtitle,
+  durationLabel,
+  payload,
+  marketingSidebar,
+}: CifraSheetPageViewProps) {
+  const sidebarProps: AuthMarketingSidebarProps = {
+    ...bibliotecaCifraSheetMarketingSidebar,
+    ...marketingSidebar,
+  };
+
+  return (
+    <div className="flex min-h-dvh flex-col bg-cifra-bg text-cifra-text lg:flex-row lg:items-stretch">
+      <AuthMarketingSidebar
+        {...sidebarProps}
+        className="hidden min-h-0 shrink-0 lg:flex lg:min-h-dvh"
+      />
+
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-h-dvh lg:border-l lg:border-white/7">
+        <CifraCenterChrome
+          navItems={navItems}
+          user={user}
+          title={title}
+          subtitle={subtitle}
+          durationLabel={durationLabel}
+          className="min-h-0 flex-1 border-l-0"
+        >
+          <CifraPocMount trackKey={trackKey} payload={payload} />
+        </CifraCenterChrome>
+      </div>
+
+      <CifraRightSidebar trackTitle={title} className="lg:min-h-dvh" />
+    </div>
+  );
+}

@@ -1,3 +1,4 @@
+import { bibliotecaCifraHref } from "@/lib/library/biblioteca-cifra-href";
 import { fetchSchubertFromBrowser } from "@/lib/schubert-api";
 import type { SchubertRecognizedSong, SchubertTrackIdentifyResponse } from "@/lib/schubert-identify-types";
 
@@ -90,9 +91,7 @@ export function mapSchubertMatchToChordPreview(
         ? track.spotifyId
         : "";
   const q = encodeURIComponent(`${songTitle} ${artistName}`.trim());
-  const chordHref = trackId
-    ? `/biblioteca/resultados?trackId=${encodeURIComponent(trackId)}`
-    : `/biblioteca/resultados?q=${q}`;
+  const chordHref = trackId ? bibliotecaCifraHref(trackId, "a") : `/biblioteca/resultados?q=${q}`;
   return {
     songTitle,
     artistName,
