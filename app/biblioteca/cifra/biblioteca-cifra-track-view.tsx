@@ -13,7 +13,6 @@ import { auth0LoginHref } from "@/lib/auth0-routes";
 import { isAuth0Configured } from "@/lib/auth0-env";
 import type { BibliotecaCifraLyricsPath } from "@/lib/library/biblioteca-cifra-href";
 import { bibliotecaCifraHref } from "@/lib/library/biblioteca-cifra-href";
-import { libraryNavForPath } from "@/lib/library/mock-data";
 import { publicMp3UrlForTrackId } from "@/lib/media/public-mp3-for-track";
 import { fetchSchubertTrackByKey } from "@/lib/schubert-fetch-track";
 
@@ -105,7 +104,6 @@ export async function BibliotecaCifraTrackView({ trackId, lyricsVariant, lyricsP
 
   return (
     <CifraSheetPageView
-      navItems={libraryNavForPath(`/biblioteca/cifra/${lyricsPath}`)}
       user={user}
       trackKey={`${trackId}:${lyricsPath}`}
       title={title}

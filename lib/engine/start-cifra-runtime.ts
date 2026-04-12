@@ -8,7 +8,7 @@ import { clampChordEndsToSectionBoundaries } from "@/lib/cifra/lyric-expand-clam
 import {
   applyCifraPlaybackHighlight,
   mountCifraView,
-  resolveCifraScrollTarget,
+  resolveCifraSmartScrollTarget,
 } from "./cifra-view";
 import { createChordTimeline, formatChordLabel, isNoChordEvent } from "./chord-timeline";
 import { buildLyricModel } from "./lyric-timeline";
@@ -39,9 +39,11 @@ import { formatClock, getEffectiveDuration } from "./time-format";
 
 const LS_AUTO_SCROLL_LEAD = "cifra-ai:autoScrollLeadSec";
 const LS_AUTO_SCROLL_DURATION_MS = "cifra-ai:autoScrollDurationMs";
+const LS_SCROLL_MODE = "cifra-ai:scrollMode";
 const DEFAULT_AUTO_SCROLL_LEAD_SEC = 0.4;
 const DEFAULT_AUTO_SCROLL_DURATION_MS = 450;
-const AUTO_SCROLL_VIEWPORT_ANCHOR = 0.38;
+/** Rolagem «inteligente»: centrar o acorde activo no eixo vertical (POC usava ~0,38 com linha inteira; com célula usamos ~0,5). */
+const SMART_SCROLL_VIEWPORT_ANCHOR = 0.5;
 
 function clamp(n, lo, hi) {
   return Math.min(hi, Math.max(lo, n));
@@ -92,6 +94,10 @@ export type CifraRuntimeEls = {
   autoScrollLeadValEl: HTMLElement | null;
   autoScrollDurEl: HTMLInputElement | null;
   autoScrollDurValEl: HTMLElement | null;
+  /** `value="automatic"` — rolagem linear com o tempo da faixa. */
+  scrollModeAutomaticEl?: HTMLInputElement | null;
+  /** `value="smart"` — centrar na célula do acorde em destaque (POC + `pickActiveChordTrackCell`). */
+  scrollModeSmartEl?: HTMLInputElement | null;
 };
 
 export type StartCifraRuntimeOptions = {
@@ -117,6 +123,8 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
     autoScrollLeadValEl,
     autoScrollDurEl,
     autoScrollDurValEl,
+    scrollModeAutomaticEl,
+    scrollModeSmartEl,
   } = opts.els;
 
   const payload = coalescePayload(opts.payloadInput);
@@ -138,6 +146,8 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
   let cifra = null;
   let autoScrollEnabled = false;
   let lastAutoScrollTarget = null;
+  /** Último `scrollTop` aplicado na rolagem automática (tempo → posição), para evitar trabalho redundante. */
+  let lastTimeBasedScrollTop = -1;
   let scrollAnimGen = 0;
 
   function chordForDisplayFromEvent(c) {
@@ -222,6 +232,24 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
     if (autoScrollDurEl) lsSet(LS_AUTO_SCROLL_DURATION_MS, autoScrollDurEl.value);
   }
 
+  function persistScrollMode() {
+    if (!scrollModeAutomaticEl && !scrollModeSmartEl) return;
+    if (scrollModeSmartEl?.checked) lsSet(LS_SCROLL_MODE, "smart");
+    else lsSet(LS_SCROLL_MODE, "automatic");
+  }
+
+  function initScrollModeRadios() {
+    if (!scrollModeAutomaticEl && !scrollModeSmartEl) return;
+    const raw = lsGet(LS_SCROLL_MODE);
+    const smart = raw === "smart";
+    if (scrollModeSmartEl) scrollModeSmartEl.checked = smart;
+    if (scrollModeAutomaticEl) scrollModeAutomaticEl.checked = !smart;
+  }
+
+  function isSmartScrollMode() {
+    return Boolean(scrollModeSmartEl?.checked);
+  }
+
   function initAutoScrollControls() {
     if (autoScrollLeadEl) {
       const raw = lsGet(LS_AUTO_SCROLL_LEAD);
@@ -289,6 +317,7 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
   function remountCifraView() {
     cancelSmoothScrolling();
     lastAutoScrollTarget = null;
+    lastTimeBasedScrollTop = -1;
     cifra = null;
     cifraContainer.innerHTML = "";
   }
@@ -296,19 +325,40 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
   function syncAutoScrollButtonUi() {
     if (!autoScrollBtn) return;
     autoScrollBtn.dataset.on = autoScrollEnabled ? "true" : "false";
-    autoScrollBtn.setAttribute("aria-pressed", autoScrollEnabled ? "true" : "false");
+    const on = autoScrollEnabled ? "true" : "false";
+    autoScrollBtn.setAttribute("aria-checked", on);
     autoScrollBtn.setAttribute(
       "aria-label",
-      autoScrollEnabled ? "Desativar scroll automático da cifra" : "Ativar scroll automático da cifra",
+      autoScrollEnabled ? "Desativar rolagem da cifra" : "Ativar rolagem da cifra",
     );
   }
 
-  function applyAutoScroll(container, t) {
-    if (!autoScrollEnabled) return;
+  /**
+   * Rolagem automática (tempo): posição vertical proporcional ao instante da faixa (teleprompter),
+   * com antecipação opcional (`lead`) sobre o eixo do tempo.
+   */
+  function applyTimeBasedScroll(t) {
+    const dur = getEffectiveDuration(audio, audioReady, chordTimeline.lastChordEndAudioTime);
+    const leadSec = autoScrollLeadEl ? Number(autoScrollLeadEl.value) : DEFAULT_AUTO_SCROLL_LEAD_SEC;
+    const lead = Number.isFinite(leadSec) ? Math.max(0, leadSec) : DEFAULT_AUTO_SCROLL_LEAD_SEC;
+    const tEff = dur > 0 ? clamp(t + lead, 0, dur) : 0;
+    const maxScroll = Math.max(0, scrollRoot.scrollHeight - scrollRoot.clientHeight);
+    const targetTop = dur > 0 ? (tEff / dur) * maxScroll : 0;
+    const y = clamp(targetTop, 0, maxScroll);
+    if (Math.abs(y - lastTimeBasedScrollTop) < 0.75) return;
+    lastTimeBasedScrollTop = y;
+    scrollRoot.scrollTop = y;
+  }
+
+  /**
+   * Rolagem inteligente: alinha o viewport ao nó do acorde activo (célula de track), como na POC,
+   * com animação suave e duração configurável.
+   */
+  function applySmartScroll(container, t) {
     const leadSec = autoScrollLeadEl ? Number(autoScrollLeadEl.value) : DEFAULT_AUTO_SCROLL_LEAD_SEC;
     const lead = Number.isFinite(leadSec) ? Math.max(0, leadSec) : DEFAULT_AUTO_SCROLL_LEAD_SEC;
     const durationMs = autoScrollDurEl ? Number(autoScrollDurEl.value) : DEFAULT_AUTO_SCROLL_DURATION_MS;
-    const el = resolveCifraScrollTarget(
+    const el = resolveCifraSmartScrollTarget(
       container,
       t,
       lead,
@@ -320,9 +370,15 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
       smoothScrollToElement(
         el,
         Number.isFinite(durationMs) ? durationMs : DEFAULT_AUTO_SCROLL_DURATION_MS,
-        AUTO_SCROLL_VIEWPORT_ANCHOR,
+        SMART_SCROLL_VIEWPORT_ANCHOR,
       );
     }
+  }
+
+  function applyAutoScroll(container, t) {
+    if (!autoScrollEnabled) return;
+    if (isSmartScrollMode()) applySmartScroll(container, t);
+    else applyTimeBasedScroll(t);
   }
 
   function ensureCifraMounted() {
@@ -383,6 +439,7 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
   const onSeekInput = () => {
     cancelSmoothScrolling();
     lastAutoScrollTarget = null;
+    lastTimeBasedScrollTop = -1;
     const dur = getEffectiveDuration(audio, audioReady, chordTimeline.lastChordEndAudioTime);
     const t = (Number(seek.value) / SEEK_SLIDER_STEPS) * dur;
     if (audioUsable && audio.src) audio.currentTime = t;
@@ -449,6 +506,7 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
   };
 
   initAutoScrollControls();
+  initScrollModeRadios();
   rebuildLayoutFromMode();
   playBtn.disabled = !renderPlan.length;
   seek.disabled = !renderPlan.length;
@@ -478,6 +536,7 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
       autoScrollEnabled = !autoScrollEnabled;
       if (!autoScrollEnabled) cancelSmoothScrolling();
       lastAutoScrollTarget = null;
+      lastTimeBasedScrollTop = -1;
       syncAutoScrollButtonUi();
       tick();
     };
@@ -492,6 +551,16 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
     autoScrollDurEl.addEventListener("input", syncAutoScrollControlLabels);
     autoScrollDurEl.addEventListener("change", persistAutoScrollControls);
   }
+
+  const onScrollModeChange = () => {
+    persistScrollMode();
+    cancelSmoothScrolling();
+    lastAutoScrollTarget = null;
+    lastTimeBasedScrollTop = -1;
+    tick();
+  };
+  if (scrollModeAutomaticEl) scrollModeAutomaticEl.addEventListener("change", onScrollModeChange);
+  if (scrollModeSmartEl) scrollModeSmartEl.addEventListener("change", onScrollModeChange);
 
   return () => {
     cancelSmoothScrolling();
@@ -513,6 +582,8 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
       autoScrollDurEl.removeEventListener("input", syncAutoScrollControlLabels);
       autoScrollDurEl.removeEventListener("change", persistAutoScrollControls);
     }
+    if (scrollModeAutomaticEl) scrollModeAutomaticEl.removeEventListener("change", onScrollModeChange);
+    if (scrollModeSmartEl) scrollModeSmartEl.removeEventListener("change", onScrollModeChange);
     remountCifraView();
   };
 }

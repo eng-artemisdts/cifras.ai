@@ -74,6 +74,7 @@ export function Auth0UserMenu({ user: serverUser, className }: Auth0UserMenuProp
             height={36}
             className="size-full object-cover"
             unoptimized
+            referrerPolicy="no-referrer"
           />
         ) : (
           <span aria-hidden className="text-[11px] font-semibold tracking-wide text-cifra-teal">

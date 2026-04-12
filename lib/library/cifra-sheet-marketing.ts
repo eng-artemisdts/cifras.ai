@@ -12,7 +12,7 @@ const bibliotecaCifraIntro =
   "A letra e os acordes vêm da base Schubert — use o player para seguir o destaque e a auto-rolagem como no laboratório.";
 
 /**
- * Textos por defeito da `AuthMarketingSidebar` na rota `/biblioteca/cifra`.
+ * Textos por defeito da `AuthMarketingSidebar` na vista de cifra da biblioteca.
  * Sobrescreva campos em `marketingSidebar` em `CifraSheetPageView` quando esta vista for reutilizada ailleurs.
  */
 export const bibliotecaCifraSheetMarketingSidebar: Partial<AuthMarketingSidebarProps> = {

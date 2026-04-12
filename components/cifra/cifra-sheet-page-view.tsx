@@ -1,6 +1,5 @@
 import type { AuthMarketingSidebarProps } from "@/components/layout/auth-marketing-sidebar";
 import { AuthMarketingSidebar } from "@/components/layout/auth-marketing-sidebar";
-import type { LibraryNavItem } from "@/lib/library/types";
 import {
   bibliotecaCifraSheetMarketingSidebar,
 } from "@/lib/library/cifra-sheet-marketing";
@@ -11,11 +10,9 @@ import type { MusicAiDemoPayload } from "@/lib/cifra/musicai-types";
 
 import { CifraCenterChrome } from "./cifra-center-chrome";
 import { CifraPocMount } from "./cifra-poc-mount";
-import { CifraRightSidebar } from "./cifra-right-sidebar";
 import type { LibraryTopNavUser } from "@/components/library/library-top-nav";
 
 export type CifraSheetPageViewProps = {
-  navItems: LibraryNavItem[];
   user?: LibraryTopNavUser | null;
   trackKey: string;
   title: string;
@@ -30,10 +27,9 @@ export type CifraSheetPageViewProps = {
 };
 
 /**
- * Layout: sidebar de marketing (AuthMarketingSidebar) · centro · painel direito — como `LibraryImportAudioUploadView`.
+ * Layout: sidebar de marketing (AuthMarketingSidebar) · coluna central (header + cifra com painel `2Zui4` no `CifraPocMount`).
  */
 export function CifraSheetPageView({
-  navItems,
   user,
   trackKey,
   title,
@@ -56,18 +52,15 @@ export function CifraSheetPageView({
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-h-dvh lg:border-l lg:border-white/7">
         <CifraCenterChrome
-          navItems={navItems}
           user={user}
           title={title}
           subtitle={subtitle}
           durationLabel={durationLabel}
           className="min-h-0 flex-1 border-l-0"
         >
-          <CifraPocMount trackKey={trackKey} payload={payload} />
+          <CifraPocMount trackKey={trackKey} payload={payload} trackTitle={title} />
         </CifraCenterChrome>
       </div>
-
-      <CifraRightSidebar trackTitle={title} className="lg:min-h-dvh" />
     </div>
   );
 }

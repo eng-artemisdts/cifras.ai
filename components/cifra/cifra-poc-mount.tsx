@@ -6,17 +6,22 @@ import type { MusicAiDemoPayload } from "@/lib/cifra/musicai-types";
 import { startCifraRuntime } from "@/lib/engine/start-cifra-runtime";
 import { cn } from "@/lib/utils";
 
+import { CifraRightSidebar } from "./cifra-right-sidebar";
+
 export type CifraPocMountProps = {
   /** Chave estável (ex.: `trackId`) para remontar o runtime quando a faixa mudar. */
   trackKey: string;
   payload: MusicAiDemoPayload;
+  /** Título da faixa para copy no painel direito (frame `2Zui4`). */
+  trackTitle?: string;
   className?: string;
 };
 
 /**
  * Monta a cifra com o mesmo motor DOM da POC (`mountCifraView`), destaque em reprodução e auto-rolagem.
+ * Painel direito completo (Pencil `sideR`) com controlos de rolagem automática.
  */
-export function CifraPocMount({ trackKey, payload, className }: CifraPocMountProps) {
+export function CifraPocMount({ trackKey, payload, trackTitle, className }: CifraPocMountProps) {
   const scrollRootRef = useRef<HTMLDivElement>(null);
   const cifraRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -30,6 +35,8 @@ export function CifraPocMount({ trackKey, payload, className }: CifraPocMountPro
   const autoScrollLeadValRef = useRef<HTMLSpanElement>(null);
   const autoScrollDurRef = useRef<HTMLInputElement>(null);
   const autoScrollDurValRef = useRef<HTMLSpanElement>(null);
+  const scrollModeAutomaticRef = useRef<HTMLInputElement>(null);
+  const scrollModeSmartRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const scrollRoot = scrollRootRef.current;
@@ -69,6 +76,8 @@ export function CifraPocMount({ trackKey, payload, className }: CifraPocMountPro
         autoScrollLeadValEl: autoScrollLeadValRef.current,
         autoScrollDurEl: autoScrollDurRef.current,
         autoScrollDurValEl: autoScrollDurValRef.current,
+        scrollModeAutomaticEl: scrollModeAutomaticRef.current,
+        scrollModeSmartEl: scrollModeSmartRef.current,
       },
     });
 
@@ -76,9 +85,18 @@ export function CifraPocMount({ trackKey, payload, className }: CifraPocMountPro
     // eslint-disable-next-line react-hooks/exhaustive-deps -- só remontar quando a faixa (`trackKey`) muda; o payload do RSC pode ter nova referência por render.
   }, [trackKey]);
 
+  const titleFromPayload =
+    typeof payload.meta?.name === "string" && payload.meta.name.trim()
+      ? payload.meta.name.trim()
+      : trackTitle;
+
   return (
     <div className={cn("flex min-h-0 w-full min-w-0 flex-1 flex-col gap-2.5 sm:gap-3", className)}>
-      <div className="cifra-transport-panel flex shrink-0 flex-wrap items-center gap-3 rounded-2xl border border-white/8 bg-[#0c0c16] px-4 py-3 sm:gap-4 sm:px-5 sm:py-3.5">
+      <div
+        id="cifra-transport"
+        tabIndex={-1}
+        className="cifra-transport-panel flex shrink-0 flex-wrap items-center gap-3 rounded-2xl border border-white/8 bg-[#0c0c16] px-4 py-3 sm:gap-4 sm:px-5 sm:py-3.5"
+      >
         <audio ref={audioRef} className="hidden" preload="metadata" />
         <button
           ref={playBtnRef}
@@ -114,57 +132,25 @@ export function CifraPocMount({ trackKey, payload, className }: CifraPocMountPro
         </div>
       </div>
 
-      <div className="cifra-transport-panel flex shrink-0 flex-wrap items-end gap-4 rounded-2xl border border-white/8 bg-[#0c0c16] px-4 py-3 sm:gap-5 sm:px-5 sm:py-3.5">
-        <button
-          ref={autoScrollBtnRef}
-          type="button"
-          className="shrink-0 rounded-full border border-white/20 bg-transparent px-3.5 py-1.5 text-xs font-semibold text-cifra-text shadow-none transition-colors hover:border-white/30 data-[on=true]:border-cifra-teal/50 data-[on=true]:text-cifra-teal"
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-white/6 bg-[#12121f] lg:flex-row lg:items-stretch">
+        <div
+          ref={scrollRootRef}
+          className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-5 lg:px-8 lg:py-6"
         >
-          Auto-scroll
-        </button>
-        <div className="flex min-w-0 flex-1 flex-wrap items-end gap-5 sm:gap-8">
-          <label className="flex min-w-36 flex-1 flex-col gap-1 text-[10px] font-medium uppercase tracking-wide text-[#7a7a98]">
-            Antecipação
-            <span className="flex items-center gap-2">
-              <input
-                ref={autoScrollLeadRef}
-                type="range"
-                min={0}
-                max={2}
-                step={0.05}
-                defaultValue={0.4}
-                className="cifra-range cifra-range--sm h-3 min-w-0 flex-1"
-              />
-              <span ref={autoScrollLeadValRef} className="w-13 shrink-0 text-right font-mono text-xs font-medium tabular-nums text-cifra-teal">
-                0,40 s
-              </span>
-            </span>
-          </label>
-          <label className="flex min-w-36 flex-1 flex-col gap-1 text-[10px] font-medium uppercase tracking-wide text-[#7a7a98]">
-            Duração scroll
-            <span className="flex items-center gap-2">
-              <input
-                ref={autoScrollDurRef}
-                type="range"
-                min={200}
-                max={1200}
-                step={50}
-                defaultValue={450}
-                className="cifra-range cifra-range--sm h-3 min-w-0 flex-1"
-              />
-              <span ref={autoScrollDurValRef} className="w-13 shrink-0 text-right font-mono text-xs font-medium tabular-nums text-cifra-teal">
-                450 ms
-              </span>
-            </span>
-          </label>
+          <div id="cifra" ref={cifraRef} className="min-h-[min(12rem,30dvh)] w-full min-w-0" />
         </div>
-      </div>
 
-      <div
-        ref={scrollRootRef}
-        className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overflow-x-hidden rounded-lg border border-white/6 bg-[#12121f] px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-5 lg:px-8 lg:py-6"
-      >
-        <div id="cifra" ref={cifraRef} className="min-h-[min(12rem,30dvh)] w-full min-w-0" />
+        <CifraRightSidebar
+          trackTitle={titleFromPayload}
+          scrollModeAutomaticRef={scrollModeAutomaticRef}
+          scrollModeSmartRef={scrollModeSmartRef}
+          autoScrollBtnRef={autoScrollBtnRef}
+          autoScrollLeadRef={autoScrollLeadRef}
+          autoScrollLeadValRef={autoScrollLeadValRef}
+          autoScrollDurRef={autoScrollDurRef}
+          autoScrollDurValRef={autoScrollDurValRef}
+          className="mt-0 w-full border-t border-white/6 bg-cifra-surface lg:mt-0 lg:w-[300px] lg:shrink-0 lg:border-l lg:border-t-0"
+        />
       </div>
     </div>
   );
