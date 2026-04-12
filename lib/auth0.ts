@@ -12,8 +12,23 @@ export function getAuth0(): Auth0Client {
     );
   }
   if (!client) {
+    const audience =
+      process.env.SCHUBERT_AUTH0_AUDIENCE?.trim() ||
+      process.env.AUTH0_AUDIENCE?.trim();
+    /** Sem AUTH0_SCOPE no .env, usamos estes (incl. offline_access para refresh token). */
+    const scope =
+      process.env.AUTH0_SCOPE?.trim() ||
+      "openid profile email offline_access";
     client = new Auth0Client({
       signInReturnToPath: "/biblioteca",
+      ...(audience
+        ? {
+          authorizationParameters: {
+            audience,
+            scope,
+          },
+        }
+        : {}),
     });
   }
   return client;

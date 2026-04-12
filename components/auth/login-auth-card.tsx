@@ -7,13 +7,16 @@ import { cn } from "@/lib/utils";
 
 export type LoginAuthCardProps = {
   className?: string;
+  /** Repassado a `/auth/login` após o utilizador escolher o método na nossa UI. */
+  returnTo?: string;
 };
 
 /**
  * Login via Auth0: SSO por connection e e-mail/senha na Universal Login.
  */
-export function LoginAuthCard({ className }: LoginAuthCardProps) {
+export function LoginAuthCard({ className, returnTo }: LoginAuthCardProps) {
   const conn = getAuth0ConnectionEnv();
+  const rt = returnTo ? { returnTo } : {};
 
   return (
     <div
@@ -34,7 +37,7 @@ export function LoginAuthCard({ className }: LoginAuthCardProps) {
 
         <div className="flex flex-col gap-2.5 pt-1">
           <a
-            href={auth0LoginHref({ connection: conn.google })}
+            href={auth0LoginHref({ connection: conn.google, ...rt })}
             className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-black/9 bg-white py-3 pl-3.5 pr-3.5 text-sm font-semibold text-[#1a1a2e] transition-opacity hover:opacity-95"
           >
             <span className="flex size-[22px] items-center justify-center rounded-[11px] bg-[#4285F4] font-[system-ui] text-[11px] font-bold text-white">
@@ -43,14 +46,14 @@ export function LoginAuthCard({ className }: LoginAuthCardProps) {
             Continuar com Google
           </a>
           <a
-            href={auth0LoginHref({ connection: conn.apple })}
+            href={auth0LoginHref({ connection: conn.apple, ...rt })}
             className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-white/[0.07] bg-cifra-surface-2 py-3 pl-3.5 pr-3.5 text-sm font-semibold text-cifra-text transition-colors hover:border-white/15"
           >
             <Apple className="size-5 text-white" strokeWidth={1.5} />
             Continuar com Apple
           </a>
           <a
-            href={auth0LoginHref({ connection: conn.spotify })}
+            href={auth0LoginHref({ connection: conn.spotify, ...rt })}
             className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-[#1DB954]/27 bg-cifra-surface-2 py-3 pl-3.5 pr-3.5 text-sm font-semibold text-cifra-text transition-colors hover:border-[#1DB954]/50"
           >
             <Music2 className="size-5 text-[#1DB954]" strokeWidth={1.75} />
@@ -66,7 +69,7 @@ export function LoginAuthCard({ className }: LoginAuthCardProps) {
           <span className="h-px min-w-0 flex-1 bg-white/[0.07]" />
         </div>
 
-        <Auth0CredentialsForm mode="login" className="flex flex-col gap-4">
+        <Auth0CredentialsForm mode="login" className="flex flex-col gap-4" returnTo={returnTo}>
           <div className="space-y-1.5">
             <label htmlFor="login-email" className="font-mono text-[11px] tracking-wide text-cifra-muted">
               E-mail
@@ -85,7 +88,7 @@ export function LoginAuthCard({ className }: LoginAuthCardProps) {
           </div>
           <div className="flex justify-end">
             <a
-              href={auth0LoginHref()}
+              href={auth0LoginHref({ ...rt })}
               className="text-xs text-cifra-teal transition-colors hover:text-cifra-teal-hover"
             >
               Esqueci a senha

@@ -59,12 +59,12 @@ export function LibraryImportStreamingView({
         titleLine3="do streaming"
         introText={importStreamingIntro}
         features={importStreamingSidebarFeatures}
-        className="min-h-0 border-b border-white/7 lg:min-h-dvh lg:border-b-0"
+        className="hidden min-h-0 shrink-0 lg:flex lg:min-h-dvh"
       />
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col border-t border-white/6 lg:min-h-dvh lg:border-t-0 lg:border-l lg:border-white/7">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-h-dvh lg:border-l lg:border-white/7">
         <LibraryTopNav items={navItems} user={user} />
-        <StreamingImportRightPanel className="min-h-0 flex-1 overflow-auto px-6 py-1.5 md:px-10 md:pb-4 md:pt-1.5" />
+        <StreamingImportRightPanel className="mx-auto min-h-0 w-full max-w-2xl flex-1 overflow-auto px-5 py-1 md:px-8 md:pb-3 md:pt-1" />
         <LibraryPageFooter className="mt-0 shrink-0 border-t border-white/7" />
       </div>
     </div>

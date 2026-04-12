@@ -3,6 +3,8 @@ import type { AuthSidebarFeature } from "@/lib/auth-layout/types";
 import type { LibraryNavItem } from "@/lib/library/types";
 import { cn } from "@/lib/utils";
 
+import type { ExistingChordDialogLayout } from "@/components/library/existing-chord-found-dialog";
+
 import { ImportAudioUploadPanel } from "./import-audio-upload-panel";
 import { LibraryPageFooter } from "./library-page-footer";
 import { LibraryTopNav, type LibraryTopNavUser } from "./library-top-nav";
@@ -11,6 +13,8 @@ export type LibraryImportAudioUploadViewProps = {
   navItems: LibraryNavItem[];
   user?: LibraryTopNavUser | null;
   className?: string;
+  /** Variante do modal «cifra já existe»; ver frame `vK9pq` no Pencil. */
+  existingChordDialogLayout?: ExistingChordDialogLayout;
 };
 
 /** Passos alinhados ao frame `ZcVmf` (Pencil — Tela Detecção IA). */
@@ -31,6 +35,7 @@ export function LibraryImportAudioUploadView({
   navItems,
   user,
   className,
+  existingChordDialogLayout,
 }: LibraryImportAudioUploadViewProps) {
   return (
     <div
@@ -47,12 +52,15 @@ export function LibraryImportAudioUploadView({
         titleLine3="no áudio"
         introText={importAudioUploadIntro}
         features={importAudioUploadSidebarFeatures}
-        className="min-h-0 border-b border-white/7 lg:min-h-dvh lg:border-b-0"
+        className="hidden min-h-0 shrink-0 lg:flex lg:min-h-dvh"
       />
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col border-t border-white/6 lg:min-h-dvh lg:border-t-0 lg:border-l lg:border-white/7">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-h-dvh lg:border-l lg:border-white/7">
         <LibraryTopNav items={navItems} user={user} />
-        <ImportAudioUploadPanel className="min-h-0 flex-1 overflow-auto px-6 py-1.5 md:px-10 md:pb-4 md:pt-1.5" />
+        <ImportAudioUploadPanel
+          className="min-h-0 min-w-0 w-full flex-1 overflow-auto px-5 py-1 md:px-10 md:pb-3 md:pt-1"
+          existingChordDialogLayout={existingChordDialogLayout}
+        />
         <LibraryPageFooter className="mt-0 shrink-0 border-t border-white/7" />
       </div>
     </div>

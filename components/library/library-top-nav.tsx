@@ -42,7 +42,9 @@ export function LibraryTopNav({ items, user, className }: LibraryTopNavProps) {
             />
           </span>
         </Link>
-        <nav className="flex min-w-0 items-center gap-4 overflow-x-auto text-[13px] md:gap-5">
+        <nav
+          className="flex min-w-0 items-center gap-4 overflow-x-auto text-[13px] max-md:[-ms-overflow-style:none] max-md:[scrollbar-width:none] md:gap-5 max-md:[&::-webkit-scrollbar]:hidden"
+        >
           {items.map((item) => (
             <Link
               key={item.href}
