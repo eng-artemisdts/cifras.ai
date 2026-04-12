@@ -126,10 +126,12 @@ export type ChordFoundPreview = {
   artistName: string;
   coverImageUrl: string | null;
   chordHref: string;
+  /** Chave pública Schubert quando a faixa já existe na base; `null` se só houver reconhecimento AudD. */
+  trackId: string | null;
 };
 
 /**
- * Monta dados para o modal «cifra já encontrada» a partir do `track` Mongo + metadados AudD.
+ * Monta dados para o modal de confirmação a partir do `track` Mongo + metadados AudD.
  */
 export function mapSchubertMatchToChordPreview(
   track: Record<string, unknown>,
@@ -140,9 +142,9 @@ export function mapSchubertMatchToChordPreview(
   const artistName = resolveArtistName(track, song);
   const trackId =
     typeof track.trackId === "string" && track.trackId.trim()
-      ? track.trackId
+      ? track.trackId.trim()
       : typeof track.spotifyId === "string" && track.spotifyId.trim()
-        ? track.spotifyId
+        ? track.spotifyId.trim()
         : "";
   const q = encodeURIComponent(`${songTitle} ${artistName}`.trim());
   const chordHref = trackId ? bibliotecaCifraHref(trackId, "a") : `/biblioteca/resultados?q=${q}`;
@@ -153,6 +155,21 @@ export function mapSchubertMatchToChordPreview(
       ? song.cover_image_url.trim()
       : null,
     chordHref,
+    trackId: trackId || null,
+  };
+}
+
+/** Reconhecimento AudD sem documento `Track` na base — pesquisa na biblioteca até haver chave Schubert. */
+export function mapRecognizedSongToChordPreview(song: SchubertRecognizedSong): ChordFoundPreview {
+  const q = encodeURIComponent(`${song.title} ${song.artist}`.trim());
+  return {
+    songTitle: song.title,
+    artistName: song.artist,
+    coverImageUrl: typeof song.cover_image_url === "string" && song.cover_image_url.trim()
+      ? song.cover_image_url.trim()
+      : null,
+    chordHref: `/biblioteca/resultados?q=${q}`,
+    trackId: null,
   };
 }
 

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { isAccessTokenLikelyJwt } from "@/lib/access-token-shape";
+import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-plan";
 import { getAuth0 } from "@/lib/auth0";
 import { isAuth0Configured } from "@/lib/auth0-env";
+import { permissionsFromSessionUser } from "@/lib/entitlements";
 
 /**
  * O `withApiAuthRequired` do SDK chama `getSession()` sem argumentos (usa só `cookies()`).
@@ -29,7 +31,14 @@ function schubertAudience(): string | null {
 
 type RouteCtx = { params?: Promise<{ path?: string[] }> };
 
-async function proxyToSchubert(req: Request, ctx: RouteCtx) {
+/** Repete contexto de sessão para a Schubert API (o JWT de API muitas vezes não inclui claims `https://cifra.ai/*`). */
+type SchubertForwardIdentity = {
+  auth0Sub: string;
+  billingPlan: string;
+  appPermissions: string[];
+};
+
+async function proxyToSchubert(req: Request, ctx: RouteCtx, forward: SchubertForwardIdentity) {
   const audience = schubertAudience();
   if (!audience) {
     return NextResponse.json(
@@ -59,6 +68,9 @@ async function proxyToSchubert(req: Request, ctx: RouteCtx) {
 
   const headers: Record<string, string> = {
     authorization: `Bearer ${token}`,
+    "x-cifra-auth0-sub": forward.auth0Sub,
+    "x-cifra-billing-plan": forward.billingPlan,
+    "x-cifra-app-permissions": JSON.stringify(forward.appPermissions),
   };
   const contentType = req.headers.get("content-type");
   if (contentType) {
@@ -117,7 +129,15 @@ async function runAuthed(req: Request, ctx: RouteCtx) {
     );
   }
 
-  return proxyToSchubert(req, ctx);
+  const auth0Sub = typeof session.user.sub === "string" ? session.user.sub : "";
+  const billingPlan = await resolveBillingPlanForSessionUser(session.user);
+  const appPermissions = permissionsFromSessionUser(session.user);
+
+  return proxyToSchubert(req, ctx, {
+    auth0Sub,
+    billingPlan,
+    appPermissions,
+  });
 }
 
 export const GET = runAuthed;

@@ -1,14 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import {
-  ArrowLeft,
-  Check,
-  CreditCard,
-  RefreshCw,
-  Shield,
-  Sparkles,
-} from "lucide-react";
+import { ArrowLeft, CreditCard, RefreshCw, Shield, Sparkles } from "lucide-react";
 
 import { SubscribePlanButton } from "@/components/billing/subscribe-plan-button";
 import { ManageBillingButton } from "@/components/billing/manage-billing-button";
@@ -19,20 +12,15 @@ import {
   fetchAuth0UserBillingSnapshot,
   isAuth0ManagementConfigured,
 } from "@/lib/billing/auth0-management";
-import { PLAN_PERMISSIONS } from "@/lib/billing/plan-permissions";
 import type { BillingPlan } from "@/lib/billing/plan-types";
-import {
-  billingPlanFromSessionUser,
-  permissionsFromSessionUser,
-  stripeCustomerIdFromSessionUser,
-} from "@/lib/entitlements";
+import { billingPlanFromSessionUser, stripeCustomerIdFromSessionUser } from "@/lib/entitlements";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Assinatura",
-  description: "Plano, permissões e faturação Stripe no cifra.ai.",
+  description: "Plano e faturação Stripe no cifra.ai.",
 };
 
 const PLAN_LABEL: Record<BillingPlan, { title: string; blurb: string }> = {
@@ -48,15 +36,6 @@ const PLAN_LABEL: Record<BillingPlan, { title: string; blurb: string }> = {
     title: "Pro",
     blurb: "API, SSO e suporte prioritário para equipas mais exigentes.",
   },
-};
-
-const PERMISSION_LABEL: Record<string, string> = {
-  "library:basic": "Biblioteca básica",
-  "library:import": "Importar conteúdo",
-  "reports:scheduled": "Relatórios agendados",
-  "api:access": "Acesso à API",
-  "billing:sso": "SSO / billing avançado",
-  "support:priority": "Suporte prioritário",
 };
 
 function planCardClass(plan: BillingPlan): string {
@@ -110,9 +89,6 @@ export default async function AssinaturaPage({ searchParams }: AssinaturaPagePro
   const hasStripeCustomer = Boolean(
     snapshot?.stripe_customer_id ?? stripeCustomerIdFromSessionUser(session.user),
   );
-
-  const perms =
-    snapshot !== null ? [...PLAN_PERMISSIONS[plan]] : permissionsFromSessionUser(session.user);
 
   const planInfo = PLAN_LABEL[plan];
   const liveFromAuth0 = Boolean(
@@ -189,7 +165,7 @@ export default async function AssinaturaPage({ searchParams }: AssinaturaPagePro
           ) : null}
         </header>
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-2 lg:gap-8">
+        <div className="mt-12 max-w-xl">
           <section
             className={cn(
               "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:delay-100 motion-safe:duration-700 motion-safe:fill-mode-both rounded-2xl border p-6 sm:p-8",
@@ -225,36 +201,6 @@ export default async function AssinaturaPage({ searchParams }: AssinaturaPagePro
                 </p>
               )}
             </div>
-          </section>
-
-          <section className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:delay-150 motion-safe:duration-700 motion-safe:fill-mode-both flex flex-col rounded-2xl border border-cifra-border bg-cifra-surface/90 p-6 sm:p-8">
-            <div className="flex items-center gap-2">
-              <Shield className="size-5 text-cifra-teal" strokeWidth={1.75} aria-hidden />
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-cifra-muted">
-                Permissões ativas
-              </h2>
-            </div>
-            <p className="mt-2 text-sm text-cifra-muted">
-              {perms.length} capacidade{perms.length === 1 ? "" : "es"} neste plano
-            </p>
-            <ul className="mt-5 flex flex-col gap-2.5">
-              {perms.map((p) => (
-                <li
-                  key={p}
-                  className="flex items-start gap-3 rounded-xl border border-cifra-border/60 bg-cifra-surface-2/80 px-3.5 py-3"
-                >
-                  <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-cifra-teal/15 text-cifra-teal">
-                    <Check className="size-3" strokeWidth={3} aria-hidden />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-sm font-medium text-white">
-                      {PERMISSION_LABEL[p] ?? p}
-                    </span>
-                    <span className="mt-0.5 block font-mono text-[11px] text-cifra-muted">{p}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
           </section>
         </div>
 

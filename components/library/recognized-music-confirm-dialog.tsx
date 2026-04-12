@@ -5,9 +5,13 @@ import { Music2, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useState } from "react";
 
+import type { LibraryImportDialogLayout } from "@/components/library/library-import-dialog-layout";
+
 import { cn } from "@/lib/utils";
 
-export type ExistingChordDialogLayout = "default" | "split";
+export type RecognizedMusicDialogLayout = LibraryImportDialogLayout;
+
+export type { ExistingChordDialogLayout } from "@/components/library/library-import-dialog-layout";
 
 function DialogCoverArt({ url }: { url: string | null | undefined }) {
   const [broken, setBroken] = useState(false);
@@ -25,35 +29,55 @@ function DialogCoverArt({ url }: { url: string | null | undefined }) {
   );
 }
 
-export type ExistingChordFoundDialogProps = {
+export type RecognizedMusicConfirmDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   songTitle: string;
   artistName: string;
   coverImageUrl?: string | null;
-  chordHref: string;
-  /** Quando o utilizador prefere seguir com uma nova detecção em vez de abrir a cifra existente. */
-  onContinueWithNewDetection: () => void;
-  /** `default` — cartão centrado; `split` — variante com imagem à esquerda em ecrãs médios (alinhada ao frame de variante no Pencil). */
-  layout?: ExistingChordDialogLayout;
+  /**
+   * URL para abrir a cifra com letra IA (`/biblioteca/cifra/a?trackId=…`).
+   * Quando ausente, usa-se `onMontarComIaSemHref` (ex.: ingestão antes de ir aos resultados).
+   */
+  montarComIaHref: string | null;
+  onMontarComIaSemHref?: () => Promise<void>;
+  confirmLoading?: boolean;
+  onNotThisMusic: () => void;
+  /** Chamado ao seguir o link direto para a cifra com IA (ex.: esvaziar a fila antes da navegação). */
+  onMontarComIaWithHrefClick?: () => void;
+  layout?: LibraryImportDialogLayout;
 };
 
-export function ExistingChordFoundDialog({
+export function RecognizedMusicConfirmDialog({
   open,
   onOpenChange,
   songTitle,
   artistName,
   coverImageUrl,
-  chordHref,
-  onContinueWithNewDetection,
+  montarComIaHref,
+  onMontarComIaSemHref,
+  confirmLoading = false,
+  onNotThisMusic,
+  onMontarComIaWithHrefClick,
   layout = "default",
-}: ExistingChordFoundDialogProps) {
+}: RecognizedMusicConfirmDialogProps) {
   const isSplit = layout === "split";
+  const useLink = Boolean(montarComIaHref?.trim());
 
-  const handleContinue = useCallback(() => {
-    onContinueWithNewDetection();
+  const handleNotThisMusic = useCallback(() => {
+    onNotThisMusic();
     onOpenChange(false);
-  }, [onContinueWithNewDetection, onOpenChange]);
+  }, [onNotThisMusic, onOpenChange]);
+
+  const handleMontarAsync = useCallback(async () => {
+    if (!onMontarComIaSemHref) return;
+    await onMontarComIaSemHref();
+  }, [onMontarComIaSemHref]);
+
+  const primaryClass = cn(
+    "inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-cifra-teal px-4 py-2.5 text-[12px] font-semibold text-cifra-bg transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50",
+    isSplit && "md:w-auto"
+  );
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange} modal>
@@ -92,7 +116,7 @@ export function ExistingChordFoundDialog({
               <div className="min-w-0 flex-1 space-y-3">
                 <div className={cn("space-y-1", !isSplit && "text-center")}>
                   <Dialog.Title className="font-serif text-[22px] font-normal leading-tight tracking-tight text-cifra-text">
-                    Cifra já encontrada
+                    Confirme a música
                   </Dialog.Title>
                   <p className="text-sm font-semibold leading-snug text-cifra-text">{songTitle}</p>
                   <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-cifra-teal">
@@ -100,9 +124,15 @@ export function ExistingChordFoundDialog({
                   </p>
                 </div>
 
-                <Dialog.Description className="text-[12px] leading-[1.5] text-cifra-muted">
-                  A detecção identificou uma cifra que já corresponde a esta música na base. Quer abrir a cifra
-                  existente ou continuar com uma nova detecção a partir do áudio enviado?
+                <Dialog.Description className="space-y-2 text-[12px] leading-[1.5] text-cifra-muted">
+                  <p>
+                    O serviço identificou esta faixa a partir do seu áudio. Confirme se corresponde mesmo à música
+                    que pretende tratar.
+                  </p>
+                  <p>
+                    Se estiver correto, pode avançar para montar a cifra com a nossa IA (letra e sincronização). Se não
+                    for esta música, cancele e envie outro ficheiro ou rode a detecção de novo.
+                  </p>
                 </Dialog.Description>
               </div>
             </div>
@@ -110,28 +140,40 @@ export function ExistingChordFoundDialog({
             <div
               className={cn(
                 "mt-5 flex flex-col gap-2.5",
-                isSplit && "md:mt-6 md:flex-row md:justify-end"
+                isSplit && "md:mt-6 md:flex-row md:flex-wrap md:justify-end"
               )}
             >
-              <Link
-                href={chordHref}
-                className={cn(
-                  "inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-cifra-teal px-4 py-2.5 text-[12px] font-semibold text-cifra-bg transition-opacity hover:opacity-95",
-                  isSplit && "md:w-auto"
-                )}
-                onClick={() => onOpenChange(false)}
-              >
-                Abrir cifra existente
-              </Link>
-              <Dialog.Close
+              {useLink ? (
+                <Link
+                  href={montarComIaHref!}
+                  className={primaryClass}
+                  onClick={() => {
+                    onMontarComIaWithHrefClick?.();
+                    onOpenChange(false);
+                  }}
+                >
+                  Sim, montar cifra com IA
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  className={primaryClass}
+                  disabled={confirmLoading || !onMontarComIaSemHref}
+                  onClick={() => void handleMontarAsync()}
+                >
+                  {confirmLoading ? "A preparar…" : "Sim, montar cifra com IA"}
+                </button>
+              )}
+              <button
+                type="button"
                 className={cn(
                   "inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/[0.09] px-4 py-2.5 text-[12px] font-semibold text-cifra-text transition-colors hover:border-cifra-teal/35 hover:bg-white/[0.04]",
                   isSplit && "md:w-auto"
                 )}
-                onClick={handleContinue}
+                onClick={handleNotThisMusic}
               >
-                Continuar com detecção nova
-              </Dialog.Close>
+                Não, não é esta música
+              </button>
             </div>
           </Dialog.Popup>
         </Dialog.Viewport>

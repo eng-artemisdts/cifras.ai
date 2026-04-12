@@ -36,36 +36,18 @@ export function LibraryTopNav({ items, user, billingPlan, className }: LibraryTo
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-4 md:gap-8">
-        <div className="flex shrink-0 items-center gap-2.5">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="relative block size-[30px] overflow-hidden rounded-md">
-              <Image
-                src="/logo.svg"
-                alt="cifra.ai"
-                width={828}
-                height={220}
-                className="h-full w-full object-contain object-left"
-                unoptimized
-              />
-            </span>
-          </Link>
-          {showStarter ? (
-            <span
-              className="inline-flex shrink-0 items-center rounded-md border border-cifra-teal/45 bg-cifra-teal/12 px-2 py-1 font-mono text-[9px] font-bold tracking-[0.12em] text-cifra-teal"
-              title="Plano Starter ativo"
-            >
-              STARTER
-            </span>
-          ) : null}
-          {showPro ? (
-            <span
-              className="inline-flex shrink-0 items-center rounded-md border border-cifra-gold/55 bg-cifra-gold/12 px-2 py-1 font-mono text-[9px] font-bold tracking-[0.12em] text-cifra-gold"
-              title="Plano Pro ativo"
-            >
-              PRO
-            </span>
-          ) : null}
-        </div>
+        <Link href="/" className="flex shrink-0 items-center gap-2">
+          <span className="relative block size-[30px] overflow-hidden rounded-md">
+            <Image
+              src="/logo.svg"
+              alt="cifra.ai"
+              width={828}
+              height={220}
+              className="h-full w-full object-contain object-left"
+              unoptimized
+            />
+          </span>
+        </Link>
         <nav
           className="flex min-w-0 items-center gap-4 overflow-x-auto text-[13px] max-md:[-ms-overflow-style:none] max-md:[scrollbar-width:none] md:gap-5 max-md:[&::-webkit-scrollbar]:hidden"
         >
@@ -85,7 +67,23 @@ export function LibraryTopNav({ items, user, billingPlan, className }: LibraryTo
           ))}
         </nav>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2.5 md:gap-3">
+        {showStarter ? (
+          <span
+            className="inline-flex shrink-0 items-center rounded-md border border-cifra-teal/45 bg-cifra-teal/12 px-2 py-1 font-mono text-[9px] font-bold tracking-[0.12em] text-cifra-teal"
+            title="Plano Starter ativo"
+          >
+            STARTER
+          </span>
+        ) : null}
+        {showPro ? (
+          <span
+            className="inline-flex shrink-0 items-center rounded-md border border-cifra-gold/55 bg-cifra-gold/12 px-2 py-1 font-mono text-[9px] font-bold tracking-[0.12em] text-cifra-gold"
+            title="Plano Pro ativo"
+          >
+            PRO
+          </span>
+        ) : null}
         {user ? <Auth0UserMenu user={user} /> : (
           <>
             <Link

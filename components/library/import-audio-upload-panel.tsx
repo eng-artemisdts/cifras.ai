@@ -10,17 +10,18 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { DragEvent } from "react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import type { SchubertRecognizedSong } from "@/lib/schubert-identify-types";
 
-import {
-  ExistingChordFoundDialog,
-  type ExistingChordDialogLayout,
-} from "@/components/library/existing-chord-found-dialog";
+import { ChordFoundAccessDialog } from "@/components/library/chord-found-access-dialog";
+import type { ExistingChordDialogLayout } from "@/components/library/library-import-dialog-layout";
+import { RecognizedMusicConfirmDialog } from "@/components/library/recognized-music-confirm-dialog";
 import {
   identifyTrackFromMp3,
+  mapRecognizedSongToChordPreview,
   mapSchubertMatchToChordPreview,
   postTrackIngestWithMeta,
   SchubertIdentifyError,
@@ -67,7 +68,7 @@ export type QueuedFile = {
 
 export type ImportAudioUploadPanelProps = {
   className?: string;
-  /** Variante visual do modal «cifra já existe» (alinhada ao frame de variante no Pencil). */
+  /** Variante visual do modal de confirmação da música (alinhada ao frame de variante no Pencil). */
   existingChordDialogLayout?: ExistingChordDialogLayout;
 };
 
@@ -75,15 +76,27 @@ export function ImportAudioUploadPanel({
   className,
   existingChordDialogLayout = "default",
 }: ImportAudioUploadPanelProps) {
+  const router = useRouter();
   const inputId = useId();
+  const manualMetaId = useId();
   const addInputRef = useRef<HTMLInputElement>(null);
   const [queue, setQueue] = useState<QueuedFile[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [detecting, setDetecting] = useState(false);
-  const [existingChordOpen, setExistingChordOpen] = useState(false);
-  const [chordPreview, setChordPreview] = useState<ChordFoundPreview | null>(null);
+  const [recognitionConfirmOpen, setRecognitionConfirmOpen] = useState(false);
+  const [recognitionPreview, setRecognitionPreview] = useState<ChordFoundPreview | null>(null);
+  const [pendingIngest, setPendingIngest] = useState<{ file: File; song: SchubertRecognizedSong } | null>(
+    null,
+  );
+  const [confirmIaLoading, setConfirmIaLoading] = useState(false);
+  const [matchedChordPreview, setMatchedChordPreview] = useState<ChordFoundPreview | null>(null);
+  const [matchedChordOpen, setMatchedChordOpen] = useState(false);
+  const [manualMetaOpen, setManualMetaOpen] = useState(false);
+  const [manualTitle, setManualTitle] = useState("");
+  const [manualArtist, setManualArtist] = useState("");
+  const [manualMetaError, setManualMetaError] = useState<string | null>(null);
   const [identifyMessage, setIdentifyMessage] = useState<string | null>(null);
-  /** Metadados AudD quando a faixa é reconhecida mas ainda não existe cifra na base — para mostrar capa na fila. */
+  /** Metadados AudD quando a faixa é reconhecida — capa na fila antes ou depois do modal. */
   const [recognizedSong, setRecognizedSong] = useState<SchubertRecognizedSong | null>(null);
 
   const ingestLabel =
@@ -99,6 +112,15 @@ export function ImportAudioUploadPanel({
     if (!file) return;
     setIdentifyMessage(null);
     setRecognizedSong(null);
+    setRecognitionPreview(null);
+    setRecognitionConfirmOpen(false);
+    setPendingIngest(null);
+    setMatchedChordPreview(null);
+    setMatchedChordOpen(false);
+    setManualMetaOpen(false);
+    setManualTitle("");
+    setManualArtist("");
+    setManualMetaError(null);
     setQueue([
       {
         id: `${file.name}-${file.size}-${Math.random().toString(36).slice(2, 9)}`,
@@ -110,53 +132,126 @@ export function ImportAudioUploadPanel({
   const removeFile = useCallback((id: string) => {
     setRecognizedSong(null);
     setIdentifyMessage(null);
+    setRecognitionPreview(null);
+    setRecognitionConfirmOpen(false);
+    setPendingIngest(null);
+    setMatchedChordPreview(null);
+    setMatchedChordOpen(false);
+    setManualMetaOpen(false);
+    setManualTitle("");
+    setManualArtist("");
+    setManualMetaError(null);
     setQueue((prev) => prev.filter((q) => q.id !== id));
   }, []);
 
   const clearQueue = useCallback(() => {
     setRecognizedSong(null);
     setIdentifyMessage(null);
+    setRecognitionPreview(null);
+    setRecognitionConfirmOpen(false);
+    setPendingIngest(null);
+    setMatchedChordPreview(null);
+    setMatchedChordOpen(false);
+    setManualMetaOpen(false);
+    setManualTitle("");
+    setManualArtist("");
+    setManualMetaError(null);
     setQueue([]);
   }, []);
+
+  const handleRecognitionDialogOpenChange = useCallback((open: boolean) => {
+    setRecognitionConfirmOpen(open);
+    if (!open) {
+      setRecognitionPreview(null);
+      setPendingIngest(null);
+      setRecognizedSong(null);
+    }
+  }, []);
+
+  const handleNotThisMusic = useCallback(() => {
+    handleRecognitionDialogOpenChange(false);
+    clearQueue();
+  }, [handleRecognitionDialogOpenChange, clearQueue]);
+
+  const handleMontarComIaSemHref = useCallback(async () => {
+    if (!pendingIngest) return;
+    setConfirmIaLoading(true);
+    setIdentifyMessage(null);
+    try {
+      await postTrackIngestWithMeta(pendingIngest.file, pendingIngest.song);
+      const q = encodeURIComponent(`${pendingIngest.song.title} ${pendingIngest.song.artist}`.trim());
+      handleRecognitionDialogOpenChange(false);
+      clearQueue();
+      router.push(`/biblioteca/resultados?q=${q}`);
+    } catch (ingestErr) {
+      if (ingestErr instanceof SchubertIdentifyError) {
+        setIdentifyMessage(`Não foi possível concluir a ingestão: ${ingestErr.message}`);
+      } else {
+        setIdentifyMessage("Não foi possível concluir a ingestão (erro inesperado).");
+      }
+    } finally {
+      setConfirmIaLoading(false);
+    }
+  }, [pendingIngest, router, handleRecognitionDialogOpenChange, clearQueue]);
+
+  const handleMatchedChordDialogOpenChange = useCallback((open: boolean) => {
+    setMatchedChordOpen(open);
+    if (!open) {
+      setMatchedChordPreview(null);
+      setRecognizedSong(null);
+    }
+  }, []);
+
+  const handleManualContinue = useCallback(() => {
+    const t = manualTitle.trim();
+    const a = manualArtist.trim();
+    if (!t || !a) {
+      setManualMetaError("Preencha o título e o artista.");
+      return;
+    }
+    setManualMetaError(null);
+    const q = encodeURIComponent(`${t} ${a}`);
+    setManualMetaOpen(false);
+    setManualTitle("");
+    setManualArtist("");
+    clearQueue();
+    router.push(`/biblioteca/resultados?q=${q}`);
+  }, [manualTitle, manualArtist, router, clearQueue]);
 
   const runDetection = useCallback(async () => {
     const item = queue[0];
     if (!item) return;
     setIdentifyMessage(null);
     setRecognizedSong(null);
-    setChordPreview(null);
-    setExistingChordOpen(false);
+    setRecognitionPreview(null);
+    setRecognitionConfirmOpen(false);
+    setPendingIngest(null);
+    setMatchedChordPreview(null);
+    setMatchedChordOpen(false);
+    setManualMetaOpen(false);
+    setManualTitle("");
+    setManualArtist("");
+    setManualMetaError(null);
     setDetecting(true);
     try {
       const res = await identifyTrackFromMp3(item.file);
-      let ingestNotice: string | null = null;
-      if (res.song) {
-        try {
-          await postTrackIngestWithMeta(item.file, res.song);
-        } catch (ingestErr) {
-          if (ingestErr instanceof SchubertIdentifyError) {
-            ingestNotice = `Aviso: ingestão não concluída (${ingestErr.message})`;
-          } else {
-            ingestNotice = "Aviso: ingestão não concluída (erro inesperado).";
-          }
-        }
-      }
-      if (res.track && res.song) {
-        setRecognizedSong(null);
-        setChordPreview(mapSchubertMatchToChordPreview(res.track, res.song));
-        if (ingestNotice) setIdentifyMessage(ingestNotice);
-        setExistingChordOpen(true);
+      if (res.recognized && res.song && res.track) {
+        setRecognizedSong(res.song);
+        setMatchedChordPreview(mapSchubertMatchToChordPreview(res.track, res.song));
+        setMatchedChordOpen(true);
         return;
       }
       if (res.recognized && res.song) {
         setRecognizedSong(res.song);
-        setIdentifyMessage(
-          [ingestNotice, `Música reconhecida (${res.song.artist} — ${res.song.title})`]
-            .filter(Boolean)
-            .join("\n"),
-        );
+        setRecognitionPreview(mapRecognizedSongToChordPreview(res.song));
+        setPendingIngest({ file: item.file, song: res.song });
+        setRecognitionConfirmOpen(true);
         return;
       }
+      setIdentifyMessage(
+        "Não identificámos a música neste áudio. Preencha manualmente o título e o artista abaixo para procurar na biblioteca.",
+      );
+      setManualMetaOpen(true);
     } catch (e) {
       if (e instanceof SchubertIdentifyError) {
         setIdentifyMessage(e.message);
@@ -179,23 +274,31 @@ export function ImportAudioUploadPanel({
 
   return (
     <div className={cn("flex min-h-0 min-w-0 w-full flex-1 flex-col gap-3 md:gap-4", className)}>
-      {chordPreview ? (
-        <ExistingChordFoundDialog
-          open={existingChordOpen}
-          onOpenChange={(open) => {
-            setExistingChordOpen(open);
-            if (!open) setChordPreview(null);
-          }}
-          songTitle={chordPreview.songTitle}
-          artistName={chordPreview.artistName}
-          coverImageUrl={chordPreview.coverImageUrl}
-          chordHref={chordPreview.chordHref}
+      {matchedChordPreview ? (
+        <ChordFoundAccessDialog
+          open={matchedChordOpen}
+          onOpenChange={handleMatchedChordDialogOpenChange}
+          songTitle={matchedChordPreview.songTitle}
+          artistName={matchedChordPreview.artistName}
+          coverImageUrl={matchedChordPreview.coverImageUrl}
+          chordHref={matchedChordPreview.chordHref}
+          onAccessClick={clearQueue}
           layout={existingChordDialogLayout}
-          onContinueWithNewDetection={() => {
-            setChordPreview(null);
-            setIdentifyMessage(null);
-            clearQueue();
-          }}
+        />
+      ) : null}
+      {recognitionPreview ? (
+        <RecognizedMusicConfirmDialog
+          open={recognitionConfirmOpen}
+          onOpenChange={handleRecognitionDialogOpenChange}
+          songTitle={recognitionPreview.songTitle}
+          artistName={recognitionPreview.artistName}
+          coverImageUrl={recognitionPreview.coverImageUrl}
+          montarComIaHref={null}
+          onMontarComIaSemHref={pendingIngest ? handleMontarComIaSemHref : undefined}
+          confirmLoading={confirmIaLoading}
+          onNotThisMusic={handleNotThisMusic}
+          onMontarComIaWithHrefClick={clearQueue}
+          layout={existingChordDialogLayout}
         />
       ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -375,6 +478,77 @@ export function ImportAudioUploadPanel({
             Grave com poucos instrumentos sobrepostos; o modelo lê melhor o núcleo harmônico central do mix.
           </p>
         </div>
+
+        {manualMetaOpen && queue.length > 0 ? (
+          <div className="rounded-2xl border border-cifra-border bg-cifra-surface-2 px-4 py-4 md:px-5">
+            <p className="text-[11px] font-semibold text-cifra-text">Dados da música (manual)</p>
+            <p className="mt-1 text-[10px] leading-snug text-cifra-muted">
+              Use os mesmos nomes que espera encontrar no catálogo para obter melhores resultados na pesquisa.
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label htmlFor={`${manualMetaId}-title`} className="block text-[10px] font-medium text-cifra-muted">
+                  Título
+                </label>
+                <input
+                  id={`${manualMetaId}-title`}
+                  type="text"
+                  value={manualTitle}
+                  onChange={(e) => {
+                    setManualTitle(e.target.value);
+                    setManualMetaError(null);
+                  }}
+                  autoComplete="off"
+                  className="w-full rounded-lg border border-cifra-border bg-[#0c0c16] px-3 py-2 text-[12px] text-cifra-text outline-none ring-cifra-teal/30 placeholder:text-cifra-muted/50 focus:border-cifra-teal/40 focus:ring-1"
+                  placeholder="Ex.: Bohemian Rhapsody"
+                />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor={`${manualMetaId}-artist`} className="block text-[10px] font-medium text-cifra-muted">
+                  Artista
+                </label>
+                <input
+                  id={`${manualMetaId}-artist`}
+                  type="text"
+                  value={manualArtist}
+                  onChange={(e) => {
+                    setManualArtist(e.target.value);
+                    setManualMetaError(null);
+                  }}
+                  autoComplete="off"
+                  className="w-full rounded-lg border border-cifra-border bg-[#0c0c16] px-3 py-2 text-[12px] text-cifra-text outline-none ring-cifra-teal/30 placeholder:text-cifra-muted/50 focus:border-cifra-teal/40 focus:ring-1"
+                  placeholder="Ex.: Queen"
+                />
+              </div>
+            </div>
+            {manualMetaError ? (
+              <p className="mt-2 text-[11px] text-red-400/90" role="alert">
+                {manualMetaError}
+              </p>
+            ) : null}
+            <div className="mt-3 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setManualMetaOpen(false);
+                  setManualTitle("");
+                  setManualArtist("");
+                  setManualMetaError(null);
+                }}
+                className="rounded-lg border border-cifra-border px-3.5 py-2 text-[11px] font-semibold text-cifra-text transition-colors hover:border-cifra-teal/35"
+              >
+                Ocultar
+              </button>
+              <button
+                type="button"
+                onClick={handleManualContinue}
+                className="rounded-lg bg-cifra-teal px-4 py-2 text-[11px] font-semibold text-cifra-bg transition-opacity hover:opacity-95"
+              >
+                Continuar com estes dados
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <p className="text-center text-[11px] text-cifra-muted md:text-left">
           <Link href="/biblioteca/importar" className="font-medium text-cifra-teal hover:text-cifra-teal-hover">

@@ -4,7 +4,7 @@ import type { BillingPlan } from "@/lib/billing/plan-types";
 import type { LibraryNavItem } from "@/lib/library/types";
 import { cn } from "@/lib/utils";
 
-import type { ExistingChordDialogLayout } from "@/components/library/existing-chord-found-dialog";
+import type { ExistingChordDialogLayout } from "@/components/library/library-import-dialog-layout";
 
 import { ImportAudioUploadPanel } from "./import-audio-upload-panel";
 import { LibraryPageFooter } from "./library-page-footer";
@@ -15,7 +15,7 @@ export type LibraryImportAudioUploadViewProps = {
   user?: LibraryTopNavUser | null;
   billingPlan?: BillingPlan | null;
   className?: string;
-  /** Variante do modal «cifra já existe»; ver frame `vK9pq` no Pencil. */
+  /** Variante do modal de confirmação da música; ver frame `vK9pq` no Pencil. */
   existingChordDialogLayout?: ExistingChordDialogLayout;
 };
 
