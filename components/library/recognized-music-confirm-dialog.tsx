@@ -5,6 +5,7 @@ import { Music2, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useState } from "react";
 
+import { ChordIngestLoadingOverlay } from "@/components/library/chord-ingest-loading-overlay";
 import type { LibraryImportDialogLayout } from "@/components/library/library-import-dialog-layout";
 
 import { cn } from "@/lib/utils";
@@ -74,25 +75,41 @@ export function RecognizedMusicConfirmDialog({
     await onMontarComIaSemHref();
   }, [onMontarComIaSemHref]);
 
+  const handleRootOpenChange = useCallback(
+    (next: boolean) => {
+      if (!next && confirmLoading) return;
+      onOpenChange(next);
+    },
+    [confirmLoading, onOpenChange],
+  );
+
   const primaryClass = cn(
     "inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-cifra-teal px-4 py-2.5 text-[12px] font-semibold text-cifra-bg transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50",
     isSplit && "md:w-auto"
   );
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange} modal>
+    <Dialog.Root open={open} onOpenChange={handleRootOpenChange} modal>
       <Dialog.Portal>
         <Dialog.Viewport className="fixed inset-0 z-[200] flex items-center justify-center p-4 outline-none">
           <Dialog.Backdrop className="fixed inset-0 bg-[#080810]/72 backdrop-blur-[2px]" />
           <Dialog.Popup
             className={cn(
-              "relative z-10 w-full max-w-[400px] rounded-2xl border border-white/[0.09] bg-[#12121f] p-6 pt-9 shadow-[0_24px_80px_rgba(0,0,0,0.55)] outline-none",
+              "relative z-10 w-full max-w-[400px] overflow-hidden rounded-2xl border border-white/[0.09] bg-[#12121f] p-6 pt-9 shadow-[0_24px_80px_rgba(0,0,0,0.55)] outline-none",
               isSplit && "max-w-[440px] md:max-w-[480px]"
             )}
+            aria-busy={confirmLoading}
           >
+            {confirmLoading ? (
+              <ChordIngestLoadingOverlay songTitle={songTitle} artistName={artistName} />
+            ) : null}
             <Dialog.Close
-              className="absolute right-3 top-3 rounded-md p-1.5 text-cifra-muted transition-colors hover:bg-white/[0.06] hover:text-cifra-text"
+              className={cn(
+                "absolute right-3 top-3 rounded-md p-1.5 text-cifra-muted transition-colors hover:bg-white/[0.06] hover:text-cifra-text",
+                confirmLoading ? "z-10" : "z-30",
+              )}
               aria-label="Fechar"
+              tabIndex={confirmLoading ? -1 : 0}
             >
               <X className="size-4" strokeWidth={1.75} aria-hidden />
             </Dialog.Close>
@@ -161,15 +178,16 @@ export function RecognizedMusicConfirmDialog({
                   disabled={confirmLoading || !onMontarComIaSemHref}
                   onClick={() => void handleMontarAsync()}
                 >
-                  {confirmLoading ? "A preparar…" : "Sim, montar cifra com IA"}
+                  {confirmLoading ? "A processar…" : "Sim, montar cifra com IA"}
                 </button>
               )}
               <button
                 type="button"
                 className={cn(
                   "inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/[0.09] px-4 py-2.5 text-[12px] font-semibold text-cifra-text transition-colors hover:border-cifra-teal/35 hover:bg-white/[0.04]",
-                  isSplit && "md:w-auto"
+                  isSplit && "md:w-auto",
                 )}
+                disabled={confirmLoading}
                 onClick={handleNotThisMusic}
               >
                 Não, não é esta música

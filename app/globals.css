@@ -218,3 +218,22 @@ body {
     height: 12px;
   }
 }
+
+/* Overlay de ingestão de cifra (modal «Confirme a música»). */
+@keyframes cifra-eq-bar {
+  0%,
+  100% {
+    transform: scaleY(0.22);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes cifra-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}

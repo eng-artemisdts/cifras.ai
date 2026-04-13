@@ -21,8 +21,7 @@ export type SchubertTrackIdentifyResponse = {
   track: Record<string, unknown> | null;
 };
 
-/** Resposta de `POST /tracks/ingest` (áudio + `meta` com o mesmo formato que `song`). */
+/** Resposta de `POST /tracks/ingest` (áudio + `meta` JSON). */
 export type SchubertTrackIngestResponse = {
-  accepted: true;
-  song: SchubertRecognizedSong | null;
+  track: Record<string, unknown>;
 };
