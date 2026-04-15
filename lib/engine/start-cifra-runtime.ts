@@ -460,7 +460,7 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
   const onPlayClick = () => {
     if (audioUsable) {
       cancelVirtualPlayback();
-      if (audio.paused) void audio.play().catch(() => {});
+      if (audio.paused) void audio.play().catch(() => { });
       else audio.pause();
     } else {
       virtualPlaying = !virtualPlaying;
@@ -494,7 +494,7 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
     tick();
     playBtn.disabled = false;
     updateTransportUi();
-    if (wasVirtualPlaying) void audio.play().catch(() => {});
+    if (wasVirtualPlaying) void audio.play().catch(() => { });
   };
   const onAudioError = () => {
     audioUsable = false;

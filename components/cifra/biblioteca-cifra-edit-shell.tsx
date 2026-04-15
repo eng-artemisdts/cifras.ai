@@ -179,6 +179,7 @@ export function BibliotecaCifraEditShell({
               <CifraTranscriptionEditor
                 ref={editorRef}
                 initial={initialPayload}
+                lyricsVariantLabel={lyricsPath === "m" ? "Letra match" : "Letra IA"}
                 onRequestPreview={() => {
                   syncPreviewFromEditor();
                   setMode("preview");

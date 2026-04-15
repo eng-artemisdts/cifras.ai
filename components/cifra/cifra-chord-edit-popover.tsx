@@ -8,7 +8,7 @@ import type { MusicAiChordEvent } from "@/lib/cifra/musicai-types";
 import { chordDisplayLabel } from "@/lib/cifra/transcription-editor-model";
 import { cn } from "@/lib/utils";
 
-function patchChordSymbolAndTimes(
+export function patchChordSymbolAndTimes(
   chord: MusicAiChordEvent,
   start: number,
   end: number,

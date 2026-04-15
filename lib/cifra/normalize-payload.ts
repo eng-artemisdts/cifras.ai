@@ -1,5 +1,4 @@
 import {
-  clampChordEndsToSectionBoundaries,
   expandMergedLyricSegments,
   mergeConsecutiveDuplicateSectionLabels,
   sortSections,
@@ -16,7 +15,8 @@ export function normalizeDemoPayload(raw: MusicAiDemoPayload | null | undefined)
   const rawChords = Array.isArray(payload.chords) ? payload.chords : [];
   const capoRaw = Number.isFinite(payload.capo_at) ? Math.round(Number(payload.capo_at)) : 0;
   return {
-    chords: clampChordEndsToSectionBoundaries(rawChords, sectionsSorted),
+    // Preserve original chord spans (some tracks intentionally sustain across section boundaries).
+    chords: rawChords.map((c) => ({ ...c })),
     lyrics: expandMergedLyricSegments(rawLyrics),
     sections: sectionsSorted,
     meta: payload.meta && typeof payload.meta === "object" ? payload.meta : {},

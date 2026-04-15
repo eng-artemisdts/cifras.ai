@@ -222,6 +222,26 @@ export type EditorSectionGroup = {
   sectionIdx?: number;
 };
 
+/**
+ * Dentro de uma secção do editor, cada `segmentIndex` corresponde a um segmento de letra na API
+ * (tipicamente uma frase / linha). Devolve linhas ordenadas no tempo para renderizar uma linha por frase.
+ */
+export function clusterSlotsByLyricSegment(slots: LyricWordSlot[]): LyricWordSlot[][] {
+  const bySeg = new Map<number, LyricWordSlot[]>();
+  for (const s of slots) {
+    const arr = bySeg.get(s.segmentIndex) ?? [];
+    arr.push(s);
+    bySeg.set(s.segmentIndex, arr);
+  }
+  return Array.from(bySeg.values())
+    .map((arr) => [...arr].sort((x, y) => x.wordIndex - y.wordIndex))
+    .sort((a, b) => {
+      const ta = a.length ? Math.min(...a.map((s) => s.start)) : 0;
+      const tb = b.length ? Math.min(...b.map((s) => s.start)) : 0;
+      return ta - tb;
+    });
+}
+
 function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n));
 }
@@ -347,7 +367,11 @@ export function createChordEvent(symbol: string, start: number, end: number): Mu
   };
 }
 
-/** Índice do slot cuja janela temporal contém `t` (preferência: primeiro que couber). */
+/**
+ * Índice do slot cuja janela temporal contém `t` (preferência: primeiro que couber).
+ * Se nenhum slot contiver `t`, devolve o índice do slot cujo centro está mais perto (útil para UI de alvo genérico).
+ * Para ancorar acordes a palavras use `anchorSlotIdForChord` — não use este fallback.
+ */
 export function slotIndexForTime(slots: LyricWordSlot[], t: number): number {
   if (!slots.length) return -1;
   const hit = slots.findIndex((s) => t >= s.start && t < s.end);
@@ -363,6 +387,65 @@ export function slotIndexForTime(slots: LyricWordSlot[], t: number): number {
     }
   });
   return best;
+}
+
+/** `true` se o instante `t` cai no intervalo half-open de alguma palavra `[start, end)`. */
+export function timeAnchorsToSomeWordSlot(slots: LyricWordSlot[], t: number): boolean {
+  return slots.some((s) => t >= s.start && t < s.end);
+}
+
+/** Ordem canónica da letra: segmento → índice da palavra → tempo. */
+export function sortSlotsLyricOrder(slots: LyricWordSlot[]): LyricWordSlot[] {
+  return [...slots].sort((a, b) => {
+    if (a.segmentIndex !== b.segmentIndex) return a.segmentIndex - b.segmentIndex;
+    if (a.wordIndex !== b.wordIndex) return a.wordIndex - b.wordIndex;
+    return a.start - b.start;
+  });
+}
+
+function chordOverlapsSlot(c: MusicAiChordEvent, s: LyricWordSlot): boolean {
+  return c.end > s.start && c.start < s.end;
+}
+
+/** Para cada acorde, id da primeira palavra (ordem da letra) cujo intervalo intersecta o do acorde. */
+export function chordAnchorSlotIds(slots: LyricWordSlot[], chords: MusicAiChordEvent[]): (string | null)[] {
+  const ordered = sortSlotsLyricOrder(slots);
+  return chords.map((c) => {
+    for (const s of ordered) {
+      if (chordOverlapsSlot(c, s)) return s.id;
+    }
+    return null;
+  });
+}
+
+/**
+ * Primeira palavra (na ordem da letra) cujo intervalo intersecta o do acorde com duração > 0.
+ * Acordes longos (ex.: G# da intro até o verso) ancoram na **primeira** palavra tocada, não na mais próxima pelo `start`.
+ */
+export function anchorSlotIdForChord(slots: LyricWordSlot[], chord: MusicAiChordEvent): string | null {
+  for (const s of sortSlotsLyricOrder(slots)) {
+    if (chordOverlapsSlot(chord, s)) return s.id;
+  }
+  return null;
+}
+
+/**
+ * Acordes cujo `start` está em [rangeStart, rangeEnd) e **não** intersectam nenhuma palavra
+ * (só tempo instrumental / intro sem letra).
+ */
+export function chordIndicesInSectionWithoutWordAnchor(
+  slots: LyricWordSlot[],
+  chords: MusicAiChordEvent[],
+  rangeStart: number,
+  rangeEnd: number,
+): number[] {
+  const lo = Math.min(rangeStart, rangeEnd);
+  const hi = Math.max(rangeStart, rangeEnd);
+  return chords
+    .map((c, i) => ({ c, i }))
+    .filter(({ c }) => c.start >= lo && c.start < hi && anchorSlotIdForChord(slots, c) === null)
+    .map((x) => x.i)
+    .sort((a, b) => chords[a]!.start - chords[b]!.start);
 }
 
 /**
@@ -427,17 +510,21 @@ export function moveChordToTimeRange(
   return next;
 }
 
-/** Índices de acordes cujo `start` cai no slot indicado (mesma regra que o editor). */
+/**
+ * Índices de acordes cuja **âncora** é esta palavra: primeira palavra na ordem da letra cujo
+ * intervalo intersecta `[chord.start, chord.end)` (acordes sustentados da intro aparecem na 1.ª palavra tocada).
+ */
 export function chordIndicesAttachedToSlot(
   slots: LyricWordSlot[],
   chords: MusicAiChordEvent[],
   slot: LyricWordSlot,
+  anchorIds?: (string | null)[],
 ): number[] {
-  const slotGlobalIndex = slots.findIndex((x) => x.id === slot.id);
-  if (slotGlobalIndex < 0) return [];
+  if (!slots.some((x) => x.id === slot.id)) return [];
+  const anchors = anchorIds ?? chordAnchorSlotIds(slots, chords);
   return chords
     .map((c, i) => ({ c, i }))
-    .filter(({ c }) => slotIndexForTime(slots, c.start) === slotGlobalIndex)
+    .filter(({ i }) => anchors[i] === slot.id)
     .map((x) => x.i);
 }
 

@@ -73,12 +73,12 @@ function cloneSegmentSlice(seg: MusicAiLyricSegment, start: number, end: number)
       end: Number.isFinite(Number(w.end)) ? mapTime(Number(w.end), srcStart, srcEnd, start, end) : w.end,
       syllables: Array.isArray(w.syllables)
         ? w.syllables.map((s) => ({
-            ...s,
-            start: Number.isFinite(Number(s.start))
-              ? mapTime(Number(s.start), srcStart, srcEnd, start, end)
-              : s.start,
-            end: Number.isFinite(Number(s.end)) ? mapTime(Number(s.end), srcStart, srcEnd, start, end) : s.end,
-          }))
+          ...s,
+          start: Number.isFinite(Number(s.start))
+            ? mapTime(Number(s.start), srcStart, srcEnd, start, end)
+            : s.start,
+          end: Number.isFinite(Number(s.end)) ? mapTime(Number(s.end), srcStart, srcEnd, start, end) : s.end,
+        }))
         : w.syllables,
     };
   });
