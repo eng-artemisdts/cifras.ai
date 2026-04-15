@@ -27,6 +27,7 @@ import {
   SchubertIdentifyError,
   type ChordFoundPreview,
 } from "@/lib/schubert-identify-service";
+import { bibliotecaCifraEditHref } from "@/lib/library/biblioteca-cifra-href";
 import { cn } from "@/lib/utils";
 
 const ACCEPT = "audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/x-m4a,.mp3,.wav,.m4a";
@@ -178,10 +179,18 @@ export function ImportAudioUploadPanel({
     setConfirmIaLoading(true);
     setIdentifyMessage(null);
     try {
-      await postTrackIngestWithMeta(pendingIngest.file, pendingIngest.song);
-      const q = encodeURIComponent(`${pendingIngest.song.title} ${pendingIngest.song.artist}`.trim());
+      const { track } = await postTrackIngestWithMeta(pendingIngest.file, pendingIngest.song);
+      const tid =
+        track && typeof track === "object" && "trackId" in track && typeof track.trackId === "string"
+          ? track.trackId.trim()
+          : "";
       handleRecognitionDialogOpenChange(false);
       clearQueue();
+      if (tid) {
+        router.push(bibliotecaCifraEditHref(tid, "a"));
+        return;
+      }
+      const q = encodeURIComponent(`${pendingIngest.song.title} ${pendingIngest.song.artist}`.trim());
       router.push(`/biblioteca/resultados?q=${q}`);
     } catch (ingestErr) {
       if (ingestErr instanceof SchubertIdentifyError) {
@@ -282,6 +291,7 @@ export function ImportAudioUploadPanel({
           artistName={matchedChordPreview.artistName}
           coverImageUrl={matchedChordPreview.coverImageUrl}
           chordHref={matchedChordPreview.chordHref}
+          editHref={matchedChordPreview.editHref}
           onAccessClick={clearQueue}
           layout={existingChordDialogLayout}
         />

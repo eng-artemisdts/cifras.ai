@@ -4,6 +4,7 @@ import { LibraryHomeView } from "@/components/library/library-home-view";
 import { getAuth0SessionCached } from "@/lib/auth0";
 import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-plan";
 import { libraryNavForPath } from "@/lib/library/mock-data";
+import { fetchLibraryHomeFeed } from "@/lib/library/beethoven-tracks";
 
 export const metadata: Metadata = {
   title: "Biblioteca · cifra.ai",
@@ -21,12 +22,20 @@ export default async function BibliotecaPage() {
     : null;
 
   const billingPlan = await resolveBillingPlanForSessionUser(session?.user ?? null);
+  const { recommendationItems, recentAccessItems } = await fetchLibraryHomeFeed(
+    session?.user?.sub,
+  ).catch(() => ({
+    recommendationItems: [],
+    recentAccessItems: [],
+  }));
 
   return (
     <LibraryHomeView
       navItems={libraryNavForPath("/biblioteca")}
       user={user}
       billingPlan={billingPlan}
+      recommendationItems={recommendationItems}
+      recentAccessItems={recentAccessItems}
     />
   );
 }

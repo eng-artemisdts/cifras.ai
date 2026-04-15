@@ -87,8 +87,7 @@ export function CifraPocMount({ trackKey, payload, trackTitle, className }: Cifr
     });
 
     return destroy;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- só remontar quando a faixa (`trackKey`) muda; o payload do RSC pode ter nova referência por render.
-  }, [trackKey]);
+  }, [trackKey, payload]);
 
   useEffect(() => {
     setOriginalTune(payload.original_tune ?? "");

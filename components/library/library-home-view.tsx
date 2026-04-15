@@ -1,9 +1,8 @@
 import Link from "next/link";
 
 import LightRays from "@/components/LightRays";
-import { recentAccessItems, recommendationTiles } from "@/lib/library/mock-data";
 import type { BillingPlan } from "@/lib/billing/plan-types";
-import type { LibraryNavItem } from "@/lib/library/types";
+import type { LibraryNavItem, RecentAccessItem, RecommendationTile } from "@/lib/library/types";
 import { cn } from "@/lib/utils";
 
 import { LibraryPageFooter } from "./library-page-footer";
@@ -16,6 +15,8 @@ export type LibraryHomeViewProps = {
   navItems: LibraryNavItem[];
   user?: LibraryTopNavUser | null;
   billingPlan?: BillingPlan | null;
+  recommendationItems: RecommendationTile[];
+  recentAccessItems: RecentAccessItem[];
   className?: string;
 };
 
@@ -23,7 +24,14 @@ export type LibraryHomeViewProps = {
  * Início da biblioteca: busca, recomendações e últimos acessos.
  * Catálogo completo (abas + resultados + grid) em `/biblioteca/resultados`.
  */
-export function LibraryHomeView({ navItems, user, billingPlan, className }: LibraryHomeViewProps) {
+export function LibraryHomeView({
+  navItems,
+  user,
+  billingPlan,
+  recommendationItems,
+  recentAccessItems,
+  className,
+}: LibraryHomeViewProps) {
   return (
     <div className={cn("flex min-h-dvh flex-col bg-cifra-bg text-cifra-text", className)}>
       <LibraryTopNav items={navItems} user={user} billingPlan={billingPlan ?? undefined} />
@@ -50,7 +58,7 @@ export function LibraryHomeView({ navItems, user, billingPlan, className }: Libr
         />
         <div className="relative z-10 flex w-full flex-col items-center">
           <LibrarySearchHero />
-          <RecommendationsSection items={recommendationTiles} />
+          <RecommendationsSection items={recommendationItems} />
           <RecentAccessSection items={recentAccessItems} />
           <div className="mx-auto w-full max-w-[1200px] px-6 pb-10 pt-4 md:px-8">
             <Link

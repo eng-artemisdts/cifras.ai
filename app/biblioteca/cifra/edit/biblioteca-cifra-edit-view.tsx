@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { CifraSheetPageView } from "@/components/cifra/cifra-sheet-page-view";
+import { BibliotecaCifraEditShell } from "@/components/cifra/biblioteca-cifra-edit-shell";
 import { normalizeDemoPayload } from "@/lib/cifra/normalize-payload";
 import type { SchubertLyricsVariant } from "@/lib/cifra/schubert-to-payload";
 import {
@@ -11,9 +11,8 @@ import {
 import { getAuth0SessionCached } from "@/lib/auth0";
 import { auth0LoginHref } from "@/lib/auth0-routes";
 import { isAuth0Configured } from "@/lib/auth0-env";
-import { registerLibraryTrackAccess } from "@/lib/library/beethoven-tracks";
 import type { BibliotecaCifraLyricsPath } from "@/lib/library/biblioteca-cifra-href";
-import { bibliotecaCifraHref } from "@/lib/library/biblioteca-cifra-href";
+import { bibliotecaCifraEditHref } from "@/lib/library/biblioteca-cifra-href";
 import { publicMp3UrlForTrackId } from "@/lib/media/public-mp3-for-track";
 import { fetchSchubertTrackByKey } from "@/lib/schubert-fetch-track";
 
@@ -35,17 +34,20 @@ function resolveDurationSeconds(track: {
   return Math.max(...ends);
 }
 
-function lyricsVariantLabel(v: SchubertLyricsVariant): string {
-  return v === "match" ? "letra alinhada (match)" : "letra IA";
+function lyricsPathFromParam(v: string | undefined): BibliotecaCifraLyricsPath {
+  return v === "m" ? "m" : "a";
+}
+
+function lyricsVariantFromPath(p: BibliotecaCifraLyricsPath): SchubertLyricsVariant {
+  return p === "m" ? "match" : "ai";
 }
 
 type Props = {
   trackId: string;
-  lyricsVariant: SchubertLyricsVariant;
   lyricsPath: BibliotecaCifraLyricsPath;
 };
 
-export async function BibliotecaCifraTrackView({ trackId, lyricsVariant, lyricsPath }: Props) {
+export async function BibliotecaCifraEditView({ trackId, lyricsPath }: Props) {
   if (!isAuth0Configured()) {
     notFound();
   }
@@ -54,7 +56,7 @@ export async function BibliotecaCifraTrackView({ trackId, lyricsVariant, lyricsP
   if (!session?.user) {
     redirect(
       auth0LoginHref({
-        returnTo: bibliotecaCifraHref(trackId, lyricsPath),
+        returnTo: bibliotecaCifraEditHref(trackId, lyricsPath),
       }),
     );
   }
@@ -72,8 +74,7 @@ export async function BibliotecaCifraTrackView({ trackId, lyricsVariant, lyricsP
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-cifra-bg px-6 text-center">
         <p className="max-w-md text-sm text-cifra-muted">
-          Não foi possível contactar a Schubert API com a sua sessão. Verifique a rede e as variáveis de ambiente,
-          ou tente novamente mais tarde.
+          Não foi possível contactar a Schubert API. Verifique a rede e tente novamente.
         </p>
         <Link href="/biblioteca/importar/arquivo" className="text-sm font-semibold text-cifra-teal">
           Voltar à importação
@@ -86,8 +87,9 @@ export async function BibliotecaCifraTrackView({ trackId, lyricsVariant, lyricsP
     notFound();
   }
 
-  const fromSchubert = schubertTrackToDemoPayload(track, lyricsVariant);
-  const payload = normalizeDemoPayload({
+  const variant = lyricsVariantFromPath(lyricsPath);
+  const fromSchubert = schubertTrackToDemoPayload(track, variant);
+  const initialPayload = normalizeDemoPayload({
     ...fromSchubert,
     meta: {
       ...fromSchubert.meta,
@@ -100,22 +102,22 @@ export async function BibliotecaCifraTrackView({ trackId, lyricsVariant, lyricsP
       ? track.name.trim()
       : (track.meta?.name ?? "Faixa sem título");
   const artist = resolveArtistNameFromSchubertTrack(track);
-  const subtitle = `${artist} · cifra sincronizada (Schubert) · ${lyricsVariantLabel(lyricsVariant)}`;
+  const subtitle = `${artist} · edição de cifra · ${variant === "match" ? "letra match" : "letra IA"}`;
   const durationLabel = formatDurationClock(resolveDurationSeconds(track));
 
-  if (session.user.sub) {
-    // Melhor esforço: não bloqueia a renderização caso o Beethoven esteja indisponível.
-    await registerLibraryTrackAccess({ userId: session.user.sub, trackKey: trackId }).catch(() => {});
-  }
-
   return (
-    <CifraSheetPageView
+    <BibliotecaCifraEditShell
       user={user}
-      trackKey={`${trackId}:${lyricsPath}`}
+      trackId={trackId}
+      lyricsPath={lyricsPath}
+      initialPayload={initialPayload}
       title={title}
       subtitle={subtitle}
       durationLabel={durationLabel}
-      payload={payload}
     />
   );
+}
+
+export function resolveLyricsPathFromSearch(v: string | undefined): BibliotecaCifraLyricsPath {
+  return lyricsPathFromParam(v);
 }

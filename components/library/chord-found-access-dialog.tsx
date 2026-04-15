@@ -32,6 +32,8 @@ export type ChordFoundAccessDialogProps = {
   artistName: string;
   coverImageUrl?: string | null;
   chordHref: string;
+  /** Quando existe chave Schubert — abre o editor de letra/acordes. */
+  editHref?: string | null;
   onAccessClick?: () => void;
   layout?: LibraryImportDialogLayout;
 };
@@ -43,6 +45,7 @@ export function ChordFoundAccessDialog({
   artistName,
   coverImageUrl,
   chordHref,
+  editHref,
   onAccessClick,
   layout = "default",
 }: ChordFoundAccessDialogProps) {
@@ -98,8 +101,8 @@ export function ChordFoundAccessDialog({
                 </div>
 
                 <Dialog.Description className="text-[12px] leading-[1.5] text-cifra-muted">
-                  A identificação encontrou esta música e já existe uma cifra correspondente na biblioteca. Deseja
-                  aceder à cifra agora?
+                  A identificação encontrou esta música e já existe uma cifra correspondente na biblioteca. Pode
+                  aceder à cifra ou abrir o modo de edição (letra e posição dos acordes).
                 </Dialog.Description>
               </div>
             </div>
@@ -123,6 +126,21 @@ export function ChordFoundAccessDialog({
               >
                 Aceder à cifra
               </Link>
+              {editHref?.trim() ? (
+                <Link
+                  href={editHref.trim()}
+                  className={cn(
+                    "inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-cifra-teal/40 bg-cifra-teal/8 px-4 py-2.5 text-[12px] font-semibold text-cifra-teal transition-colors hover:border-cifra-teal/55 hover:bg-cifra-teal/14",
+                    isSplit && "md:w-auto"
+                  )}
+                  onClick={() => {
+                    onAccessClick?.();
+                    onOpenChange(false);
+                  }}
+                >
+                  Editar cifra
+                </Link>
+              ) : null}
               <button
                 type="button"
                 className={cn(

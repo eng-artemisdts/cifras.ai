@@ -1,4 +1,4 @@
-import { bibliotecaCifraHref } from "@/lib/library/biblioteca-cifra-href";
+import { bibliotecaCifraEditHref, bibliotecaCifraHref } from "@/lib/library/biblioteca-cifra-href";
 import { fetchSchubertFromBrowser } from "@/lib/schubert-api";
 import type {
   SchubertRecognizedSong,
@@ -128,6 +128,8 @@ export type ChordFoundPreview = {
   chordHref: string;
   /** Chave pública Schubert quando a faixa já existe na base; `null` se só houver reconhecimento AudD. */
   trackId: string | null;
+  /** URL do editor (letra + acordes) quando `trackId` existe. */
+  editHref: string | null;
 };
 
 /**
@@ -148,6 +150,7 @@ export function mapSchubertMatchToChordPreview(
         : "";
   const q = encodeURIComponent(`${songTitle} ${artistName}`.trim());
   const chordHref = trackId ? bibliotecaCifraHref(trackId, "a") : `/biblioteca/resultados?q=${q}`;
+  const tid = trackId || null;
   return {
     songTitle,
     artistName,
@@ -155,7 +158,8 @@ export function mapSchubertMatchToChordPreview(
       ? song.cover_image_url.trim()
       : null,
     chordHref,
-    trackId: trackId || null,
+    trackId: tid,
+    editHref: tid ? bibliotecaCifraEditHref(tid, "a") : null,
   };
 }
 
@@ -170,6 +174,7 @@ export function mapRecognizedSongToChordPreview(song: SchubertRecognizedSong): C
       : null,
     chordHref: `/biblioteca/resultados?q=${q}`,
     trackId: null,
+    editHref: null,
   };
 }
 
