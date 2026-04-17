@@ -1,8 +1,9 @@
 // @ts-nocheck
 /**
  * Renderização da cifra: blocos instrumentais (sem letra) + linhas vocais com acordes.
- * Colapsa acordes iguais consecutivos dentro da linha; não repete na linha seguinte acorde cujo
- * onset (evento no JSON) começou antes do `start` da linha — `chordSegmentsInAudioWindow` clipa `a0` à palavra.
+ * Colapsa acordes iguais consecutivos dentro da linha. Se o **mesmo** evento de acorde (`chordIdx`)
+ * continua na linha seguinte, não repete o símbolo na 1.ª palavra e estende `playbackA1` na última
+ * célula da linha anterior; dois eventos distintos no JSON com o mesmo rótulo mantêm-se ambos visíveis.
  *
  * @module cifra-view
  */
@@ -33,13 +34,13 @@ const CHORD_SNAP_AFTER_SECTION_START_SEC = 0.06;
 const CHORD_SNAP_PICKUP_END_EPS_SEC = 0.12;
 /** Só anacruse se o fim da palavra está a no máximo isto **antes** de S (evita confundir desvio Whisper/Music.AI com pickup). */
 const CHORD_SNAP_MAX_LEAD_BEFORE_SECTION_SEC = 4;
-/**
- * Onset do evento antes disto (vs. 1.º `start` da linha) → não reimprimir o símbolo na linha nova.
- * (Os segmentos por palavra usam `a0` clipado à palavra, não o onset real do acorde.)
- */
-const CHORD_LINE_CROSS_EPS_SEC = 0.05;
 /** Alinhar `sections.json` (Intro.end vs Verso.start) com pequenos desvios de tempo. */
 const SECTION_BOUNDARY_DEDUPE_EPS_SEC = 0.15;
+/**
+ * Só deduplicar o 1.º acorde da linha vocal após instrumental se a 1.ª sílaba não começa logo a seguir
+ * ao fim do bloco só-acordes (senão esconde o G# sustentado na entrada do verso).
+ */
+const SECTION_BOUNDARY_PENDING_DEDUPE_MIN_LYRIC_GAP_SEC = 0.35;
 
 /**
  * Último rótulo de acorde visível nas células da grelha instrumental desde `fromIdx` (para dedupe na fronteira de secção).
@@ -61,23 +62,6 @@ function lastChordLabelInStripCellsSince(stripCells, fromIdx, getChordLabelAtAud
     if (lab != null && String(lab).trim() !== '' && lab !== '\u00A0') return lab;
   }
   return null;
-}
-
-/**
- * Início em tempo de áudio do evento `chords[chordIdx]` após a mesma normalização que a grelha.
- *
- * @param {import('./musicai-types.ts').MusicAiChordEvent[]} chords
- * @param {number} chordIdx
- * @param {number} chordTimeOffsetSec
- * @returns {number}
- */
-function chordEventOnsetAudioSec(chords, chordIdx, chordTimeOffsetSec) {
-  const normalized = collapseTrailingNoChordEvents(Array.isArray(chords) ? chords : []);
-  const c = normalized[chordIdx];
-  if (!c) return NaN;
-  const chordStart = Number(c.start);
-  const off = Number.isFinite(chordTimeOffsetSec) ? chordTimeOffsetSec : 0;
-  return Number.isFinite(chordStart) ? chordStart + off : NaN;
 }
 
 /** Compara envelopes Music.AI (secção fundida) para fundir UI instrumental + letra. */
@@ -128,14 +112,6 @@ function createInstrumentalChordStrip(iv, chords, chordOffsetSec, stripCellsOut,
   const segs = chordSegmentsInAudioWindow(chords, iv.start, iv.end, chordOffsetSec, {
     formatChord: formatChordEvent
   });
-  if (!segs.length) {
-    const empty = document.createElement('p');
-    empty.className = 'mb-2 text-[11px] text-auris-muted/80';
-    empty.textContent = 'Sem acordes neste intervalo.';
-    outer.appendChild(empty);
-    return outer;
-  }
-
   const row = document.createElement('div');
   row.className = 'cifra-line flex flex-wrap items-end gap-x-3 gap-y-4';
   row.setAttribute('data-instrumental-strip', `${iv.start}-${iv.end}`);
@@ -297,6 +273,72 @@ export function mountCifraView(params) {
 
   function build() {
     clear();
+    const normalizedChords = collapseTrailingNoChordEvents(Array.isArray(chords) ? chords : []);
+    /**
+     * Janela temporal efetiva da palavra (mesma heurística usada no render da linha).
+     * @param {any[]} words
+     * @param {number} idx
+     * @returns {{ start: number, end: number } | null}
+     */
+    const wordAudioWindow = (words, idx) => {
+      const tw = words[idx];
+      if (!tw || tw.start == null || !Number.isFinite(tw.start)) return null;
+      const nextStart =
+        idx + 1 < words.length && words[idx + 1].start != null && Number.isFinite(words[idx + 1].start)
+          ? words[idx + 1].start
+          : null;
+      let upper =
+        nextStart != null && Number.isFinite(nextStart) && nextStart > tw.start + 1e-4
+          ? nextStart
+          : tw.end != null && Number.isFinite(tw.end) && tw.end > tw.start + 1e-4
+            ? tw.end
+            : tw.start + 0.5;
+      if (
+        tw.end != null &&
+        Number.isFinite(tw.end) &&
+        tw.end > tw.start + 1e-4 &&
+        upper > tw.end + 1e-6
+      ) {
+        upper = tw.end;
+      }
+      if (!Number.isFinite(upper) || upper <= tw.start + 1e-4) return null;
+      return { start: Number(tw.start), end: Number(upper) };
+    };
+    /** @type {{ w: any, start: number, end: number }[]} */
+    const lyricWordWindows = [];
+    for (let i = 0; i < renderPlan.length; i++) {
+      const ev = renderPlan[i];
+      if (!ev || ev.kind !== 'lyric' || !Array.isArray(ev.line)) continue;
+      for (let wi = 0; wi < ev.line.length; wi++) {
+        const w = ev.line[wi];
+        const win = wordAudioWindow(ev.line, wi);
+        if (!w || !win) continue;
+        lyricWordWindows.push({ w, start: win.start, end: win.end });
+      }
+    }
+    /**
+     * Mapa palavra -> índices de acordes ancorados nela.
+     * Regra igual ao editor: acorde ancora na 1ª palavra (ordem da letra) que intersecta seu intervalo.
+     * @type {WeakMap<object, number[]>}
+     */
+    const anchoredChordIdxByWord = new WeakMap();
+    const off = Number.isFinite(chordTimeOffsetSec) ? chordTimeOffsetSec : 0;
+    for (let ci = 0; ci < normalizedChords.length; ci++) {
+      const c = normalizedChords[ci];
+      if (!c) continue;
+      const cA0 = Number(c.start) + off;
+      const cA1 = Number(c.end) + off;
+      if (!Number.isFinite(cA0) || !Number.isFinite(cA1) || cA1 <= cA0 + 1e-6) continue;
+      for (let wi = 0; wi < lyricWordWindows.length; wi++) {
+        const ww = lyricWordWindows[wi];
+        if (cA1 > ww.start && cA0 < ww.end) {
+          const arr = anchoredChordIdxByWord.get(ww.w) ?? [];
+          arr.push(ci);
+          anchoredChordIdxByWord.set(ww.w, arr);
+          break;
+        }
+      }
+    }
     /** @type {number|null} */
     let vocalShellKey = null;
     /** @type {HTMLElement|null} */
@@ -310,11 +352,18 @@ export function mountCifraView(params) {
      * @type {{ label: string, boundarySecStart: number } | null}
      */
     let pendingSectionBoundaryChordDedupe = null;
+    /**
+     * Última célula vocal com símbolo de acorde visível na linha anterior (para não repetir o mesmo
+     * `chordIdx` na 1.ª palavra da linha seguinte — um só objeto JSON atravessa a quebra de linha).
+     * @type {{ wrap: HTMLElement, chordIdx: number } | null}
+     */
+    let prevLyricRowLastVisibleChord = null;
 
     for (let evIdx = 0; evIdx < renderPlan.length; evIdx++) {
       const ev = renderPlan[evIdx];
       if (ev.kind === 'instrumental') {
         carryLyricChordLabel = null;
+        prevLyricRowLastVisibleChord = null;
         const instrumentalStripStartIdx = stripCells.length;
         const iv0 = ev.iv;
         const env0 =
@@ -426,7 +475,15 @@ export function mountCifraView(params) {
           if (fs != null && Number.isFinite(fs)) {
             lyricEnv = musicAiSectionEnvelopeForTime(fs, sectionsSorted);
           }
-          if (lyricEnv && !envelopesMatch(env0, lyricEnv)) {
+          const lastIv = instGroup[instGroup.length - 1];
+          const ivEnd = lastIv != null ? Number(lastIv.end) : NaN;
+          const handoffGap =
+            fs != null && Number.isFinite(fs) && Number.isFinite(ivEnd) ? fs - ivEnd : Infinity;
+          if (
+            lyricEnv &&
+            !envelopesMatch(env0, lyricEnv) &&
+            handoffGap >= SECTION_BOUNDARY_PENDING_DEDUPE_MIN_LYRIC_GAP_SEC - 1e-3
+          ) {
             const lastLab = lastChordLabelInStripCellsSince(
               stripCells,
               instrumentalStripStartIdx,
@@ -458,13 +515,13 @@ export function mountCifraView(params) {
 
       if (sec && sec.start !== vocalShellKey) {
         carryLyricChordLabel = null;
+        prevLyricRowLastVisibleChord = null;
       }
+
+      const crossRowCarryFromPrev = prevLyricRowLastVisibleChord;
 
       const row = document.createElement('div');
       row.className = 'cifra-line flex flex-wrap items-end gap-x-3 gap-y-4';
-
-      const rowAudioStart =
-        fw.start != null && Number.isFinite(fw.start) ? Number(fw.start) : null;
 
       let rowPrevChordLabel = carryLyricChordLabel;
       let exactPrevRenderedLabel = /** @type {string|null} */ (null);
@@ -495,23 +552,27 @@ export function mountCifraView(params) {
         const isPickupSyllable =
           Boolean(
             sec &&
-              !isInstrumentalSectionLabel(sec.label) &&
-              Number.isFinite(sec.start) &&
-              tw.start != null &&
-              Number.isFinite(tw.start) &&
-              tw.start < sec.start &&
-              tw.end != null &&
-              Number.isFinite(tw.end) &&
-              tw.end <= sec.start + CHORD_SNAP_PICKUP_END_EPS_SEC &&
-              leadBeforeSec >= -CHORD_SNAP_PICKUP_END_EPS_SEC &&
-              leadBeforeSec <= CHORD_SNAP_MAX_LEAD_BEFORE_SECTION_SEC
+            !isInstrumentalSectionLabel(sec.label) &&
+            Number.isFinite(sec.start) &&
+            tw.start != null &&
+            Number.isFinite(tw.start) &&
+            tw.start < sec.start &&
+            tw.end != null &&
+            Number.isFinite(tw.end) &&
+            tw.end <= sec.start + CHORD_SNAP_PICKUP_END_EPS_SEC &&
+            leadBeforeSec >= -CHORD_SNAP_PICKUP_END_EPS_SEC &&
+            leadBeforeSec <= CHORD_SNAP_MAX_LEAD_BEFORE_SECTION_SEC
           );
         if (isPickupSyllable) {
           chordLookupT = sec.start + CHORD_SNAP_AFTER_SECTION_START_SEC;
         }
 
-        const applySectionOnsetFilter =
-          Boolean(sec && !isInstrumentalSectionLabel(sec.label) && Number.isFinite(sec.start) && !isPickupSyllable);
+        /**
+         * A edição ancora acordes por sobreposição com a palavra (não pelo onset na secção).
+         * Para manter preview = edição, não removemos segmentos só porque começaram antes da secção:
+         * acordes sustentados (ex.: G# da intro até "Everywhere") devem continuar visíveis.
+         */
+        const applySectionOnsetFilter = false;
         const sectionStartForChords = sec && Number.isFinite(sec.start) ? Number(sec.start) : NaN;
 
         let label = getChordLabelAtAudioTime(chordLookupT);
@@ -562,7 +623,31 @@ export function mountCifraView(params) {
           }
         }
 
+        // Preview alinhada ao editor: usar acordes ancorados à palavra por sobreposição temporal.
+        const anchoredIdxs = anchoredChordIdxByWord.get(tw) ?? [];
+        if (anchoredIdxs.length && tw.start != null && Number.isFinite(tw.start) && wordT1 != null) {
+          const anchoredSegs = [];
+          for (let ai = 0; ai < anchoredIdxs.length; ai++) {
+            const chordIdx = anchoredIdxs[ai];
+            const c = normalizedChords[chordIdx];
+            if (!c) continue;
+            const cA0 = Number(c.start) + off;
+            const cA1 = Number(c.end) + off;
+            const a0 = Math.max(Number(tw.start), cA0);
+            const a1 = Math.min(Number(wordT1), cA1);
+            if (Number.isFinite(a0) && Number.isFinite(a1) && a1 > a0 + 1e-6) {
+              anchoredSegs.push({ a0, a1, label: formatChordEvent(c), chordIdx });
+            }
+          }
+          if (anchoredSegs.length) {
+            anchoredSegs.sort((a, b) => a.a0 - b.a0);
+            segs = collapseSequentialEqualChordSegments(anchoredSegs);
+            label = segs[0].label;
+          }
+        }
+
         if (
+          segs.length === 0 &&
           useChordBarAnchors &&
           tw.start != null &&
           Number.isFinite(tw.start) &&
@@ -597,7 +682,7 @@ export function mountCifraView(params) {
         if (segs.length) {
           label = segs[0].label;
         }
-        if (!segs.length && Number.isFinite(chordLookupT)) {
+        if (segs.length === 0 && Number.isFinite(chordLookupT)) {
           const rawFb = chordSegmentsInAudioWindow(chords, chordLookupT, chordLookupT + 4, chordTimeOffsetSec, {
             formatChord: formatChordEvent
           });
@@ -647,18 +732,16 @@ export function mountCifraView(params) {
         if (!showAllChordPositions) {
           showChordLabel = rowPrevChordLabel === null || label !== rowPrevChordLabel;
         }
-        if (
-          rowAudioStart != null &&
-          label !== '\u00A0' &&
-          segs.length &&
-          Number.isFinite(segs[0].chordIdx)
-        ) {
-          const eventOnset = chordEventOnsetAudioSec(chords, segs[0].chordIdx, chordTimeOffsetSec);
-          if (Number.isFinite(eventOnset) && eventOnset < rowAudioStart - CHORD_LINE_CROSS_EPS_SEC) {
-            showChordLabel = false;
-          }
-        }
 
+        const crossLineSameEventDup =
+          idx === 0 &&
+          crossRowCarryFromPrev != null &&
+          segs.length > 0 &&
+          Number.isFinite(segs[0].chordIdx) &&
+          segs[0].chordIdx === crossRowCarryFromPrev.chordIdx;
+        if (crossLineSameEventDup) {
+          showChordLabel = false;
+        }
 
         const chordDisplay = showChordLabel ? label : '\u00A0';
         const mainPlaybackWin =
@@ -670,6 +753,30 @@ export function mountCifraView(params) {
           segs.length && Number.isFinite(segs[0].chordIdx) ? segs[0].chordIdx : undefined;
         const wrap = createLyricChordCell(chordDisplay, tw.text, tw.g, spans, mainPlaybackWin, mainChordIdx);
         row.appendChild(wrap);
+
+        if (crossLineSameEventDup && crossRowCarryFromPrev != null && segs.length > 0) {
+          const c = normalizedChords[segs[0].chordIdx];
+          const cEnd = c != null ? Number(c.end) + off : NaN;
+          const pw = crossRowCarryFromPrev.wrap;
+          if (Number.isFinite(cEnd) && pw && pw.dataset && pw.dataset.playbackA1 != null) {
+            const prevA1 = Number(pw.dataset.playbackA1);
+            if (Number.isFinite(prevA1)) {
+              pw.dataset.playbackA1 = String(Math.max(prevA1, cEnd));
+            } else {
+              pw.dataset.playbackA1 = String(cEnd);
+            }
+          }
+        }
+
+        if (
+          chordDisplay !== '\u00A0' &&
+          String(chordDisplay).trim() !== '' &&
+          mainChordIdx != null &&
+          Number.isFinite(mainChordIdx)
+        ) {
+          prevLyricRowLastVisibleChord = { wrap, chordIdx: mainChordIdx };
+        }
+
         if (
           showAllChordPositions &&
           chordDisplay !== '\u00A0' &&
@@ -702,6 +809,9 @@ export function mountCifraView(params) {
             row.appendChild(ghost);
             if (showAllChordPositions) {
               exactPrevRenderedLabel = seg.label;
+            }
+            if (seg.label !== '\u00A0' && String(seg.label).trim() !== '' && Number.isFinite(seg.chordIdx)) {
+              prevLyricRowLastVisibleChord = { wrap: ghost, chordIdx: seg.chordIdx };
             }
           }
         }

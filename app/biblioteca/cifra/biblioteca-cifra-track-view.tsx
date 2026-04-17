@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound, redirect, unstable_rethrow } from "next/navigation";
 
 import { CifraSheetPageView } from "@/components/cifra/cifra-sheet-page-view";
 import { normalizeDemoPayload } from "@/lib/cifra/normalize-payload";
@@ -66,9 +66,12 @@ export async function BibliotecaCifraTrackView({ trackId, lyricsVariant, lyricsP
   };
 
   let track: Awaited<ReturnType<typeof fetchSchubertTrackByKey>>;
+
   try {
     track = await fetchSchubertTrackByKey(trackId);
-  } catch {
+
+  } catch (error) {
+    unstable_rethrow(error);
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-cifra-bg px-6 text-center">
         <p className="max-w-md text-sm text-cifra-muted">
@@ -105,7 +108,7 @@ export async function BibliotecaCifraTrackView({ trackId, lyricsVariant, lyricsP
 
   if (session.user.sub) {
     // Melhor esforço: não bloqueia a renderização caso o Beethoven esteja indisponível.
-    await registerLibraryTrackAccess({ userId: session.user.sub, trackKey: trackId }).catch(() => {});
+    await registerLibraryTrackAccess({ userId: session.user.sub, trackKey: trackId }).catch(() => { });
   }
 
   return (

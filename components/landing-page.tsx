@@ -27,6 +27,7 @@ export function LandingPage() {
               width={228}
               height={60}
               className="h-6 w-auto shrink-0 object-contain sm:h-6"
+              style={{ width: "auto" }}
               priority
               unoptimized
             />
@@ -139,6 +140,7 @@ export function LandingPage() {
                 width={828}
                 height={220}
                 className="h-10 w-auto max-w-[min(100%,240px)] shrink-0 object-contain sm:h-11 md:h-12"
+                style={{ width: "auto" }}
                 priority
                 unoptimized
               />

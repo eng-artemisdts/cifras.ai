@@ -38,6 +38,7 @@ export function LibrarySearchHero({
           width={228}
           height={60}
           className="h-8 w-auto object-contain sm:h-9"
+          style={{ width: "auto" }}
           priority
           unoptimized
         />

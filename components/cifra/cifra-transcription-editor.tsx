@@ -896,483 +896,483 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
         />
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
           <section className="space-y-2">
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cifra-muted">
-              Letra e acordes
-            </h2>
-            {onRequestPreview ? (
-              <button
-                type="button"
-                onClick={onRequestPreview}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-cifra-teal/40 bg-cifra-teal/10 px-2.5 py-1.5 text-[10px] font-semibold text-cifra-teal transition-colors hover:border-cifra-teal/55 hover:bg-cifra-teal/15"
-              >
-                <Eye className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-                Pré-visualizar alterações
-              </button>
-            ) : null}
-          </div>
-          <div className="rounded-lg border border-cifra-border bg-cifra-surface/80 px-3 py-2">
-            <button
-              type="button"
-              onClick={() => setGuideOpen((o) => !o)}
-              className="flex w-full items-center justify-between gap-2 text-left text-[11px] font-semibold text-cifra-text"
-            >
-              Guia rápido
-              <span className="font-mono text-[10px] font-normal text-cifra-teal">{guideOpen ? "Recolher" : "Expandir"}</span>
-            </button>
-            {guideOpen ? (
-              <p className="mt-2 text-[10px] leading-snug text-cifra-muted">
-                Toque numa palavra para a selecionar (painel à direita). Duplo clique edita letra e tempos. «Acorde na
-                palavra ativa» adiciona acorde à palavra selecionada. Arraste o símbolo do acorde ou a célula da palavra
-                para mover. Dicionário e edição em massa ficam nas colunas laterais.
-              </p>
-            ) : (
-              <p className="mt-1 text-[10px] leading-snug text-cifra-muted">
-                O centro mostra só a leitura; detalhes e duração do acorde no painel à direita.
-              </p>
-            )}
-          </div>
-          {durationMismatch ? (
-            <div
-              className="rounded-lg border border-amber-500/40 bg-amber-500/12 px-3 py-2 text-[11px] leading-snug text-amber-100/95"
-              role="status"
-            >
-              A duração da faixa em meta ({formatDurationSeconds(durationMismatch.ref)} s) não coincide com o fim do
-              conteúdo atual (~{formatDurationSeconds(durationMismatch.end)} s; Δ ≈{" "}
-              {formatDurationSeconds(durationMismatch.delta)}). Corrija se não for intencional.
-            </div>
-          ) : null}
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-start gap-2">
-              {!addSectionOpen ? (
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cifra-muted">
+                Letra e acordes
+              </h2>
+              {onRequestPreview ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    setAddChordContext(null);
-                    setAddSectionOpen(true);
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-cifra-teal/35 bg-cifra-teal/5 px-2.5 py-1.5 text-[10px] font-semibold text-cifra-teal hover:bg-cifra-teal/10"
+                  onClick={onRequestPreview}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-cifra-teal/40 bg-cifra-teal/10 px-2.5 py-1.5 text-[10px] font-semibold text-cifra-teal transition-colors hover:border-cifra-teal/55 hover:bg-cifra-teal/15"
                 >
-                  <Plus className="size-3.5 shrink-0" strokeWidth={2} aria-hidden />
-                  Nova secção
+                  <Eye className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                  Pré-visualizar alterações
                 </button>
-              ) : (
-                <AddSectionForm
-                  defaultStart={defaultNewSectionRange.start}
-                  defaultEnd={defaultNewSectionRange.end}
-                  onAdd={commitAddSection}
-                  onCancel={() => setAddSectionOpen(false)}
-                />
-              )}
+              ) : null}
+            </div>
+            <div className="rounded-lg border border-cifra-border bg-cifra-surface/80 px-3 py-2">
               <button
                 type="button"
-                disabled={!activeSlot}
-                onClick={() => {
-                  if (!activeSlot) return;
-                  setNewWordContext(null);
-                  const dt = defaultChordTimesOnWordSlot(slots, chords, activeSlot);
-                  setAddChordContext({
-                    kind: "slot",
-                    slotId: activeSlot.id,
-                    defaultStart: dt.start,
-                    defaultEnd: dt.end,
-                  });
-                }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-cifra-teal/35 bg-cifra-teal/10 px-2.5 py-1.5 text-[10px] font-semibold text-cifra-teal hover:bg-cifra-teal/15 disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={() => setGuideOpen((o) => !o)}
+                className="flex w-full items-center justify-between gap-2 text-left text-[11px] font-semibold text-cifra-text"
               >
-                <Plus className="size-3.5 shrink-0" strokeWidth={2} aria-hidden />
-                Acorde na palavra ativa
+                Guia rápido
+                <span className="font-mono text-[10px] font-normal text-cifra-teal">{guideOpen ? "Recolher" : "Expandir"}</span>
               </button>
-            </div>
-            {addChordContext?.kind === "slot" ? (
-              <AddChordForm
-                defaultStart={addChordContext.defaultStart}
-                defaultEnd={addChordContext.defaultEnd}
-                onApply={(sym, s, e) => commitAddChord(sym, s, e)}
-                onCancel={() => setAddChordContext(null)}
-              />
-            ) : null}
-
-            {sectionGroups.length === 0 ? (
-              <div className="rounded-xl border border-cifra-border bg-cifra-surface px-4 py-4">
-                <p className="mb-3 text-[11px] leading-snug text-cifra-muted">
-                  Ainda não há palavras nesta vista. Adicione uma primeira palavra (letra no segmento 0) ou crie secções
-                  e depois palavras em cada bloco.
+              {guideOpen ? (
+                <p className="mt-2 text-[10px] leading-snug text-cifra-muted">
+                  Toque numa palavra para a selecionar (painel à direita). Duplo clique edita letra e tempos. «Acorde na
+                  palavra ativa» adiciona acorde à palavra selecionada. Arraste o símbolo do acorde ou a célula da palavra
+                  para mover. Dicionário e edição em massa ficam nas colunas laterais.
                 </p>
-                <div className="flex flex-wrap gap-3">
-                  {newWordContext?.groupKey === "__bootstrap" ? (
-                    <AddWordForm
-                      defaultStart={newWordContext.defaultStart}
-                      defaultEnd={newWordContext.defaultEnd}
-                      onApply={(text, s, e) => commitAddWord(newWordContext, text, s, e)}
-                      onCancel={() => setNewWordContext(null)}
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAddChordContext(null);
-                        setNewWordContext({ groupKey: "__bootstrap", defaultStart: 0, defaultEnd: 1 });
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-cifra-teal/35 px-2.5 py-1.5 text-[10px] font-semibold text-cifra-teal hover:bg-cifra-teal/10"
-                    >
-                      <Plus className="size-3.5 shrink-0" aria-hidden />
-                      Primeira palavra
-                    </button>
-                  )}
-                </div>
+              ) : (
+                <p className="mt-1 text-[10px] leading-snug text-cifra-muted">
+                  O centro mostra só a leitura; detalhes e duração do acorde no painel à direita.
+                </p>
+              )}
+            </div>
+            {durationMismatch ? (
+              <div
+                className="rounded-lg border border-amber-500/40 bg-amber-500/12 px-3 py-2 text-[11px] leading-snug text-amber-100/95"
+                role="status"
+              >
+                A duração da faixa em meta ({formatDurationSeconds(durationMismatch.ref)} s) não coincide com o fim do
+                conteúdo atual (~{formatDurationSeconds(durationMismatch.end)} s; Δ ≈{" "}
+                {formatDurationSeconds(durationMismatch.delta)}). Corrija se não for intencional.
               </div>
-            ) : (
-            sectionGroups.map((group) => {
-              const sec =
-                group.sectionIdx !== undefined ? sections[group.sectionIdx] ?? null : null;
-              const totalTimelineMax = Math.max(
-                referenceDurationSec ?? 0,
-                contentTimelineEnd,
-                ...sections.map((s) => s.end),
-                sec?.end ?? 0,
-              );
-              const sectionCollapsed = collapsedSections[group.key] === true;
-              return (
-                <div key={group.key} className="rounded-[14px] border border-cifra-border bg-cifra-surface p-[18px]">
+            ) : null}
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-start gap-2">
+                {!addSectionOpen ? (
                   <button
                     type="button"
-                    onClick={() => toggleSectionCollapsed(group.key)}
-                    className="flex w-full items-center justify-between gap-x-3 gap-y-1 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-cifra-teal/35 focus-visible:ring-offset-2 focus-visible:ring-offset-cifra-surface"
-                    aria-expanded={!sectionCollapsed}
-                    aria-controls={`cifra-section-body-${group.key}`}
-                    id={`cifra-section-head-${group.key}`}
+                    onClick={() => {
+                      setAddChordContext(null);
+                      setAddSectionOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-cifra-teal/35 bg-cifra-teal/5 px-2.5 py-1.5 text-[10px] font-semibold text-cifra-teal hover:bg-cifra-teal/10"
                   >
-                    <span className="flex min-w-0 flex-1 items-center gap-2">
-                      <ChevronDown
-                        strokeWidth={2}
-                        className={cn(
-                          "size-4 shrink-0 text-cifra-muted transition-transform duration-200",
-                          sectionCollapsed && "-rotate-90",
-                        )}
-                        aria-hidden
-                      />
-                      <span className="truncate font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-cifra-teal">
-                        {group.title}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-right font-mono text-[10px] tabular-nums text-cifra-muted">
-                      {formatSectionTime(group.start)} — {formatSectionTime(group.end)}
-                    </span>
+                    <Plus className="size-3.5 shrink-0" strokeWidth={2} aria-hidden />
+                    Nova secção
                   </button>
+                ) : (
+                  <AddSectionForm
+                    defaultStart={defaultNewSectionRange.start}
+                    defaultEnd={defaultNewSectionRange.end}
+                    onAdd={commitAddSection}
+                    onCancel={() => setAddSectionOpen(false)}
+                  />
+                )}
+                <button
+                  type="button"
+                  disabled={!activeSlot}
+                  onClick={() => {
+                    if (!activeSlot) return;
+                    setNewWordContext(null);
+                    const dt = defaultChordTimesOnWordSlot(slots, chords, activeSlot);
+                    setAddChordContext({
+                      kind: "slot",
+                      slotId: activeSlot.id,
+                      defaultStart: dt.start,
+                      defaultEnd: dt.end,
+                    });
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-cifra-teal/35 bg-cifra-teal/10 px-2.5 py-1.5 text-[10px] font-semibold text-cifra-teal hover:bg-cifra-teal/15 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Plus className="size-3.5 shrink-0" strokeWidth={2} aria-hidden />
+                  Acorde na palavra ativa
+                </button>
+              </div>
+              {addChordContext?.kind === "slot" ? (
+                <AddChordForm
+                  defaultStart={addChordContext.defaultStart}
+                  defaultEnd={addChordContext.defaultEnd}
+                  onApply={(sym, s, e) => commitAddChord(sym, s, e)}
+                  onCancel={() => setAddChordContext(null)}
+                />
+              ) : null}
 
-                  {!sectionCollapsed ? (
-                    <div
-                      id={`cifra-section-body-${group.key}`}
-                      role="region"
-                      aria-labelledby={`cifra-section-head-${group.key}`}
-                      className="mt-2.5 flex flex-col gap-2.5"
-                    >
-                      {sec && group.sectionIdx !== undefined ? (
-                        <div className="w-full min-w-0 border-b border-white/6 pb-2.5">
-                          <SectionTimeInputs
-                            sections={sections}
-                            activeSectionIdx={group.sectionIdx!}
-                            totalMax={totalTimelineMax}
-                            step={0.05}
-                            onCommitAll={patchSectionBreakpoints}
-                          />
-                        </div>
-                      ) : null}
-
-                      <div className="rounded-[10px] border border-white/5 bg-cifra-surface-2/80 px-[14px] py-[14px]">
-                    {group.slots.length === 0 ? (
-                      <div
-                        role="region"
-                        aria-label="Zona para largar acordes nesta secção sem letra"
-                        className={cn(
-                          "flex min-h-22 flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed px-3 py-4 text-center transition-colors",
-                          dragActive && "border-cifra-teal/45 bg-cifra-teal/6 ring-1 ring-dashed ring-cifra-teal/25",
-                          dropSectionKey === group.key && "border-cifra-teal bg-cifra-teal/12 ring-2 ring-cifra-teal/40",
-                          !dragActive && "border-white/12",
-                        )}
-                        onDragOver={onDragOverWord}
-                        onDragEnter={(e) => {
-                          if (!isChordDrag(e)) return;
-                          setDropSectionKey(group.key);
-                        }}
-                        onDragLeave={() => {
-                          setDropSectionKey((prev) => (prev === group.key ? null : prev));
-                        }}
-                        onDrop={(e) => onDropChordOnlyZone(group.start, group.end, e)}
-                      >
-                        <p className="text-[11px] text-cifra-muted/90">
-                          Sem palavras (intro, instrumental…)
-                        </p>
-                        {(() => {
-                          const instIdxs = chordIndicesInSectionWithoutWordAnchor(
-                            slots,
-                            chords,
-                            group.start,
-                            group.end,
-                          );
-                          if (!instIdxs.length) return null;
-                          return (
-                            <div className="mt-1 flex w-full flex-wrap items-center justify-center gap-x-1.5 gap-y-1">
-                              {instIdxs.map((ci) => {
-                                const chord = chords[ci]!;
-                                const label = chordDisplayLabel(chord);
-                                return (
-                                  <span
-                                    key={`${group.key}-inst-${ci}`}
-                                    data-cifra-chord-slot
-                                    data-chord-index={ci}
-                                    draggable
-                                    aria-label={`Acorde ${label} nesta secção sem letra`}
-                                    title="Arraste para outra secção ou palavra"
-                                    onDragStart={(e) => {
-                                      e.stopPropagation();
-                                      e.dataTransfer.setData(CHORD_DRAG_MIME, String(ci));
-                                      e.dataTransfer.effectAllowed = "move";
-                                      setDragChordIdx(ci);
-                                    }}
-                                    onDragEnd={() => {
-                                      setDragChordIdx(null);
-                                      setDropSlotId(null);
-                                      setDropSectionKey(null);
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setActiveSlotId(null);
-                                      setActiveChordIndex(ci);
-                                    }}
-                                    className={cn(
-                                      "cursor-grab touch-none rounded-md px-2 py-1 text-center font-mono text-[12px] font-semibold text-cifra-teal transition-colors hover:bg-cifra-teal/15 active:cursor-grabbing",
-                                      activeChordIndex === ci &&
-                                        activeSlotId === null &&
-                                        "bg-cifra-teal/15 text-cifra-teal",
-                                    )}
-                                  >
-                                    {label}
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          );
-                        })()}
-                        <p className="max-w-sm text-[10px] leading-snug text-cifra-muted/75">
-                          Arraste o acorde para aqui: o início alinha ao início desta secção (
-                          {formatSectionTime(group.start)}).
-                        </p>
-                        {addChordContext?.kind === "range" && addChordContext.sectionKey === group.key ? (
-                          <AddChordForm
-                            defaultStart={addChordContext.defaultStart}
-                            defaultEnd={addChordContext.defaultEnd}
-                            onApply={(sym, s, e) => commitAddChord(sym, s, e)}
-                            onCancel={() => setAddChordContext(null)}
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(ev) => {
-                              ev.stopPropagation();
-                              setNewWordContext(null);
-                              const dt = defaultChordTimesOnTimeRange(chords, group.start, group.end);
-                              setAddChordContext({
-                                kind: "range",
-                                sectionKey: group.key,
-                                defaultStart: dt.start,
-                                defaultEnd: dt.end,
-                              });
-                            }}
-                            className="mt-1 inline-flex items-center gap-1 rounded-md border border-dashed border-cifra-teal/35 px-2 py-1 text-[10px] font-semibold text-cifra-teal hover:bg-cifra-teal/10"
-                          >
-                            <Plus className="size-3 shrink-0" strokeWidth={2} aria-hidden />
-                            Acorde
-                          </button>
-                        )}
-                      </div>
+              {sectionGroups.length === 0 ? (
+                <div className="rounded-xl border border-cifra-border bg-cifra-surface px-4 py-4">
+                  <p className="mb-3 text-[11px] leading-snug text-cifra-muted">
+                    Ainda não há palavras nesta vista. Adicione uma primeira palavra (letra no segmento 0) ou crie secções
+                    e depois palavras em cada bloco.
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {newWordContext?.groupKey === "__bootstrap" ? (
+                      <AddWordForm
+                        defaultStart={newWordContext.defaultStart}
+                        defaultEnd={newWordContext.defaultEnd}
+                        onApply={(text, s, e) => commitAddWord(newWordContext, text, s, e)}
+                        onCancel={() => setNewWordContext(null)}
+                      />
                     ) : (
-                      <div className="flex flex-col gap-3">
-                        {clusterSlotsByLyricSegment(group.slots).map((phraseSlots, phraseIdx) => (
-                          <div
-                            key={`${group.key}-phrase-${phraseSlots[0]?.segmentIndex ?? phraseIdx}`}
-                            className="flex w-full flex-wrap items-end gap-x-2 gap-y-2 border-b border-white/6 pb-3 last:border-b-0 last:pb-0"
-                          >
-                            {phraseSlots.map((slot) => {
-                              const chordIdxs = chordIndicesAttachedToSlot(slots, chords, slot, chordAnchors);
-                              const hasChord = chordIdxs.length > 0;
-                              return (
-                                <div
-                                  key={slot.id}
-                                  role="group"
-                                  aria-label={`Célula: ${slot.text}`}
-                                  tabIndex={editingId === slot.id ? -1 : 0}
-                                  draggable={editingId !== slot.id}
-                                  className={cn(
-                                    "flex min-h-[3.5rem] min-w-10 flex-col items-stretch justify-end gap-1 rounded-lg px-2 py-2 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-cifra-teal/35",
-                                    editingId === slot.id ? "max-w-56" : "max-w-[11rem]",
-                                    hasChord && "border border-cifra-teal/40 bg-[#0FD2C112]",
-                                    !hasChord && "border border-transparent",
-                                    activeSlotId === slot.id && "bg-cifra-teal/8",
-                                    editingId !== slot.id && "cursor-grab active:cursor-grabbing",
-                                    dragActive && "bg-cifra-teal/6 ring-1 ring-dashed ring-cifra-teal/25",
-                                    dropSlotId === slot.id && "bg-cifra-teal/14 ring-2 ring-cifra-teal/40",
-                                  )}
-                                  onDragStart={(e) => {
-                                    if (editingId === slot.id) return;
-                                    e.dataTransfer.setData(WORD_DRAG_MIME, slot.id);
-                                    e.dataTransfer.effectAllowed = "move";
-                                    setDragWordSlotId(slot.id);
-                                  }}
-                                  onDragEnd={() => setDragWordSlotId(null)}
-                                  onDragOver={onDragOverWord}
-                                  onDragEnter={(e) => {
-                                    if (!isChordDrag(e) && !isWordDrag(e)) return;
-                                    setDropSlotId(slot.id);
-                                  }}
-                                  onDragLeave={() => {
-                                    setDropSlotId((prev) => (prev === slot.id ? null : prev));
-                                  }}
-                                  onDrop={(e) => onDropWord(slot, e)}
-                                  onClick={(e) => {
-                                    const root = e.currentTarget;
-                                    const t = e.target;
-                                    if (!(t instanceof Node) || !root.contains(t)) return;
-                                    const el = t instanceof Element ? t : t.parentElement;
-                                    const chordEl = el?.closest("[data-cifra-chord-slot]");
-                                    if (chordEl && root.contains(chordEl)) {
-                                      const raw = chordEl.getAttribute("data-chord-index");
-                                      const idx = raw != null ? parseInt(raw, 10) : NaN;
-                                      if (Number.isFinite(idx)) {
-                                        setActiveSlotId(slot.id);
-                                        setActiveChordIndex(idx);
-                                        return;
-                                      }
-                                    }
-                                    setActiveSlotId(slot.id);
-                                    const idxs = chordIndicesAttachedToSlot(slots, chords, slot, chordAnchors);
-                                    setActiveChordIndex(idxs[0] ?? null);
-                                  }}
-                                  onDoubleClick={(e) => {
-                                    if ((e.target as HTMLElement).closest("[data-cifra-chord-slot]")) return;
-                                    setAddChordContext((prev) =>
-                                      prev?.kind === "slot" && prev.slotId === slot.id ? null : prev,
-                                    );
-                                    setEditingId(slot.id);
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (editingId === slot.id) return;
-                                    if (e.key === "Enter" || e.key === " ") {
-                                      e.preventDefault();
-                                      setActiveSlotId(slot.id);
-                                      const idxs = chordIndicesAttachedToSlot(slots, chords, slot, chordAnchors);
-                                      setActiveChordIndex(idxs[0] ?? null);
-                                    }
-                                  }}
-                                >
-                                  <div className="flex min-h-[22px] w-full flex-1 flex-row flex-wrap content-end items-end justify-center gap-x-1.5 gap-y-0.5">
-                                    {chordIdxs.length === 0 ? (
-                                      <span
-                                        className="pointer-events-none flex min-h-[18px] min-w-[1ch] select-none items-center justify-center font-mono text-[10px] text-cifra-muted/85"
-                                        aria-hidden
-                                      >
-                                        ·
-                                      </span>
-                                    ) : (
-                                      [...chordIdxs]
-                                        .sort((a, b) => chords[a]!.start - chords[b]!.start)
-                                        .map((ci) => {
-                                          const chord = chords[ci]!;
-                                          const label = chordDisplayLabel(chord);
-                                          return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddChordContext(null);
+                          setNewWordContext({ groupKey: "__bootstrap", defaultStart: 0, defaultEnd: 1 });
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-cifra-teal/35 px-2.5 py-1.5 text-[10px] font-semibold text-cifra-teal hover:bg-cifra-teal/10"
+                      >
+                        <Plus className="size-3.5 shrink-0" aria-hidden />
+                        Primeira palavra
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                sectionGroups.map((group) => {
+                  const sec =
+                    group.sectionIdx !== undefined ? sections[group.sectionIdx] ?? null : null;
+                  const totalTimelineMax = Math.max(
+                    referenceDurationSec ?? 0,
+                    contentTimelineEnd,
+                    ...sections.map((s) => s.end),
+                    sec?.end ?? 0,
+                  );
+                  const sectionCollapsed = collapsedSections[group.key] === true;
+                  return (
+                    <div key={group.key} className="rounded-[14px] border border-cifra-border bg-cifra-surface p-[18px]">
+                      <button
+                        type="button"
+                        onClick={() => toggleSectionCollapsed(group.key)}
+                        className="flex w-full items-center justify-between gap-x-3 gap-y-1 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-cifra-teal/35 focus-visible:ring-offset-2 focus-visible:ring-offset-cifra-surface"
+                        aria-expanded={!sectionCollapsed}
+                        aria-controls={`cifra-section-body-${group.key}`}
+                        id={`cifra-section-head-${group.key}`}
+                      >
+                        <span className="flex min-w-0 flex-1 items-center gap-2">
+                          <ChevronDown
+                            strokeWidth={2}
+                            className={cn(
+                              "size-4 shrink-0 text-cifra-muted transition-transform duration-200",
+                              sectionCollapsed && "-rotate-90",
+                            )}
+                            aria-hidden
+                          />
+                          <span className="truncate font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-cifra-teal">
+                            {group.title}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-right font-mono text-[10px] tabular-nums text-cifra-muted">
+                          {formatSectionTime(group.start)} — {formatSectionTime(group.end)}
+                        </span>
+                      </button>
+
+                      {!sectionCollapsed ? (
+                        <div
+                          id={`cifra-section-body-${group.key}`}
+                          role="region"
+                          aria-labelledby={`cifra-section-head-${group.key}`}
+                          className="mt-2.5 flex flex-col gap-2.5"
+                        >
+                          {sec && group.sectionIdx !== undefined ? (
+                            <div className="w-full min-w-0 border-b border-white/6 pb-2.5">
+                              <SectionTimeInputs
+                                sections={sections}
+                                activeSectionIdx={group.sectionIdx!}
+                                totalMax={totalTimelineMax}
+                                step={0.05}
+                                onCommitAll={patchSectionBreakpoints}
+                              />
+                            </div>
+                          ) : null}
+
+                          <div className="rounded-[10px] border border-white/5 bg-cifra-surface-2/80 px-[14px] py-[14px]">
+                            {group.slots.length === 0 ? (
+                              <div
+                                role="region"
+                                aria-label="Zona para largar acordes nesta secção sem letra"
+                                className={cn(
+                                  "flex min-h-22 flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed px-3 py-4 text-center transition-colors",
+                                  dragActive && "border-cifra-teal/45 bg-cifra-teal/6 ring-1 ring-dashed ring-cifra-teal/25",
+                                  dropSectionKey === group.key && "border-cifra-teal bg-cifra-teal/12 ring-2 ring-cifra-teal/40",
+                                  !dragActive && "border-white/12",
+                                )}
+                                onDragOver={onDragOverWord}
+                                onDragEnter={(e) => {
+                                  if (!isChordDrag(e)) return;
+                                  setDropSectionKey(group.key);
+                                }}
+                                onDragLeave={() => {
+                                  setDropSectionKey((prev) => (prev === group.key ? null : prev));
+                                }}
+                                onDrop={(e) => onDropChordOnlyZone(group.start, group.end, e)}
+                              >
+                                <p className="text-[11px] text-cifra-muted/90">
+                                  Sem palavras (intro, instrumental…)
+                                </p>
+                                {(() => {
+                                  const instIdxs = chordIndicesInSectionWithoutWordAnchor(
+                                    slots,
+                                    chords,
+                                    group.start,
+                                    group.end,
+                                  );
+                                  if (!instIdxs.length) return null;
+                                  return (
+                                    <div className="mt-1 flex w-full flex-wrap items-center justify-center gap-x-1.5 gap-y-1">
+                                      {instIdxs.map((ci) => {
+                                        const chord = chords[ci]!;
+                                        const label = chordDisplayLabel(chord);
+                                        return (
+                                          <span
+                                            key={`${group.key}-inst-${ci}`}
+                                            data-cifra-chord-slot
+                                            data-chord-index={ci}
+                                            draggable
+                                            aria-label={`Acorde ${label} nesta secção sem letra`}
+                                            title="Arraste para outra secção ou palavra"
+                                            onDragStart={(e) => {
+                                              e.stopPropagation();
+                                              e.dataTransfer.setData(CHORD_DRAG_MIME, String(ci));
+                                              e.dataTransfer.effectAllowed = "move";
+                                              setDragChordIdx(ci);
+                                            }}
+                                            onDragEnd={() => {
+                                              setDragChordIdx(null);
+                                              setDropSlotId(null);
+                                              setDropSectionKey(null);
+                                            }}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setActiveSlotId(null);
+                                              setActiveChordIndex(ci);
+                                            }}
+                                            className={cn(
+                                              "cursor-grab touch-none rounded-md px-2 py-1 text-center font-mono text-[12px] font-semibold text-cifra-teal transition-colors hover:bg-cifra-teal/15 active:cursor-grabbing",
+                                              activeChordIndex === ci &&
+                                              activeSlotId === null &&
+                                              "bg-cifra-teal/15 text-cifra-teal",
+                                            )}
+                                          >
+                                            {label}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                })()}
+                                <p className="max-w-sm text-[10px] leading-snug text-cifra-muted/75">
+                                  Arraste o acorde para aqui: o início alinha ao início desta secção (
+                                  {formatSectionTime(group.start)}).
+                                </p>
+                                {addChordContext?.kind === "range" && addChordContext.sectionKey === group.key ? (
+                                  <AddChordForm
+                                    defaultStart={addChordContext.defaultStart}
+                                    defaultEnd={addChordContext.defaultEnd}
+                                    onApply={(sym, s, e) => commitAddChord(sym, s, e)}
+                                    onCancel={() => setAddChordContext(null)}
+                                  />
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={(ev) => {
+                                      ev.stopPropagation();
+                                      setNewWordContext(null);
+                                      const dt = defaultChordTimesOnTimeRange(chords, group.start, group.end);
+                                      setAddChordContext({
+                                        kind: "range",
+                                        sectionKey: group.key,
+                                        defaultStart: dt.start,
+                                        defaultEnd: dt.end,
+                                      });
+                                    }}
+                                    className="mt-1 inline-flex items-center gap-1 rounded-md border border-dashed border-cifra-teal/35 px-2 py-1 text-[10px] font-semibold text-cifra-teal hover:bg-cifra-teal/10"
+                                  >
+                                    <Plus className="size-3 shrink-0" strokeWidth={2} aria-hidden />
+                                    Acorde
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex flex-col gap-3">
+                                {clusterSlotsByLyricSegment(group.slots).map((phraseSlots, phraseIdx) => (
+                                  <div
+                                    key={`${group.key}-phrase-${phraseSlots[0]?.segmentIndex ?? phraseIdx}`}
+                                    className="flex w-full flex-wrap items-end gap-x-2 gap-y-2 border-b border-white/6 pb-3 last:border-b-0 last:pb-0"
+                                  >
+                                    {phraseSlots.map((slot) => {
+                                      const chordIdxs = chordIndicesAttachedToSlot(slots, chords, slot, chordAnchors);
+                                      const hasChord = chordIdxs.length > 0;
+                                      return (
+                                        <div
+                                          key={slot.id}
+                                          role="group"
+                                          aria-label={`Célula: ${slot.text}`}
+                                          tabIndex={editingId === slot.id ? -1 : 0}
+                                          draggable={editingId !== slot.id}
+                                          className={cn(
+                                            "flex min-h-[3.5rem] min-w-10 flex-col items-stretch justify-end gap-1 rounded-lg px-2 py-2 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-cifra-teal/35",
+                                            editingId === slot.id ? "max-w-56" : "max-w-[11rem]",
+                                            hasChord && "border border-cifra-teal/40 bg-[#0FD2C112]",
+                                            !hasChord && "border border-transparent",
+                                            activeSlotId === slot.id && "bg-cifra-teal/8",
+                                            editingId !== slot.id && "cursor-grab active:cursor-grabbing",
+                                            dragActive && "bg-cifra-teal/6 ring-1 ring-dashed ring-cifra-teal/25",
+                                            dropSlotId === slot.id && "bg-cifra-teal/14 ring-2 ring-cifra-teal/40",
+                                          )}
+                                          onDragStart={(e) => {
+                                            if (editingId === slot.id) return;
+                                            e.dataTransfer.setData(WORD_DRAG_MIME, slot.id);
+                                            e.dataTransfer.effectAllowed = "move";
+                                            setDragWordSlotId(slot.id);
+                                          }}
+                                          onDragEnd={() => setDragWordSlotId(null)}
+                                          onDragOver={onDragOverWord}
+                                          onDragEnter={(e) => {
+                                            if (!isChordDrag(e) && !isWordDrag(e)) return;
+                                            setDropSlotId(slot.id);
+                                          }}
+                                          onDragLeave={() => {
+                                            setDropSlotId((prev) => (prev === slot.id ? null : prev));
+                                          }}
+                                          onDrop={(e) => onDropWord(slot, e)}
+                                          onClick={(e) => {
+                                            const root = e.currentTarget;
+                                            const t = e.target;
+                                            if (!(t instanceof Node) || !root.contains(t)) return;
+                                            const el = t instanceof Element ? t : t.parentElement;
+                                            const chordEl = el?.closest("[data-cifra-chord-slot]");
+                                            if (chordEl && root.contains(chordEl)) {
+                                              const raw = chordEl.getAttribute("data-chord-index");
+                                              const idx = raw != null ? parseInt(raw, 10) : NaN;
+                                              if (Number.isFinite(idx)) {
+                                                setActiveSlotId(slot.id);
+                                                setActiveChordIndex(idx);
+                                                return;
+                                              }
+                                            }
+                                            setActiveSlotId(slot.id);
+                                            const idxs = chordIndicesAttachedToSlot(slots, chords, slot, chordAnchors);
+                                            setActiveChordIndex(idxs[0] ?? null);
+                                          }}
+                                          onDoubleClick={(e) => {
+                                            if ((e.target as HTMLElement).closest("[data-cifra-chord-slot]")) return;
+                                            setAddChordContext((prev) =>
+                                              prev?.kind === "slot" && prev.slotId === slot.id ? null : prev,
+                                            );
+                                            setEditingId(slot.id);
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (editingId === slot.id) return;
+                                            if (e.key === "Enter" || e.key === " ") {
+                                              e.preventDefault();
+                                              setActiveSlotId(slot.id);
+                                              const idxs = chordIndicesAttachedToSlot(slots, chords, slot, chordAnchors);
+                                              setActiveChordIndex(idxs[0] ?? null);
+                                            }
+                                          }}
+                                        >
+                                          <div className="flex min-h-[22px] w-full flex-1 flex-row flex-wrap content-end items-end justify-center gap-x-1.5 gap-y-0.5">
+                                            {chordIdxs.length === 0 ? (
+                                              <span
+                                                className="pointer-events-none flex min-h-[18px] min-w-[1ch] select-none items-center justify-center font-mono text-[10px] text-cifra-muted/85"
+                                                aria-hidden
+                                              >
+                                                ·
+                                              </span>
+                                            ) : (
+                                              [...chordIdxs]
+                                                .sort((a, b) => chords[a]!.start - chords[b]!.start)
+                                                .map((ci) => {
+                                                  const chord = chords[ci]!;
+                                                  const label = chordDisplayLabel(chord);
+                                                  return (
+                                                    <span
+                                                      key={`${slot.id}-${ci}`}
+                                                      data-cifra-chord-slot
+                                                      data-chord-index={ci}
+                                                      draggable
+                                                      aria-label={`Acorde ${label}. Arraste para mover; clique na célula para editar no painel.`}
+                                                      title="Arraste para outra palavra ou zona instrumental"
+                                                      onDragStart={(e) => {
+                                                        e.stopPropagation();
+                                                        e.dataTransfer.setData(CHORD_DRAG_MIME, String(ci));
+                                                        e.dataTransfer.effectAllowed = "move";
+                                                        setDragChordIdx(ci);
+                                                      }}
+                                                      onDragEnd={() => {
+                                                        setDragChordIdx(null);
+                                                        setDropSlotId(null);
+                                                        setDropSectionKey(null);
+                                                      }}
+                                                      className={cn(
+                                                        "cursor-grab touch-none rounded-md px-1.5 py-0.5 text-center font-mono text-[12px] font-semibold text-cifra-teal transition-colors hover:bg-cifra-teal/12 active:cursor-grabbing",
+                                                        activeSlotId === slot.id &&
+                                                        activeChordIndex === ci &&
+                                                        "bg-cifra-teal/15 text-cifra-teal",
+                                                      )}
+                                                    >
+                                                      {label}
+                                                    </span>
+                                                  );
+                                                })
+                                            )}
+                                          </div>
+                                          {editingId === slot.id ? (
+                                            <WordSlotInlineEditor
+                                              key={slot.id}
+                                              slot={slot}
+                                              onApply={(text, start, end) => applyWordSlotEdit(slot.id, text, start, end)}
+                                              onCancel={() => setEditingId(null)}
+                                            />
+                                          ) : (
                                             <span
-                                              key={`${slot.id}-${ci}`}
-                                              data-cifra-chord-slot
-                                              data-chord-index={ci}
-                                              draggable
-                                              aria-label={`Acorde ${label}. Arraste para mover; clique na célula para editar no painel.`}
-                                              title="Arraste para outra palavra ou zona instrumental"
-                                              onDragStart={(e) => {
-                                                e.stopPropagation();
-                                                e.dataTransfer.setData(CHORD_DRAG_MIME, String(ci));
-                                                e.dataTransfer.effectAllowed = "move";
-                                                setDragChordIdx(ci);
-                                              }}
-                                              onDragEnd={() => {
-                                                setDragChordIdx(null);
-                                                setDropSlotId(null);
-                                                setDropSectionKey(null);
-                                              }}
+                                              data-cifra-word
                                               className={cn(
-                                                "cursor-grab touch-none rounded-md px-1.5 py-0.5 text-center font-mono text-[12px] font-semibold text-cifra-teal transition-colors hover:bg-cifra-teal/12 active:cursor-grabbing",
-                                                activeSlotId === slot.id &&
-                                                  activeChordIndex === ci &&
-                                                  "bg-cifra-teal/15 text-cifra-teal",
+                                                "pointer-events-none block w-full min-w-0 select-none px-1 py-0.5 text-center text-[14px] font-medium leading-tight tracking-tight text-cifra-text",
+                                                activeSlotId === slot.id && "font-semibold text-cifra-teal",
                                               )}
                                             >
-                                              {label}
+                                              {slot.text}
                                             </span>
-                                          );
-                                        })
-                                    )}
+                                          )}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
-                                  {editingId === slot.id ? (
-                                    <WordSlotInlineEditor
-                                      key={slot.id}
-                                      slot={slot}
-                                      onApply={(text, start, end) => applyWordSlotEdit(slot.id, text, start, end)}
-                                      onCancel={() => setEditingId(null)}
-                                    />
-                                  ) : (
-                                    <span
-                                      data-cifra-word
-                                      className={cn(
-                                        "pointer-events-none block w-full min-w-0 select-none px-1 py-0.5 text-center text-[14px] font-medium leading-tight tracking-tight text-cifra-text",
-                                        activeSlotId === slot.id && "font-semibold text-cifra-teal",
-                                      )}
-                                    >
-                                      {slot.text}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })}
+                                ))}
+                              </div>
+                            )}
+                            <div className="mt-3 border-t border-white/6 pt-3">
+                              {newWordContext?.groupKey === group.key ? (
+                                <AddWordForm
+                                  defaultStart={newWordContext.defaultStart}
+                                  defaultEnd={newWordContext.defaultEnd}
+                                  onApply={(text, s, e) => commitAddWord(newWordContext, text, s, e)}
+                                  onCancel={() => setNewWordContext(null)}
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setAddChordContext(null);
+                                    const d = defaultTimesForNewWordInGroup(group);
+                                    setNewWordContext({
+                                      groupKey: group.key,
+                                      defaultStart: d.start,
+                                      defaultEnd: d.end,
+                                    });
+                                  }}
+                                  className="inline-flex items-center gap-2 font-mono text-[10px] font-normal text-cifra-teal hover:text-cifra-teal/90"
+                                >
+                                  <Plus className="size-3 shrink-0" strokeWidth={2} aria-hidden />
+                                  Palavra no fim da linha
+                                </button>
+                              )}
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="mt-3 border-t border-white/6 pt-3">
-                      {newWordContext?.groupKey === group.key ? (
-                        <AddWordForm
-                          defaultStart={newWordContext.defaultStart}
-                          defaultEnd={newWordContext.defaultEnd}
-                          onApply={(text, s, e) => commitAddWord(newWordContext, text, s, e)}
-                          onCancel={() => setNewWordContext(null)}
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAddChordContext(null);
-                            const d = defaultTimesForNewWordInGroup(group);
-                            setNewWordContext({
-                              groupKey: group.key,
-                              defaultStart: d.start,
-                              defaultEnd: d.end,
-                            });
-                          }}
-                          className="inline-flex items-center gap-2 font-mono text-[10px] font-normal text-cifra-teal hover:text-cifra-teal/90"
-                        >
-                          <Plus className="size-3 shrink-0" strokeWidth={2} aria-hidden />
-                          Palavra no fim da linha
-                        </button>
-                      )}
+                        </div>
+                      ) : null}
                     </div>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })
-            )}
-          </div>
-        </section>
+                  );
+                })
+              )}
+            </div>
+          </section>
         </div>
         <CifraEditInspectorPanel
           activeSlot={activeSlot}

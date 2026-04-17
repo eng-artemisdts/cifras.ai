@@ -188,6 +188,36 @@ export function splitInstrumentalBlocksAtSectionBoundaries(blocks, sectionsSorte
   return mergeContiguousInstrumentalBlocksSameLabel(out, sectionsSorted);
 }
 
+/**
+ * Duração máxima de um bloco só-acordes com rótulo de **parte vocal** (Verse, Chorus, …) que ainda
+ * conservamos. Blocos mais curtos são quase sempre caudas do `splitInstrumentalBlocksAtSectionBoundaries`
+ * entre `Verse.start` e a 1.ª sílaba — duplicam o G# sustentado na linha seguinte.
+ */
+export const MICRO_INSTRUMENTAL_VOCAL_SECTION_DROP_SEC = 0.35;
+
+/**
+ * Remove blocos só-acordes muito curtos cujo `displayLabel` não é parte só-instrumental
+ * (`isInstrumentalSectionLabel`). Intro / instrumental / bridge / solo mantêm-se.
+ *
+ * @param {{ start: number, end: number, displayLabel: string }[]} blocks
+ * @returns {{ start: number, end: number, displayLabel: string }[]}
+ */
+export function dropMicroInstrumentalBlocksInVocalSections(blocks) {
+  if (!Array.isArray(blocks) || !blocks.length) return blocks;
+  /** @type {{ start: number, end: number, displayLabel: string }[]} */
+  const out = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    const d = Number(b.end) - Number(b.start);
+    if (!Number.isFinite(d) || d <= 0) continue;
+    if (d < MICRO_INSTRUMENTAL_VOCAL_SECTION_DROP_SEC - TIME_EPS && !isInstrumentalSectionLabel(b.displayLabel)) {
+      continue;
+    }
+    out.push(b);
+  }
+  return out;
+}
+
 const CHORD_GAP_TIME_EPS = 1e-3;
 
 /**

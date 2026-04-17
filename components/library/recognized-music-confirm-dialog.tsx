@@ -142,14 +142,14 @@ export function RecognizedMusicConfirmDialog({
                 </div>
 
                 <Dialog.Description className="space-y-2 text-[12px] leading-[1.5] text-cifra-muted">
-                  <p>
+                  <span className="block">
                     O serviço identificou esta faixa a partir do seu áudio. Confirme se corresponde mesmo à música
                     que pretende tratar.
-                  </p>
-                  <p>
+                  </span>
+                  <span className="block">
                     Se estiver correto, pode avançar para montar a cifra com a nossa IA (letra e sincronização). Se não
                     for esta música, cancele e envie outro ficheiro ou rode a detecção de novo.
-                  </p>
+                  </span>
                 </Dialog.Description>
               </div>
             </div>

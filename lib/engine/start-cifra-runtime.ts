@@ -3,8 +3,6 @@
  * Runtime da cifra alinhado a `startMusicAiApp.ts` da POC: mount DOM, playback, destaque e auto-rolagem.
  * Sem capotraste nem sugestão automática de capo.
  */
-import { clampChordEndsToSectionBoundaries } from "@/lib/cifra/lyric-expand-clamp";
-
 import {
   applyCifraPlaybackHighlight,
   mountCifraView,
@@ -30,6 +28,7 @@ import {
   buildCifraRenderPlan,
   buildInstrumentalBlocksFromChordLyricGaps,
   collapseRedundantBetweenLineGapBlocks,
+  dropMicroInstrumentalBlocksInVocalSections,
   renumberGlobalWordIndices,
   splitInstrumentalBlocksAtSectionBoundaries,
   supplementInstrumentalBlocksFromSections,
@@ -129,7 +128,6 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
 
   const payload = coalescePayload(opts.payloadInput);
   const sectionsSorted = mergeConsecutiveDuplicateSectionLabels(sortSections(payload.sections));
-  payload.chords = clampChordEndsToSectionBoundaries(payload.chords || [], sectionsSorted);
   const chordTimeline = createChordTimeline(payload.chords, { offsetSec: payload.chordTimeOffsetSec });
   const { timedLines: rawTimedLines } = buildLyricModel(payload.lyrics);
   const meta = payload.meta;
@@ -311,6 +309,7 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
       { formatChord: (c) => chordForDisplayFromEvent(c) },
     );
     chordOnlyBlocks = splitInstrumentalBlocksAtSectionBoundaries(chordOnlyBlocks, sectionsSorted);
+    chordOnlyBlocks = dropMicroInstrumentalBlocksInVocalSections(chordOnlyBlocks);
     renderPlan = buildCifraRenderPlan(chordOnlyBlocks, vocalTimedLines);
   }
 
