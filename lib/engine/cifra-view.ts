@@ -22,6 +22,7 @@ import {
   formatChordLabel
 } from './chord-timeline';
 import { chordsHaveBeatGridMetadata, downbeatChordStartingInsideWordWindow } from './chord-bar-grid';
+import { attachChordDiagramHoverDom } from '../cifra/chord-diagram/attach-chord-diagram-hover-dom';
 
 /**
  * Se o cabeçalho da linha é uma secção vocal (Verse, Chorus, …) com `start` = S, só **anacruse**
@@ -104,8 +105,17 @@ function envelopesMatch(
  * @param {number} chordOffsetSec
  * @param {StripChordCell[]} stripCellsOut
  * @param {(c: import('./musicai-types.ts').MusicAiChordEvent) => string} formatChordEvent
+ * @param {(el: HTMLElement, label: string) => void} [wireChordDiagram]
  */
-function createInstrumentalChordStrip(iv, chords, chordOffsetSec, stripCellsOut, formatChordEvent, embeddedInSection) {
+function createInstrumentalChordStrip(
+  iv,
+  chords,
+  chordOffsetSec,
+  stripCellsOut,
+  formatChordEvent,
+  embeddedInSection,
+  wireChordDiagram
+) {
   const outer = document.createElement('div');
   outer.className = embeddedInSection ? 'mb-0' : 'mb-6';
 
@@ -143,6 +153,7 @@ function createInstrumentalChordStrip(iv, chords, chordOffsetSec, stripCellsOut,
       wrap.dataset.playbackA1 = String(s.a1);
       wrap.dataset.chordIdx = String(s.chordIdx);
       wrap.classList.add('cifra-chord--track');
+      if (typeof wireChordDiagram === 'function') wireChordDiagram(ch, s.label);
     }
   }
 
@@ -157,9 +168,10 @@ function createInstrumentalChordStrip(iv, chords, chordOffsetSec, stripCellsOut,
  * @param {CifraSpan[]} spansOut
  * @param {{ a0: number, a1: number } | null | undefined} playbackWin — só se o acorde estiver visível (não `\u00A0`)
  * @param {number} [chordIdx] — índice na lista normalizada (`chord-timeline`); alinha highlight com «ACORDE NO TEMPO»
+ * @param {(el: HTMLElement, label: string) => void} [wireChordDiagram] — pré-visualização svguitar ao hover
  * @returns {HTMLElement}
  */
-function createLyricChordCell(chordText, lyricText, g, spansOut, playbackWin, chordIdx) {
+function createLyricChordCell(chordText, lyricText, g, spansOut, playbackWin, chordIdx, wireChordDiagram) {
   const wrap = document.createElement('span');
   wrap.className = 'inline-flex flex-col items-start gap-1 rounded-md px-1 py-0.5 transition-colors';
   wrap.dataset.g = String(g);
@@ -191,6 +203,10 @@ function createLyricChordCell(chordText, lyricText, g, spansOut, playbackWin, ch
       wrap.dataset.chordIdx = String(chordIdx);
     }
     wrap.classList.add('cifra-chord--track');
+  }
+
+  if (chordVisible && typeof wireChordDiagram === 'function') {
+    wireChordDiagram(ch, chordText);
   }
 
   return wrap;
@@ -265,7 +281,28 @@ export function mountCifraView(params) {
   /** @type {StripChordCell[]} */
   const stripCells = [];
 
+  /** @type {(() => void)[]} */
+  const diagramHoverDisposers = [];
+
+  /** Pré-visualização: diagrama svguitar ao hover no símbolo (mesma base que o editor). */
+  function wireChordDiagramIfResolvable(chEl, labelRaw) {
+    const lab = String(labelRaw ?? '')
+      .trim()
+      .replace(/\u00a0/g, '');
+    if (!lab) return;
+    const dispose = attachChordDiagramHoverDom(chEl, lab);
+    diagramHoverDisposers.push(dispose);
+  }
+
   function clear() {
+    for (let i = 0; i < diagramHoverDisposers.length; i++) {
+      try {
+        diagramHoverDisposers[i]();
+      } catch {
+        // ignore
+      }
+    }
+    diagramHoverDisposers.length = 0;
     container.innerHTML = '';
     spans.length = 0;
     stripCells.length = 0;
@@ -422,7 +459,8 @@ export function mountCifraView(params) {
                 chordTimeOffsetSec,
                 stripCells,
                 formatChordEvent,
-                true
+                true,
+                wireChordDiagramIfResolvable
               )
             );
           }
@@ -458,12 +496,28 @@ export function mountCifraView(params) {
           if (wrapInst) {
             const shell = createSectionShell(secLike, wantHeader, formatClock);
             shell.inner.appendChild(
-              createInstrumentalChordStrip(iv, chords, chordTimeOffsetSec, stripCells, formatChordEvent, true)
+              createInstrumentalChordStrip(
+                iv,
+                chords,
+                chordTimeOffsetSec,
+                stripCells,
+                formatChordEvent,
+                true,
+                wireChordDiagramIfResolvable
+              )
             );
             container.appendChild(shell.wrap);
           } else {
             container.appendChild(
-              createInstrumentalChordStrip(iv, chords, chordTimeOffsetSec, stripCells, formatChordEvent, false)
+              createInstrumentalChordStrip(
+                iv,
+                chords,
+                chordTimeOffsetSec,
+                stripCells,
+                formatChordEvent,
+                false,
+                wireChordDiagramIfResolvable
+              )
             );
           }
         }
@@ -751,7 +805,15 @@ export function mountCifraView(params) {
 
         const mainChordIdx =
           segs.length && Number.isFinite(segs[0].chordIdx) ? segs[0].chordIdx : undefined;
-        const wrap = createLyricChordCell(chordDisplay, tw.text, tw.g, spans, mainPlaybackWin, mainChordIdx);
+        const wrap = createLyricChordCell(
+          chordDisplay,
+          tw.text,
+          tw.g,
+          spans,
+          mainPlaybackWin,
+          mainChordIdx,
+          wireChordDiagramIfResolvable
+        );
         row.appendChild(wrap);
 
         if (crossLineSameEventDup && crossRowCarryFromPrev != null && segs.length > 0) {
@@ -804,7 +866,8 @@ export function mountCifraView(params) {
                 a0: seg.a0,
                 a1: seg.a1
               },
-              Number.isFinite(seg.chordIdx) ? seg.chordIdx : undefined
+              Number.isFinite(seg.chordIdx) ? seg.chordIdx : undefined,
+              wireChordDiagramIfResolvable
             );
             row.appendChild(ghost);
             if (showAllChordPositions) {

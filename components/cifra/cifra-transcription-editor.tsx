@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import { patchChordSymbolAndTimes } from "@/components/cifra/cifra-chord-edit-popover";
+import { ChordDiagramTooltip } from "@/components/cifra/chord-diagram-tooltip";
 import { CifraEditInspectorPanel } from "@/components/cifra/cifra-edit-inspector-panel";
 import { CifraEditMetaSidebar } from "@/components/cifra/cifra-edit-meta-sidebar";
 import { Slider } from "@/components/ui/slider";
@@ -1189,41 +1190,42 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                         const showLabel = idx === 0 || stripCells[idx - 1]!.label !== cell.label;
                                         const ci = cell.chordIdx;
                                         return (
-                                          <span
-                                            key={`${group.key}-plan-inst-${ci}-${idx}`}
-                                            data-cifra-chord-slot
-                                            data-chord-index={ci}
-                                            draggable
-                                            aria-label={`Acorde ${cell.label} nesta zona só instrumento`}
-                                            title="Arraste para outra secção ou palavra"
-                                            onDragStart={(e) => {
-                                              e.stopPropagation();
-                                              e.dataTransfer.setData(CHORD_DRAG_MIME, String(ci));
-                                              e.dataTransfer.effectAllowed = "move";
-                                              setDragChordIdx(ci);
-                                            }}
-                                            onDragEnd={() => {
-                                              setDragChordIdx(null);
-                                              setDropSlotId(null);
-                                              setDropSectionKey(null);
-                                            }}
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setActiveSlotId(null);
-                                              setActiveChordIndex(ci);
-                                            }}
-                                            className={cn(
-                                              "inline-flex cursor-grab touch-none flex-col items-start gap-1 rounded-md px-1 py-0.5 transition-colors hover:bg-cifra-teal/10 active:cursor-grabbing",
-                                              activeChordIndex === ci &&
-                                              activeSlotId === null &&
-                                              "bg-cifra-teal/15 text-cifra-teal",
-                                            )}
-                                          >
-                                            <span className="cifra-chord__symbol inline-flex min-h-[1.125rem] items-end font-mono text-xs font-semibold text-cifra-teal sm:text-sm">
-                                              {showLabel ? cell.label : "\u00A0"}
+                                          <ChordDiagramTooltip key={`${group.key}-plan-inst-${ci}-${idx}`} label={cell.label}>
+                                            <span
+                                              data-cifra-chord-slot
+                                              data-chord-index={ci}
+                                              draggable
+                                              aria-label={`Acorde ${cell.label} nesta zona só instrumento`}
+                                              title="Arraste para outra secção ou palavra"
+                                              onDragStart={(e) => {
+                                                e.stopPropagation();
+                                                e.dataTransfer.setData(CHORD_DRAG_MIME, String(ci));
+                                                e.dataTransfer.effectAllowed = "move";
+                                                setDragChordIdx(ci);
+                                              }}
+                                              onDragEnd={() => {
+                                                setDragChordIdx(null);
+                                                setDropSlotId(null);
+                                                setDropSectionKey(null);
+                                              }}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setActiveSlotId(null);
+                                                setActiveChordIndex(ci);
+                                              }}
+                                              className={cn(
+                                                "inline-flex cursor-grab touch-none flex-col items-start gap-1 rounded-md px-1 py-0.5 transition-colors hover:bg-cifra-teal/10 active:cursor-grabbing",
+                                                activeChordIndex === ci &&
+                                                activeSlotId === null &&
+                                                "bg-cifra-teal/15 text-cifra-teal",
+                                              )}
+                                            >
+                                              <span className="cifra-chord__symbol inline-flex min-h-[1.125rem] items-end font-mono text-xs font-semibold text-cifra-teal sm:text-sm">
+                                                {showLabel ? cell.label : "\u00A0"}
+                                              </span>
+                                              <span className="min-h-[1.25rem] text-cifra-text">{"\u00A0"}</span>
                                             </span>
-                                            <span className="min-h-[1.25rem] text-cifra-text">{"\u00A0"}</span>
-                                          </span>
+                                          </ChordDiagramTooltip>
                                         );
                                       })}
                                     </div>
@@ -1330,33 +1332,34 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                                     const chord = chords[ci]!;
                                                     const label = chordDisplayLabel(chord);
                                                     return (
-                                                      <span
-                                                        key={`${slot.id}-${ci}`}
-                                                        data-cifra-chord-slot
-                                                        data-chord-index={ci}
-                                                        draggable
-                                                        aria-label={`Acorde ${label}. Arraste para mover; clique na célula para editar no painel.`}
-                                                        title="Arraste para outra palavra ou zona instrumental"
-                                                        onDragStart={(e) => {
-                                                          e.stopPropagation();
-                                                          e.dataTransfer.setData(CHORD_DRAG_MIME, String(ci));
-                                                          e.dataTransfer.effectAllowed = "move";
-                                                          setDragChordIdx(ci);
-                                                        }}
-                                                        onDragEnd={() => {
-                                                          setDragChordIdx(null);
-                                                          setDropSlotId(null);
-                                                          setDropSectionKey(null);
-                                                        }}
-                                                        className={cn(
-                                                          "cursor-grab touch-none rounded-md px-1.5 py-0.5 text-center font-mono text-[12px] font-semibold text-cifra-teal transition-colors hover:bg-cifra-teal/12 active:cursor-grabbing",
-                                                          activeSlotId === slot.id &&
-                                                          activeChordIndex === ci &&
-                                                          "bg-cifra-teal/15 text-cifra-teal",
-                                                        )}
-                                                      >
-                                                        {label}
-                                                      </span>
+                                                      <ChordDiagramTooltip key={`${slot.id}-${ci}`} label={label}>
+                                                        <span
+                                                          data-cifra-chord-slot
+                                                          data-chord-index={ci}
+                                                          draggable
+                                                          aria-label={`Acorde ${label}. Arraste para mover; clique na célula para editar no painel.`}
+                                                          title="Arraste para outra palavra ou zona instrumental"
+                                                          onDragStart={(e) => {
+                                                            e.stopPropagation();
+                                                            e.dataTransfer.setData(CHORD_DRAG_MIME, String(ci));
+                                                            e.dataTransfer.effectAllowed = "move";
+                                                            setDragChordIdx(ci);
+                                                          }}
+                                                          onDragEnd={() => {
+                                                            setDragChordIdx(null);
+                                                            setDropSlotId(null);
+                                                            setDropSectionKey(null);
+                                                          }}
+                                                          className={cn(
+                                                            "cursor-grab touch-none rounded-md px-1.5 py-0.5 text-center font-mono text-[12px] font-semibold text-cifra-teal transition-colors hover:bg-cifra-teal/12 active:cursor-grabbing",
+                                                            activeSlotId === slot.id &&
+                                                            activeChordIndex === ci &&
+                                                            "bg-cifra-teal/15 text-cifra-teal",
+                                                          )}
+                                                        >
+                                                          {label}
+                                                        </span>
+                                                      </ChordDiagramTooltip>
                                                     );
                                                   })
                                               )}

@@ -293,8 +293,12 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
     cancelSmoothScrolling();
     lastAutoScrollTarget = null;
     lastTimeBasedScrollTop = -1;
+    if (cifra && typeof cifra.clear === "function") {
+      cifra.clear();
+    } else {
+      cifraContainer.innerHTML = "";
+    }
     cifra = null;
-    cifraContainer.innerHTML = "";
   }
 
   function syncAutoScrollButtonUi() {
