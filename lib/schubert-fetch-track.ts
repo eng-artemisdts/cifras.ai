@@ -6,7 +6,7 @@ import { getAuth0, getAuth0SessionCached } from "@/lib/auth0";
 import { AUTH0_LOGOUT_PATH } from "@/lib/auth0-routes";
 import { isAuth0Configured } from "@/lib/auth0-env";
 
-import type { SchubertTrackJson } from "./cifra/schubert-to-payload";
+import type { SchubertTrackJson } from "./schubert-api";
 
 function schubertApiBase(): string {
   return (process.env.SCHUBERT_API_BASE_URL ?? "http://127.0.0.1:3001").replace(/\/$/, "");

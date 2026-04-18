@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { CifraEditView, resolveLyricsPathFromSearch } from "@/components/cifra/cifra-edit-view";
+import { CifraEditView } from "@/components/cifra/cifra-edit-view";
 
 export const metadata: Metadata = {
   title: "Editar cifra · cifra.ai",
@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 };
 
 type PageProps = Readonly<{
-  searchParams: Promise<{ trackId?: string; v?: string }>;
+  searchParams: Promise<{ trackId?: string }>;
 }>;
 
 export default async function CifraEditPage({ searchParams }: PageProps) {
@@ -20,7 +20,7 @@ export default async function CifraEditPage({ searchParams }: PageProps) {
         <p className="max-w-md text-sm text-cifra-muted">
           Indique a faixa na URL, por exemplo{" "}
           <code className="rounded bg-cifra-surface px-1 py-0.5 text-cifra-teal">
-            ?trackId=all_i_need&amp;v=a
+            ?trackId=all_i_need
           </code>
           .
         </p>
@@ -28,7 +28,5 @@ export default async function CifraEditPage({ searchParams }: PageProps) {
     );
   }
 
-  const lyricsPath = resolveLyricsPathFromSearch(sp.v);
-
-  return <CifraEditView trackId={trackId} lyricsPath={lyricsPath} />;
+  return <CifraEditView trackId={trackId} />;
 }

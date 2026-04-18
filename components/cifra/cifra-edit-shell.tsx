@@ -9,10 +9,9 @@ import { AuthMarketingSidebar } from "@/components/layout/auth-marketing-sidebar
 import type { LibraryTopNavUser } from "@/components/library/library-top-nav";
 import type { MusicAiDemoPayload } from "@/lib/cifra/musicai-types";
 import { normalizeDemoPayload } from "@/lib/cifra/normalize-payload";
-import type { CifraLyricsPath } from "@/lib/cifra/cifra-routes";
 import { cifraHref } from "@/lib/cifra/cifra-routes";
 import { bibliotecaCifraSheetMarketingSidebar } from "@/lib/library/cifra-sheet-marketing";
-import { fetchSchubertFromBrowser } from "@/lib/schubert-api";
+import { fetchSchubertFromBrowser, type SchubertLyricsSource } from "@/lib/schubert-api";
 import { cn } from "@/lib/utils";
 
 import { CifraCenterChrome } from "./cifra-center-chrome";
@@ -29,7 +28,7 @@ const editMarketing = {
 export type CifraEditShellProps = {
   user: LibraryTopNavUser;
   trackId: string;
-  lyricsPath: CifraLyricsPath;
+  lyricsSource: SchubertLyricsSource;
   initialPayload: MusicAiDemoPayload;
   title: string;
   subtitle: string;
@@ -39,7 +38,7 @@ export type CifraEditShellProps = {
 export function CifraEditShell({
   user,
   trackId,
-  lyricsPath,
+  lyricsSource,
   initialPayload,
   title,
   subtitle,
@@ -72,13 +71,13 @@ export function CifraEditShell({
     setSaving(true);
     setMsg(null);
     try {
-      const variant = lyricsPath === "m" ? "match" : "ai";
       const res = await fetchSchubertFromBrowser(`tracks/by-key/${encodeURIComponent(trackId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chords: p.chords,
-          lyricsVariants: { [variant]: p.lyrics },
+          lyrics: p.lyrics,
+          lyricsSource,
           sections: p.sections,
         }),
       });
@@ -94,13 +93,16 @@ export function CifraEditShell({
         }
         throw new Error(detail || `HTTP ${res.status}`);
       }
-      router.push(cifraHref(trackId, lyricsPath));
+      router.push(cifraHref(trackId));
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Não foi possível gravar.");
     } finally {
       setSaving(false);
     }
   };
+
+  const lyricsVariantLabel =
+    lyricsSource === "MATCH" ? "Letra match" : "Letra IA";
 
   return (
     <div className="flex min-h-dvh flex-col bg-cifra-bg text-cifra-text lg:flex-row lg:items-stretch">
@@ -149,7 +151,7 @@ export function CifraEditShell({
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Link
-                  href={cifraHref(trackId, lyricsPath)}
+                  href={cifraHref(trackId)}
                   className="rounded-lg border border-cifra-border px-3 py-2 text-[11px] font-semibold text-cifra-muted transition-colors hover:border-cifra-teal/30 hover:text-cifra-text"
                 >
                   Cancelar
@@ -179,7 +181,7 @@ export function CifraEditShell({
               <CifraTranscriptionEditor
                 ref={editorRef}
                 initial={initialPayload}
-                lyricsVariantLabel={lyricsPath === "m" ? "Letra match" : "Letra IA"}
+                lyricsVariantLabel={lyricsVariantLabel}
                 onRequestPreview={() => {
                   syncPreviewFromEditor();
                   setMode("preview");
@@ -193,7 +195,7 @@ export function CifraEditShell({
               )}
             >
               <CifraPocMount
-                trackKey={`${trackId}:edit-preview:${lyricsPath}`}
+                trackKey={`${trackId}:edit-preview:${lyricsSource}`}
                 payload={previewPayload}
                 trackTitle={title}
               />

@@ -187,7 +187,7 @@ export function ImportAudioUploadPanel({
       handleRecognitionDialogOpenChange(false);
       clearQueue();
       if (tid) {
-        router.push(cifraEditHref(tid, "a"));
+        router.push(cifraEditHref(tid));
         return;
       }
       const q = encodeURIComponent(`${pendingIngest.song.title} ${pendingIngest.song.artist}`.trim());

@@ -1,58 +1,35 @@
-import type {
-  MusicAiChordEvent,
-  MusicAiDemoPayload,
-  MusicAiLyricSegment,
-  MusicAiMeta,
-  MusicAiSection,
-} from "./musicai-types";
-
-export type SchubertTrackJson = {
-  trackId?: string;
-  spotifyId?: string;
-  name?: string;
-  chords?: MusicAiChordEvent[];
-  lyricsVariants?: {
-    ai?: MusicAiLyricSegment[];
-    match?: MusicAiLyricSegment[];
-  };
-  sections?: MusicAiSection[];
-  meta?: MusicAiMeta;
-  chordTimeOffsetSec?: number;
-  userId?: string;
-  original_tune?: string;
-  capo_at?: number;
-  is_private?: boolean;
-  artistId?: { name?: string; _id?: unknown } | string;
-};
+import type { MusicAiDemoPayload, MusicAiLyricSegment, MusicAiMeta } from "./musicai-types";
+import type { SchubertLyricsSource, SchubertTrackJson } from "../schubert-api";
 
 function isLyricSegmentArray(v: unknown): v is MusicAiLyricSegment[] {
   return Array.isArray(v);
 }
 
-export type SchubertLyricsVariant = "ai" | "match";
+/**
+ * Rótulo curto da origem da letra (UI / sidebar).
+ */
+export function schubertLyricsSourceLabel(src: SchubertLyricsSource | undefined): string {
+  return src === "MATCH" ? "letra alinhada (match)" : "letra IA";
+}
+
+/**
+ * Rótulo curto no estilo do editor (subtítulo / painel).
+ */
+export function schubertLyricsSourceEditorLabel(src: SchubertLyricsSource | undefined): string {
+  return src === "MATCH" ? "letra match" : "letra IA";
+}
 
 /**
  * Converte o documento `Track` da Schubert (JSON) para o payload canónico da POC.
- *
- * @param lyricsVariant Se definido (ex. pela rota `/cifra/a` ou `/cifra/m`), escolhe esse ramo em `lyricsVariants`;
- * caso contrário usa `meta.lyricsVariant` da faixa, com fallback para `ai`.
  */
-export function schubertTrackToDemoPayload(
-  track: SchubertTrackJson,
-  lyricsVariant?: SchubertLyricsVariant,
-): MusicAiDemoPayload {
-  const variant: SchubertLyricsVariant =
-    lyricsVariant ??
-    (track.meta?.lyricsVariant === "match" ? "match" : "ai");
-  const lyricsRaw =
-    variant === "match" ? track.lyricsVariants?.match : track.lyricsVariants?.ai;
-  const lyrics = isLyricSegmentArray(lyricsRaw) ? lyricsRaw : [];
-
+export function schubertTrackToDemoPayload(track: SchubertTrackJson): MusicAiDemoPayload {
+  const lyrics = isLyricSegmentArray(track.lyrics) ? track.lyrics : [];
+  const source: SchubertLyricsSource = track.lyricsSource === "MATCH" ? "MATCH" : "AI";
   const meta: MusicAiMeta = {
     ...(track.meta && typeof track.meta === "object" ? track.meta : {}),
     trackId: track.trackId ?? track.meta?.trackId,
     name: track.name ?? track.meta?.name,
-    lyricsVariant: variant,
+    lyricsVariant: source === "MATCH" ? "match" : "ai",
   };
 
   return {

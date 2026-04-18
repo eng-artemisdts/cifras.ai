@@ -149,7 +149,7 @@ export function mapSchubertMatchToChordPreview(
         ? track.spotifyId.trim()
         : "";
   const q = encodeURIComponent(`${songTitle} ${artistName}`.trim());
-  const chordHref = trackId ? cifraHref(trackId, "a") : `/biblioteca?q=${q}`;
+  const chordHref = trackId ? cifraHref(trackId) : `/biblioteca?q=${q}`;
   const tid = trackId || null;
   return {
     songTitle,
@@ -159,7 +159,7 @@ export function mapSchubertMatchToChordPreview(
       : null,
     chordHref,
     trackId: tid,
-    editHref: tid ? cifraEditHref(tid, "a") : null,
+    editHref: tid ? cifraEditHref(tid) : null,
   };
 }
 

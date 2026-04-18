@@ -3,16 +3,16 @@ import { notFound, redirect } from "next/navigation";
 
 import { CifraEditShell } from "@/components/cifra/cifra-edit-shell";
 import { normalizeDemoPayload } from "@/lib/cifra/normalize-payload";
-import type { CifraLyricsPath } from "@/lib/cifra/cifra-routes";
 import { cifraEditHref } from "@/lib/cifra/cifra-routes";
-import type { SchubertLyricsVariant } from "@/lib/cifra/schubert-to-payload";
 import {
   resolveArtistNameFromSchubertTrack,
+  schubertLyricsSourceEditorLabel,
   schubertTrackToDemoPayload,
 } from "@/lib/cifra/schubert-to-payload";
 import { getAuth0SessionCached } from "@/lib/auth0";
 import { auth0LoginHref } from "@/lib/auth0-routes";
 import { isAuth0Configured } from "@/lib/auth0-env";
+import type { SchubertLyricsSource } from "@/lib/schubert-api";
 import { publicMp3UrlForTrackId } from "@/lib/media/public-mp3-for-track";
 import { fetchSchubertTrackByKey } from "@/lib/schubert-fetch-track";
 
@@ -34,20 +34,16 @@ function resolveDurationSeconds(track: {
   return Math.max(...ends);
 }
 
-function lyricsPathFromParam(v: string | undefined): CifraLyricsPath {
-  return v === "m" ? "m" : "a";
-}
-
-function lyricsVariantFromPath(p: CifraLyricsPath): SchubertLyricsVariant {
-  return p === "m" ? "match" : "ai";
+function resolveLyricsSource(track: Awaited<ReturnType<typeof fetchSchubertTrackByKey>>): SchubertLyricsSource {
+  if (track && track.lyricsSource === "MATCH") return "MATCH";
+  return "AI";
 }
 
 type Props = {
   trackId: string;
-  lyricsPath: CifraLyricsPath;
 };
 
-export async function CifraEditView({ trackId, lyricsPath }: Props) {
+export async function CifraEditView({ trackId }: Props) {
   if (!isAuth0Configured()) {
     notFound();
   }
@@ -56,7 +52,7 @@ export async function CifraEditView({ trackId, lyricsPath }: Props) {
   if (!session?.user) {
     redirect(
       auth0LoginHref({
-        returnTo: cifraEditHref(trackId, lyricsPath),
+        returnTo: cifraEditHref(trackId),
       }),
     );
   }
@@ -87,8 +83,8 @@ export async function CifraEditView({ trackId, lyricsPath }: Props) {
     notFound();
   }
 
-  const variant = lyricsVariantFromPath(lyricsPath);
-  const fromSchubert = schubertTrackToDemoPayload(track, variant);
+  const lyricsSource = resolveLyricsSource(track);
+  const fromSchubert = schubertTrackToDemoPayload(track);
   const initialPayload = normalizeDemoPayload({
     ...fromSchubert,
     meta: {
@@ -102,22 +98,18 @@ export async function CifraEditView({ trackId, lyricsPath }: Props) {
       ? track.name.trim()
       : (track.meta?.name ?? "Faixa sem título");
   const artist = resolveArtistNameFromSchubertTrack(track);
-  const subtitle = `${artist} · edição de cifra · ${variant === "match" ? "letra match" : "letra IA"}`;
+  const subtitle = `${artist} · edição de cifra · ${schubertLyricsSourceEditorLabel(lyricsSource)}`;
   const durationLabel = formatDurationClock(resolveDurationSeconds(track));
 
   return (
     <CifraEditShell
       user={user}
       trackId={trackId}
-      lyricsPath={lyricsPath}
+      lyricsSource={lyricsSource}
       initialPayload={initialPayload}
       title={title}
       subtitle={subtitle}
       durationLabel={durationLabel}
     />
   );
-}
-
-export function resolveLyricsPathFromSearch(v: string | undefined): CifraLyricsPath {
-  return lyricsPathFromParam(v);
 }

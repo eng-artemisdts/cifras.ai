@@ -3,11 +3,10 @@ import { notFound, unstable_rethrow } from "next/navigation";
 
 import { CifraSheetPageView } from "@/components/cifra/cifra-sheet-page-view";
 import { normalizeDemoPayload } from "@/lib/cifra/normalize-payload";
-import type { CifraLyricsPath } from "@/lib/cifra/cifra-routes";
 import { cifraHref } from "@/lib/cifra/cifra-routes";
-import type { SchubertLyricsVariant } from "@/lib/cifra/schubert-to-payload";
 import {
   resolveArtistNameFromSchubertTrack,
+  schubertLyricsSourceLabel,
   schubertTrackToDemoPayload,
 } from "@/lib/cifra/schubert-to-payload";
 import { getAuth0SessionCached } from "@/lib/auth0";
@@ -35,21 +34,15 @@ function resolveDurationSeconds(track: {
   return Math.max(...ends);
 }
 
-function lyricsVariantLabel(v: SchubertLyricsVariant): string {
-  return v === "match" ? "letra alinhada (match)" : "letra IA";
-}
-
 type Props = {
   trackId: string;
-  lyricsVariant: SchubertLyricsVariant;
-  lyricsPath: CifraLyricsPath;
 };
 
 /**
- * Visualização pública da cifra em `/cifra/...` (rota fora do bloqueio da biblioteca).
+ * Visualização pública da cifra em `/cifra` (rota fora do bloqueio da biblioteca).
  * A carga da faixa continua a exigir sessão na Schubert; visitantes vêem convite a entrar.
  */
-export async function CifraTrackView({ trackId, lyricsVariant, lyricsPath }: Props) {
+export async function CifraTrackView({ trackId }: Props) {
   if (!isAuth0Configured()) {
     notFound();
   }
@@ -90,7 +83,7 @@ export async function CifraTrackView({ trackId, lyricsVariant, lyricsPath }: Pro
             Inicie sessão para carregar esta cifra a partir da Schubert.
           </p>
           <Link
-            href={auth0LoginHref({ returnTo: cifraHref(trackId, lyricsPath) })}
+            href={auth0LoginHref({ returnTo: cifraHref(trackId) })}
             className="rounded-full bg-cifra-teal px-5 py-2 text-sm font-semibold text-cifra-bg transition-opacity hover:opacity-95"
           >
             Entrar
@@ -101,7 +94,7 @@ export async function CifraTrackView({ trackId, lyricsVariant, lyricsPath }: Pro
     notFound();
   }
 
-  const fromSchubert = schubertTrackToDemoPayload(track, lyricsVariant);
+  const fromSchubert = schubertTrackToDemoPayload(track);
   const payload = normalizeDemoPayload({
     ...fromSchubert,
     meta: {
@@ -115,7 +108,7 @@ export async function CifraTrackView({ trackId, lyricsVariant, lyricsPath }: Pro
       ? track.name.trim()
       : (track.meta?.name ?? "Faixa sem título");
   const artist = resolveArtistNameFromSchubertTrack(track);
-  const subtitle = `${artist} · cifra sincronizada (Schubert) · ${lyricsVariantLabel(lyricsVariant)}`;
+  const subtitle = `${artist} · cifra sincronizada (Schubert) · ${schubertLyricsSourceLabel(track.lyricsSource)}`;
   const durationLabel = formatDurationClock(resolveDurationSeconds(track));
 
   if (session?.user?.sub) {
@@ -125,7 +118,7 @@ export async function CifraTrackView({ trackId, lyricsVariant, lyricsPath }: Pro
   return (
     <CifraSheetPageView
       user={user}
-      trackKey={`${trackId}:${lyricsPath}`}
+      trackKey={trackId}
       title={title}
       subtitle={subtitle}
       durationLabel={durationLabel}

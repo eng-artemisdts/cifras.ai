@@ -1,15 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
-import { cifraHref } from "@/lib/cifra/cifra-routes";
+import { CifraTrackView } from "@/components/cifra/cifra-track-view";
 
 export const metadata: Metadata = {
   title: "Cifra · cifra.ai",
   description: "Pré-visualização sincronizada de letra e acordes.",
 };
 
-export default async function CifraLandingPage({
+export default async function CifraPage({
   searchParams,
 }: Readonly<{
   searchParams: Promise<{ trackId?: string }>;
@@ -18,7 +17,7 @@ export default async function CifraLandingPage({
   const trackId = typeof sp.trackId === "string" && sp.trackId.trim() ? sp.trackId.trim() : null;
 
   if (trackId) {
-    redirect(cifraHref(trackId, "a"));
+    return <CifraTrackView trackId={trackId} />;
   }
 
   return (
@@ -26,13 +25,9 @@ export default async function CifraLandingPage({
       <p className="max-w-md text-sm text-cifra-muted">
         Indique uma faixa na URL, por exemplo{" "}
         <code className="rounded bg-cifra-surface px-1 py-0.5 text-cifra-teal">
-          /cifra/a?trackId=all_i_need
-        </code>{" "}
-        (letra IA) ou{" "}
-        <code className="rounded bg-cifra-surface px-1 py-0.5 text-cifra-teal">
-          /cifra/m?trackId=all_i_need
-        </code>{" "}
-        (letra match).
+          /cifra?trackId=all_i_need
+        </code>
+        . A origem da letra (IA ou match) vem dos dados da faixa.
       </p>
       <Link
         href="/biblioteca/importar/arquivo"

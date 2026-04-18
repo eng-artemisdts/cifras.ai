@@ -10,8 +10,10 @@ const nextConfig: NextConfig = {
         destination: "/cifra/edit",
         permanent: true,
       },
-      { source: "/biblioteca/cifra/a", destination: "/cifra/a", permanent: true },
-      { source: "/biblioteca/cifra/m", destination: "/cifra/m", permanent: true },
+      { source: "/biblioteca/cifra/a", destination: "/cifra", permanent: true },
+      { source: "/biblioteca/cifra/m", destination: "/cifra", permanent: true },
+      { source: "/cifra/a", destination: "/cifra", permanent: true },
+      { source: "/cifra/m", destination: "/cifra", permanent: true },
       { source: "/biblioteca/cifra", destination: "/cifra", permanent: true },
     ];
   },
