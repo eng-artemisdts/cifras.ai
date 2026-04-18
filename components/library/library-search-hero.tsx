@@ -1,8 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Search } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+
+import { LibraryExploreSearch } from "./library-explore-search";
 
 export type LibrarySearchHeroProps = {
   title?: string;
@@ -12,7 +13,7 @@ export type LibrarySearchHeroProps = {
 };
 
 /**
- * Bloco hero com busca (apenas UI).
+ * Bloco hero com busca (resultados rápidos abaixo do campo e página dedicada para lista completa).
  */
 export function LibrarySearchHero({
   title = "O que você quer ouvir?",
@@ -49,28 +50,7 @@ export function LibrarySearchHero({
       <p className="max-w-[560px] text-center text-sm leading-relaxed text-cifra-muted">
         {description}
       </p>
-      <form
-        className="mt-2 flex w-full max-w-[720px] flex-col gap-2.5 sm:flex-row sm:items-stretch"
-        action="#"
-        method="get"
-      >
-        <div className="flex min-h-12 min-w-0 flex-1 items-center gap-3 rounded-[10px] border border-white/[0.07] bg-cifra-surface-2 px-4 py-2.5">
-          <Search className="size-[18px] shrink-0 text-cifra-muted" strokeWidth={1.75} />
-          <input
-            type="search"
-            name="q"
-            placeholder={placeholder}
-            className="min-w-0 flex-1 bg-transparent text-sm text-cifra-text placeholder:text-[#6b6b8a] outline-none"
-            autoComplete="off"
-          />
-        </div>
-        <button
-          type="button"
-          className="h-12 shrink-0 rounded-[10px] bg-cifra-teal px-5 text-[13px] font-semibold text-cifra-bg transition-opacity hover:opacity-95 sm:h-auto sm:px-6"
-        >
-          Buscar
-        </button>
-      </form>
+      <LibraryExploreSearch placeholder={placeholder} />
     </section>
   );
 }

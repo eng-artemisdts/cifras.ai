@@ -55,6 +55,9 @@ export type MusicAiDemoPayload = {
   sections?: MusicAiSection[];
   meta?: MusicAiMeta;
   chordTimeOffsetSec?: number;
+  /** Cliente só: âncoras alinhadas ao editor (`buildPreviewChordAnchors`). */
+  slotIdsInLyricOrder?: string[];
+  chordAnchorsBySlotId?: Record<string, number[]>;
   /** `sub` Auth0 ou id interno de quem criou esta versão da cifra. */
   userId?: string;
   /** Texto livre (afinação original) — editável na sidebar. */

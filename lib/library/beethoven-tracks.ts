@@ -1,5 +1,19 @@
 import { fetchBeethovenFromServer } from "@/lib/beethoven-api";
+import { cifraHref, resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-routes";
 import type { RecentAccessItem, RecommendationTile } from "@/lib/library/types";
+import type { SchubertTrackJson } from "@/lib/schubert-api";
+import { fetchSchubertTrackByKey } from "@/lib/schubert-fetch-track";
+
+function cifraHrefFromSchubertTrack(
+  schubert: SchubertTrackJson | null,
+  trackKey: string,
+): string | null {
+  const k = trackKey.trim();
+  if (!k) return null;
+  const pair = resolveCifraSlugPairFromTrack(schubert ?? undefined);
+  if (pair) return cifraHref(pair.artistSlug, pair.songSlug);
+  return `/cifras?trackId=${encodeURIComponent(k)}`;
+}
 
 type BeethovenTrack = {
   _id?: string;
@@ -33,6 +47,54 @@ function mapTrackToRecommendation(track: BeethovenTrack, index: number): Recomme
     subtitle: `${resolveTrackArtistName(track)} · Música`,
     coverTone: coverTones[index % coverTones.length],
   };
+}
+
+async function enrichRecommendationTilesFromSchubert(
+  tracks: BeethovenTrack[],
+  tiles: RecommendationTile[],
+): Promise<RecommendationTile[]> {
+  return Promise.all(
+    tiles.map(async (tile, index) => {
+      const track = tracks[index];
+      const key = typeof track?.trackId === "string" ? track.trackId.trim() : "";
+      if (!key) return tile;
+      const schubert = await fetchSchubertTrackByKey(key).catch(() => null);
+      const url =
+        schubert && typeof schubert.coverImageUrl === "string" && schubert.coverImageUrl.trim()
+          ? schubert.coverImageUrl.trim()
+          : null;
+      const href = cifraHrefFromSchubertTrack(schubert, key);
+      return {
+        ...tile,
+        ...(url ? { coverImageUrl: url } : {}),
+        href,
+      };
+    }),
+  );
+}
+
+async function enrichRecentAccessFromSchubert(
+  tracks: BeethovenTrack[],
+  items: RecentAccessItem[],
+): Promise<RecentAccessItem[]> {
+  return Promise.all(
+    items.map(async (item, index) => {
+      const track = tracks[index];
+      const key = typeof track?.trackId === "string" ? track.trackId.trim() : "";
+      if (!key) return item;
+      const schubert = await fetchSchubertTrackByKey(key).catch(() => null);
+      const url =
+        schubert && typeof schubert.coverImageUrl === "string" && schubert.coverImageUrl.trim()
+          ? schubert.coverImageUrl.trim()
+          : null;
+      const href = cifraHrefFromSchubertTrack(schubert, key);
+      return {
+        ...item,
+        ...(url ? { coverImageUrl: url } : {}),
+        href,
+      };
+    }),
+  );
 }
 
 function formatRelativeTime(dateIso?: string): string {
@@ -92,9 +154,20 @@ export async function fetchLibraryHomeFeed(
   const recommended = Array.isArray(feed.recommended) ? feed.recommended : [];
   const recent = Array.isArray(feed.recent) ? feed.recent : [];
 
+  const recommendationTiles = recommended.map((track, index) =>
+    mapTrackToRecommendation(track, index),
+  );
+  const recommendationItems = await enrichRecommendationTilesFromSchubert(
+    recommended,
+    recommendationTiles,
+  );
+
+  const recentRows = recent.map((track, index) => mapTrackToRecentAccess(track, index));
+  const recentAccessItems = await enrichRecentAccessFromSchubert(recent, recentRows);
+
   return {
-    recommendationItems: recommended.map((track, index) => mapTrackToRecommendation(track, index)),
-    recentAccessItems: recent.map((track, index) => mapTrackToRecentAccess(track, index)),
+    recommendationItems,
+    recentAccessItems,
   };
 }
 
@@ -113,6 +186,7 @@ export async function registerLibraryTrackAccess(params: {
     body: JSON.stringify({ userId, trackKey }),
   });
   if (!res.ok) {
-    throw new Error(`beethoven_library_access_failed:${res.status}`);
+    const errorBody = (await res.text()).slice(0, 500);
+    throw new Error(`beethoven_library_access_failed:${res.status}:${errorBody}`);
   }
 }

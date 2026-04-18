@@ -1,9 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { MusicAiDemoPayload } from "@/lib/cifra/musicai-types";
+import { buildPreviewChordAnchors } from "@/lib/cifra/preview-chord-anchors";
 import { startCifraRuntime } from "@/lib/engine/start-cifra-runtime";
 import { cn } from "@/lib/utils";
 
@@ -64,6 +65,15 @@ export function CifraPocMount({ trackKey, payload, trackTitle, className }: Cifr
     setRightSidebarMountGen((n) => n + 1);
   }, []);
 
+  const payloadForRuntime = useMemo(() => {
+    const previewAnchors = buildPreviewChordAnchors(payload.lyrics, payload.chords);
+    return {
+      ...payload,
+      slotIdsInLyricOrder: previewAnchors.slotIdsInLyricOrder,
+      chordAnchorsBySlotId: previewAnchors.chordAnchorsBySlotId,
+    };
+  }, [payload]);
+
   const scrollRootRef = useRef<HTMLDivElement>(null);
   const cifraRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -103,7 +113,7 @@ export function CifraPocMount({ trackKey, payload, trackTitle, className }: Cifr
     }
 
     const destroy = startCifraRuntime({
-      payloadInput: payload as unknown as Record<string, unknown>,
+      payloadInput: payloadForRuntime as unknown as Record<string, unknown>,
       els: {
         scrollRoot,
         cifraContainer,
@@ -124,7 +134,7 @@ export function CifraPocMount({ trackKey, payload, trackTitle, className }: Cifr
     });
 
     return destroy;
-  }, [trackKey, payload, rightSidebarMountGen]);
+  }, [trackKey, payloadForRuntime, rightSidebarMountGen]);
 
   useEffect(() => {
     setOriginalTune(payload.original_tune ?? "");

@@ -36,6 +36,8 @@ export type SchubertTrackJson = {
         _id?: unknown;
       }
     | string;
+  /** Capa persistida na ingestão (AudD `cover_image_url`). */
+  coverImageUrl?: string;
 };
 
 /** Caminho relativo ao proxy Schubert (ex.: `tracks/identify`). */

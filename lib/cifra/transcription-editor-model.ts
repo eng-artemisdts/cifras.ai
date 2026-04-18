@@ -402,23 +402,42 @@ function chordOverlapsSlot(c: MusicAiChordEvent, s: LyricWordSlot): boolean {
   return c.end > s.start && c.start < s.end;
 }
 
-/** Para cada acorde, id da primeira palavra (ordem da letra) cujo intervalo intersecta o do acorde. */
+/**
+ * Para cada acorde, id da palavra onde a cifra deve “assentar” na grelha.
+ * Regra: se o instante `chord.start` cai no intervalo half-open de uma ou mais palavras,
+ * escolhe a palavra cujo `start` está mais próximo de `chord.start` (empate → ordem da letra).
+ * Assim, ao largar um acorde com início alinhado a `slot.start`, ele fica na palavra certa
+ * mesmo com intervalos de palavras sobrepostos no tempo.
+ * Caso `chord.start` não caia em nenhuma palavra, mantém-se o fallback: primeira palavra
+ * (ordem da letra) cujo intervalo intersecta o do acorde (intro / sustentações longas).
+ */
 export function chordAnchorSlotIds(slots: LyricWordSlot[], chords: MusicAiChordEvent[]): (string | null)[] {
-  const ordered = sortSlotsLyricOrder(slots);
-  return chords.map((c) => {
-    for (const s of ordered) {
-      if (chordOverlapsSlot(c, s)) return s.id;
-    }
-    return null;
-  });
+  return chords.map((c) => anchorSlotIdForChord(slots, c));
 }
 
-/**
- * Primeira palavra (na ordem da letra) cujo intervalo intersecta o do acorde com duração > 0.
- * Acordes longos (ex.: G# da intro até o verso) ancoram na **primeira** palavra tocada, não na mais próxima pelo `start`.
- */
 export function anchorSlotIdForChord(slots: LyricWordSlot[], chord: MusicAiChordEvent): string | null {
-  for (const s of sortSlotsLyricOrder(slots)) {
+  const ordered = sortSlotsLyricOrder(slots);
+  const t = chord.start;
+
+  const containing = ordered.filter((s) => t >= s.start && t < s.end);
+  if (containing.length) {
+    let best = containing[0]!;
+    let bestD = Math.abs(best.start - t);
+    let bestOrd = ordered.indexOf(best);
+    for (let i = 1; i < containing.length; i++) {
+      const s = containing[i]!;
+      const d = Math.abs(s.start - t);
+      const ord = ordered.indexOf(s);
+      if (d < bestD - 1e-12 || (Math.abs(d - bestD) <= 1e-12 && ord < bestOrd)) {
+        best = s;
+        bestD = d;
+        bestOrd = ord;
+      }
+    }
+    return best.id;
+  }
+
+  for (const s of ordered) {
     if (chordOverlapsSlot(chord, s)) return s.id;
   }
   return null;
@@ -506,8 +525,10 @@ export function moveChordToTimeRange(
 }
 
 /**
- * Índices de acordes cuja **âncora** é esta palavra: primeira palavra na ordem da letra cujo
- * intervalo intersecta `[chord.start, chord.end)` (acordes sustentados da intro aparecem na 1.ª palavra tocada).
+ * Índices de acordes cuja **âncora** é esta palavra (via `anchorSlotIdForChord` /
+ * `chordAnchorSlotIds`): em geral o instante `chord.start`; se várias palavras contêm esse instante,
+ * usa-se a mais coerente com `slot.start`; sem palavra a cobrir `chord.start`, mantém-se o fallback
+ * por interseção temporal (intro / sustentações).
  */
 export function chordIndicesAttachedToSlot(
   slots: LyricWordSlot[],

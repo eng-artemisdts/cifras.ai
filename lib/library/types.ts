@@ -11,6 +11,10 @@ export type RecommendationTile = {
   subtitle: string;
   /** Classes Tailwind para o bloco de capa (cor sólida ou gradiente). */
   coverTone: "navy" | "navyAlt" | "surface" | "tealGlow";
+  /** Capa da Schubert quando existe `trackKey` em `tracks/by-key`. */
+  coverImageUrl?: string | null;
+  /** `/cifras/:artistSlug/:songSlug` quando há slugs; senão `/cifras?trackId=`. */
+  href?: string | null;
 };
 
 /** Linha em “Últimos acessos”. */
@@ -20,6 +24,9 @@ export type RecentAccessItem = {
   subtitle: string;
   timeLabel: string;
   thumbTone: "navy" | "tealTint" | "surface";
+  coverImageUrl?: string | null;
+  /** `/cifras/:artistSlug/:songSlug` ou `/cifras?trackId=`. */
+  href?: string | null;
 };
 
 export type CatalogTabId = "musicas" | "artistas" | "albuns" | "playlists";

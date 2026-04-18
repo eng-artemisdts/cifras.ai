@@ -59,6 +59,34 @@ import { cn } from "@/lib/utils";
 
 const CHORD_DRAG_MIME = "application/x-cifra-chord-index";
 const WORD_DRAG_MIME = "application/x-cifra-word-slot-id";
+const CHORD_DRAG_PLAIN_PREFIX = "cifra-ci:";
+const WORD_DRAG_PLAIN_PREFIX = "cifra-ws:";
+
+function setChordDragTransfer(dt: DataTransfer, chordIdx: number) {
+  dt.setData(CHORD_DRAG_MIME, String(chordIdx));
+  dt.setData("text/plain", `${CHORD_DRAG_PLAIN_PREFIX}${chordIdx}`);
+}
+
+function readChordDragIndexRaw(dt: DataTransfer): string {
+  const custom = dt.getData(CHORD_DRAG_MIME);
+  if (custom) return custom;
+  const plain = dt.getData("text/plain");
+  if (plain.startsWith(CHORD_DRAG_PLAIN_PREFIX)) return plain.slice(CHORD_DRAG_PLAIN_PREFIX.length);
+  return "";
+}
+
+function setWordDragTransfer(dt: DataTransfer, slotId: string) {
+  dt.setData(WORD_DRAG_MIME, slotId);
+  dt.setData("text/plain", `${WORD_DRAG_PLAIN_PREFIX}${slotId}`);
+}
+
+function readWordDragIdRaw(dt: DataTransfer): string {
+  const custom = dt.getData(WORD_DRAG_MIME);
+  if (custom) return custom;
+  const plain = dt.getData("text/plain");
+  if (plain.startsWith(WORD_DRAG_PLAIN_PREFIX)) return plain.slice(WORD_DRAG_PLAIN_PREFIX.length);
+  return "";
+}
 
 /** Eventos do mesmo plano que o preview (#cifra), limitados ao envelope da secção na edição. */
 function planEventsOverlappingSection(
@@ -549,6 +577,8 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
     const [editingId, setEditingId] = useState<string | null>(null);
     const [chordInspectorOpen, setChordInspectorOpen] = useState(false);
     const chordInspectorAnchorRef = useRef<HTMLElement | null>(null);
+    /** Reflete arrasto iniciado aqui (alguns browsers não expõem MIME custom em dragOver). */
+    const internalDnDRef = useRef<"chord" | "word" | null>(null);
     const [dragChordIdx, setDragChordIdx] = useState<number | null>(null);
     const [dragWordSlotId, setDragWordSlotId] = useState<string | null>(null);
     const [dropSlotId, setDropSlotId] = useState<string | null>(null);
@@ -830,9 +860,24 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
       return Array.from(e.dataTransfer.types).includes(WORD_DRAG_MIME);
     }, []);
 
+    const finishChordDnD = useCallback(() => {
+      internalDnDRef.current = null;
+      setDragChordIdx(null);
+      setDropSlotId(null);
+      setDropSectionKey(null);
+    }, []);
+
+    const finishWordDnD = useCallback(() => {
+      internalDnDRef.current = null;
+      setDragWordSlotId(null);
+      setDropSlotId(null);
+      setDropSectionKey(null);
+    }, []);
+
     const onDragOverWord = useCallback(
       (e: React.DragEvent) => {
-        if (!isChordDrag(e) && !isWordDrag(e)) return;
+        const internal = internalDnDRef.current === "chord" || internalDnDRef.current === "word";
+        if (!internal && !isChordDrag(e) && !isWordDrag(e)) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
       },
@@ -842,21 +887,19 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
     const onDropWord = useCallback(
       (slot: LyricWordSlot, e: React.DragEvent) => {
         e.preventDefault();
-        const chordRaw = e.dataTransfer.getData(CHORD_DRAG_MIME);
+        const chordRaw = readChordDragIndexRaw(e.dataTransfer);
         if (chordRaw) {
           const idx = parseInt(chordRaw, 10);
           if (!Number.isFinite(idx) || idx < 0 || idx >= chords.length) {
-            setDragChordIdx(null);
+            finishChordDnD();
             return;
           }
           const order = sortedChordIndices(chords);
           setChords(moveChordToSlot(chords, idx, slot, order));
-          setDragChordIdx(null);
-          setDropSlotId(null);
-          setDropSectionKey(null);
+          finishChordDnD();
           return;
         }
-        const wordRaw = e.dataTransfer.getData(WORD_DRAG_MIME);
+        const wordRaw = readWordDragIdRaw(e.dataTransfer);
         if (wordRaw && wordRaw !== slot.id) {
           const { slots: nextSlots, chords: nextChords } = applyWordSlotMoveToTarget(
             slots,
@@ -867,33 +910,30 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
           setSlots(nextSlots);
           setChords(nextChords);
         }
-        setDragWordSlotId(null);
-        setDropSlotId(null);
-        setDropSectionKey(null);
+        finishWordDnD();
       },
-      [chords, slots],
+      [chords, slots, finishChordDnD, finishWordDnD],
     );
 
     /** Secção ou segmento sem palavras: largar acorde alinha ao intervalo temporal do bloco. */
     const onDropChordOnlyZone = useCallback(
       (rangeStart: number, rangeEnd: number, e: React.DragEvent) => {
         e.preventDefault();
-        const chordRaw = e.dataTransfer.getData(CHORD_DRAG_MIME);
+        const chordRaw = readChordDragIndexRaw(e.dataTransfer);
         if (chordRaw) {
           const idx = parseInt(chordRaw, 10);
           if (!Number.isFinite(idx) || idx < 0 || idx >= chords.length) {
-            setDragChordIdx(null);
+            finishChordDnD();
             return;
           }
           const order = sortedChordIndices(chords);
           setChords(moveChordToTimeRange(chords, idx, rangeStart, rangeEnd, order));
-          setDragChordIdx(null);
-          setDropSectionKey(null);
+          finishChordDnD();
           return;
         }
-        if (e.dataTransfer.getData(WORD_DRAG_MIME)) setDragWordSlotId(null);
+        if (readWordDragIdRaw(e.dataTransfer)) finishWordDnD();
       },
-      [chords],
+      [chords, finishChordDnD, finishWordDnD],
     );
 
     const dragActive = dragChordIdx !== null || dragWordSlotId !== null;
@@ -1148,15 +1188,12 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                                 title="Arraste para outra secção ou palavra"
                                                 onDragStart={(e) => {
                                                   e.stopPropagation();
-                                                  e.dataTransfer.setData(CHORD_DRAG_MIME, String(ci));
+                                                  internalDnDRef.current = "chord";
+                                                  setChordDragTransfer(e.dataTransfer, ci);
                                                   e.dataTransfer.effectAllowed = "move";
                                                   setDragChordIdx(ci);
                                                 }}
-                                                onDragEnd={() => {
-                                                  setDragChordIdx(null);
-                                                  setDropSlotId(null);
-                                                  setDropSectionKey(null);
-                                                }}
+                                                onDragEnd={() => finishChordDnD()}
                                                 onClick={(e) => {
                                                   e.stopPropagation();
                                                   setActiveSlotId(null);
@@ -1224,17 +1261,27 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                                 )}
                                                 onDragStart={(e) => {
                                                   if (editingId === slot.id) return;
-                                                  e.dataTransfer.setData(WORD_DRAG_MIME, slot.id);
+                                                  internalDnDRef.current = "word";
+                                                  setWordDragTransfer(e.dataTransfer, slot.id);
                                                   e.dataTransfer.effectAllowed = "move";
                                                   setDragWordSlotId(slot.id);
                                                 }}
-                                                onDragEnd={() => setDragWordSlotId(null)}
+                                                onDragEnd={() => finishWordDnD()}
                                                 onDragOver={onDragOverWord}
                                                 onDragEnter={(e) => {
-                                                  if (!isChordDrag(e) && !isWordDrag(e)) return;
+                                                  if (
+                                                    internalDnDRef.current !== "chord" &&
+                                                    internalDnDRef.current !== "word" &&
+                                                    !isChordDrag(e) &&
+                                                    !isWordDrag(e)
+                                                  ) {
+                                                    return;
+                                                  }
                                                   setDropSlotId(slot.id);
                                                 }}
-                                                onDragLeave={() => {
+                                                onDragLeave={(e) => {
+                                                  const rt = e.relatedTarget;
+                                                  if (rt instanceof Node && e.currentTarget.contains(rt)) return;
                                                   setDropSlotId((prev) => (prev === slot.id ? null : prev));
                                                 }}
                                                 onDrop={(e) => onDropWord(slot, e)}
@@ -1278,11 +1325,9 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                                 <div className="flex min-h-[22px] w-full flex-1 flex-row flex-wrap content-end items-end justify-center gap-x-1.5 gap-y-0.5">
                                                   {chordIdxs.length === 0 ? (
                                                     <span
-                                                      className="pointer-events-none flex min-h-[18px] min-w-[1ch] select-none items-center justify-center font-mono text-[10px] text-cifra-muted/85"
+                                                      className="pointer-events-none flex min-h-[18px] min-w-[1ch] shrink-0 select-none items-center justify-center"
                                                       aria-hidden
-                                                    >
-                                                      ·
-                                                    </span>
+                                                    />
                                                   ) : (
                                                     [...chordIdxs]
                                                       .sort((a, b) => chords[a]!.start - chords[b]!.start)
@@ -1299,15 +1344,12 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                                               title="Arraste para outra palavra ou zona instrumental"
                                                               onDragStart={(e) => {
                                                                 e.stopPropagation();
-                                                                e.dataTransfer.setData(CHORD_DRAG_MIME, String(ci));
+                                                                internalDnDRef.current = "chord";
+                                                                setChordDragTransfer(e.dataTransfer, ci);
                                                                 e.dataTransfer.effectAllowed = "move";
                                                                 setDragChordIdx(ci);
                                                               }}
-                                                              onDragEnd={() => {
-                                                                setDragChordIdx(null);
-                                                                setDropSlotId(null);
-                                                                setDropSectionKey(null);
-                                                              }}
+                                                              onDragEnd={() => finishChordDnD()}
                                                               onDoubleClick={(e) => {
                                                                 e.preventDefault();
                                                                 e.stopPropagation();
@@ -1370,10 +1412,12 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                   )}
                                   onDragOver={onDragOverWord}
                                   onDragEnter={(e) => {
-                                    if (!isChordDrag(e)) return;
+                                    if (internalDnDRef.current !== "chord" && !isChordDrag(e)) return;
                                     setDropSectionKey(group.key);
                                   }}
-                                  onDragLeave={() => {
+                                  onDragLeave={(e) => {
+                                    const rt = e.relatedTarget;
+                                    if (rt instanceof Node && e.currentTarget.contains(rt)) return;
                                     setDropSectionKey((prev) => (prev === group.key ? null : prev));
                                   }}
                                   onDrop={(e) => onDropChordOnlyZone(group.start, group.end, e)}

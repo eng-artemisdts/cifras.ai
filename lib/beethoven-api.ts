@@ -1,23 +1,8 @@
 import { headers } from "next/headers";
 
-const proxyPrefix = "/api/beethoven";
+import { beethovenProxyUrl } from "./beethoven-browser-client";
 
-/** Caminho relativo ao proxy (ex.: `tracks`, `artists`). */
-export function beethovenProxyUrl(path: string): string {
-  const p = path.replace(/^\/+/, "");
-  return `${proxyPrefix}/${p}`;
-}
-
-/**
- * Chamadas do browser à API Nest através do BFF (cookies de sessão Auth0).
- * Usa URL relativa; inclui credenciais para enviar cookies.
- */
-export function fetchBeethovenFromBrowser(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(beethovenProxyUrl(path), {
-    ...init,
-    credentials: "include",
-  });
-}
+export { beethovenProxyUrl, fetchBeethovenFromBrowser } from "./beethoven-browser-client";
 
 /**
  * Server Components / Route Handlers: reencaminha cookies para o BFF no mesmo host.

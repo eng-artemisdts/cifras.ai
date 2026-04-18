@@ -2,20 +2,20 @@ import Link from "next/link";
 import { notFound, unstable_rethrow } from "next/navigation";
 
 import { CifraSheetPageView } from "@/components/cifra/cifra-sheet-page-view";
-import { cifraHref, resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-routes";
+import { resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-routes";
 import { normalizeDemoPayload } from "@/lib/cifra/normalize-payload";
 import {
   resolveArtistNameFromSchubertTrack,
-  schubertLyricsSourceLabel,
   schubertTrackToDemoPayload,
 } from "@/lib/cifra/schubert-to-payload";
 import { getAuth0SessionCached } from "@/lib/auth0";
-import { registerLibraryTrackAccess } from "@/lib/library/beethoven-tracks";
 import { publicMp3UrlForTrackId } from "@/lib/media/public-mp3-for-track";
 import {
   fetchSchubertTrackByKey,
   fetchSchubertTrackBySlug,
 } from "@/lib/schubert-fetch-track";
+
+import { RegisterLibraryTrackAccess } from "./register-library-track-access";
 
 function formatDurationClock(sec: number | undefined): string | undefined {
   if (sec == null || !Number.isFinite(sec) || sec <= 0) return undefined;
@@ -46,10 +46,10 @@ export async function CifraTrackView(props: CifraTrackViewProps) {
   const session = await getAuth0SessionCached();
   const user = session?.user
     ? {
-        name: session.user.name ?? null,
-        email: session.user.email ?? null,
-        picture: session.user.picture ?? null,
-      }
+      name: session.user.name ?? null,
+      email: session.user.email ?? null,
+      picture: session.user.picture ?? null,
+    }
     : null;
 
   let track: Awaited<ReturnType<typeof fetchSchubertTrackBySlug>>;
@@ -96,7 +96,7 @@ export async function CifraTrackView(props: CifraTrackViewProps) {
       ? track.name.trim()
       : (track.meta?.name ?? "Faixa sem título");
   const artist = resolveArtistNameFromSchubertTrack(track);
-  const subtitle = `${artist} · cifra sincronizada (Schubert) · ${schubertLyricsSourceLabel(track.lyricsSource)}`;
+  const subtitle = `${artist}`
   const durationLabel = formatDurationClock(resolveDurationSeconds(track));
 
   const reactKey =
@@ -104,21 +104,20 @@ export async function CifraTrackView(props: CifraTrackViewProps) {
       ? `${slugPair.artistSlug}/${slugPair.songSlug}`
       : mp3Id || ("artistSlug" in props ? `${props.artistSlug}/${props.songSlug}` : props.trackKey);
 
-  if (session?.user?.sub && mp3Id) {
-    await registerLibraryTrackAccess({
-      userId: session.user.sub,
-      trackKey: mp3Id,
-    }).catch(() => {});
-  }
 
   return (
-    <CifraSheetPageView
-      user={user}
-      trackKey={reactKey}
-      title={title}
-      subtitle={subtitle}
-      durationLabel={durationLabel}
-      payload={payload}
-    />
+    <>
+      {session?.user?.sub && mp3Id ? (
+        <RegisterLibraryTrackAccess trackKey={mp3Id} />
+      ) : null}
+      <CifraSheetPageView
+        user={user}
+        trackKey={reactKey}
+        title={title}
+        subtitle={subtitle}
+        durationLabel={durationLabel}
+        payload={payload}
+      />
+    </>
   );
 }

@@ -21,6 +21,10 @@ function coalescePayload(raw) {
     sections: Array.isArray(p.sections) ? p.sections : [],
     meta: p.meta && typeof p.meta === "object" ? p.meta : {},
     chordTimeOffsetSec: Number.isFinite(p.chordTimeOffsetSec) ? p.chordTimeOffsetSec : 0,
+    /** Cliente: âncoras = modelo do editor (ver `buildPreviewChordAnchors`). */
+    slotIdsInLyricOrder: Array.isArray(p.slotIdsInLyricOrder) ? p.slotIdsInLyricOrder : null,
+    chordAnchorsBySlotId:
+      p.chordAnchorsBySlotId && typeof p.chordAnchorsBySlotId === "object" ? p.chordAnchorsBySlotId : null,
   };
 }
 import { sectionAtTimestamp } from "./section-timeline";
@@ -37,8 +41,10 @@ const LS_AUTO_SCROLL_DURATION_MS = "cifra-ai:autoScrollDurationMs";
 const LS_SCROLL_MODE = "cifra-ai:scrollMode";
 const DEFAULT_AUTO_SCROLL_LEAD_SEC = 0.4;
 const DEFAULT_AUTO_SCROLL_DURATION_MS = 450;
-/** Rolagem «inteligente»: centrar o acorde activo no eixo vertical (POC usava ~0,38 com linha inteira; com célula usamos ~0,5). */
+/** Rolagem «inteligente»: manter secção activa centrada no viewport. */
 const SMART_SCROLL_VIEWPORT_ANCHOR = 0.5;
+/** Tempo mínimo (ms) sem auto-scroll após gesto manual do utilizador. */
+const USER_SCROLL_PAUSE_MS = 1400;
 
 function clamp(n, lo, hi) {
   return Math.min(hi, Math.max(lo, n));
@@ -128,6 +134,32 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
   const { timedLines: rawTimedLines } = buildLyricModel(payload.lyrics);
   const meta = payload.meta;
 
+  /**
+   * Contentor que realmente rola verticalmente. Se `scrollRoot` não rola (layout flex em que o ancestral
+   * cresce com o conteúdo), sobe a árvore até encontrar um ancestral com `overflow-y: auto|scroll` e
+   * `scrollHeight > clientHeight`. Fallback: `document.scrollingElement` (rolagem da página).
+   *
+   * @returns {HTMLElement | null}
+   */
+  function pickScrollContainer() {
+    function canScroll(el) {
+      if (!(el instanceof HTMLElement)) return false;
+      const cs = getComputedStyle(el);
+      const oy = cs.overflowY;
+      const overflowable = oy === "auto" || oy === "scroll" || oy === "overlay";
+      return overflowable && el.scrollHeight - el.clientHeight > 1;
+    }
+    if (canScroll(scrollRoot)) return scrollRoot;
+    /** @type {HTMLElement | null} */
+    let node = scrollRoot.parentElement;
+    while (node && node !== document.body && node !== document.documentElement) {
+      if (canScroll(node)) return node;
+      node = node.parentElement;
+    }
+    const se = document.scrollingElement instanceof HTMLElement ? document.scrollingElement : null;
+    return se && se.scrollHeight - se.clientHeight > 1 ? se : scrollRoot;
+  }
+
   let virtualT = 0;
   let audioReady = false;
   /** `true` após `loadedmetadata` com duração válida; `false` se o áudio falhar ou não for utilizável. */
@@ -140,9 +172,19 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
   let cifra = null;
   let autoScrollEnabled = false;
   let lastAutoScrollTarget = null;
+  let lastSmartSectionStart = null;
   /** Último `scrollTop` aplicado na rolagem automática (tempo → posição), para evitar trabalho redundante. */
   let lastTimeBasedScrollTop = -1;
   let scrollAnimGen = 0;
+  /** RAF da rolagem automática (suavização contínua sem saltos/flicker). */
+  let timeScrollRafId = 0;
+  let timeScrollTargetY = -1;
+  /** `true` quando o relógio virtual está a correr por causa da rolagem (sem áudio). */
+  let autoScrollVirtualClock = false;
+  /** Até quando o auto-scroll deve ficar suspenso por intervenção manual. */
+  let userScrollPauseUntilMs = 0;
+  /** Janela curta para ignorar eventos de scroll gerados pelo próprio runtime. */
+  let programmaticScrollUntilMs = 0;
 
   function chordForDisplayFromEvent(c) {
     return formatChordLabel(c);
@@ -152,9 +194,30 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
     scrollAnimGen += 1;
   }
 
+  function cancelTimeBasedScrollAnimation() {
+    if (timeScrollRafId) {
+      cancelAnimationFrame(timeScrollRafId);
+      timeScrollRafId = 0;
+    }
+    timeScrollTargetY = -1;
+  }
+
+  function markProgrammaticScroll() {
+    programmaticScrollUntilMs = performance.now() + 120;
+  }
+
+  function pauseAutoScrollByUser(ms = USER_SCROLL_PAUSE_MS) {
+    if (!autoScrollEnabled) return;
+    userScrollPauseUntilMs = Math.max(userScrollPauseUntilMs, performance.now() + ms);
+    cancelSmoothScrolling();
+    cancelTimeBasedScrollAnimation();
+    lastAutoScrollTarget = null;
+  }
+
   function cancelVirtualPlayback() {
     virtualPlaying = false;
     lastVirtualPerfMs = 0;
+    autoScrollVirtualClock = false;
     if (virtualRafId) {
       cancelAnimationFrame(virtualRafId);
       virtualRafId = 0;
@@ -182,32 +245,78 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
     virtualRafId = requestAnimationFrame(virtualStep);
   }
 
+  function ensureSilentScrollClock() {
+    if (!autoScrollEnabled) return;
+    const canRunSilently = !audioUsable || audio.paused;
+    if (!canRunSilently || virtualPlaying) return;
+    if (audioUsable && Number.isFinite(audio.currentTime)) {
+      virtualT = Math.max(0, Number(audio.currentTime));
+    }
+    autoScrollVirtualClock = true;
+    virtualPlaying = true;
+    lastVirtualPerfMs = 0;
+    virtualRafId = requestAnimationFrame(virtualStep);
+    updateTransportUi();
+  }
+
   function smoothScrollToElement(el, durationMs, viewportAnchor) {
     scrollAnimGen += 1;
     const myGen = scrollAnimGen;
+    const root = pickScrollContainer();
+    if (!root) return;
     const rect = el.getBoundingClientRect();
-    const rootRect = scrollRoot.getBoundingClientRect();
-    const elCenterY = rect.top - rootRect.top + scrollRoot.scrollTop + rect.height / 2;
-    let targetY = elCenterY - scrollRoot.clientHeight * viewportAnchor;
-    const maxScroll = Math.max(0, scrollRoot.scrollHeight - scrollRoot.clientHeight);
+    const rootRect = root.getBoundingClientRect();
+    const elCenterY = rect.top - rootRect.top + root.scrollTop + rect.height / 2;
+    let targetY = elCenterY - root.clientHeight * viewportAnchor;
+    const maxScroll = Math.max(0, root.scrollHeight - root.clientHeight);
     targetY = clamp(targetY, 0, maxScroll);
-    const startY = scrollRoot.scrollTop;
+    const startY = root.scrollTop;
     const delta = targetY - startY;
     if (Math.abs(delta) < 2) return;
     const durRaw = Number(durationMs);
     const dur = Number.isFinite(durRaw) && durRaw >= 0 ? durRaw : DEFAULT_AUTO_SCROLL_DURATION_MS;
     if (dur <= 0) {
-      scrollRoot.scrollTo({ top: targetY, behavior: "auto" });
+      markProgrammaticScroll();
+      root.scrollTo({ top: targetY, behavior: "auto" });
       return;
     }
     const t0 = performance.now();
     function frame(now) {
       if (myGen !== scrollAnimGen) return;
       const u = Math.min(1, (now - t0) / dur);
-      scrollRoot.scrollTop = startY + delta * easeInOutQuad(u);
+      markProgrammaticScroll();
+      root.scrollTop = startY + delta * easeInOutQuad(u);
       if (u < 1) requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
+  }
+
+  function requestTimeBasedScrollTo(nextY) {
+    timeScrollTargetY = Number(nextY);
+    if (timeScrollRafId) return;
+    const step = () => {
+      timeScrollRafId = 0;
+      const root = pickScrollContainer();
+      if (!root) return;
+      const maxScroll = Math.max(0, root.scrollHeight - root.clientHeight);
+      if (maxScroll <= 0) return;
+      const target = clamp(timeScrollTargetY, 0, maxScroll);
+      const curr = root.scrollTop;
+      const delta = target - curr;
+      if (Math.abs(delta) <= 0.5) {
+        markProgrammaticScroll();
+        root.scrollTop = target;
+        lastTimeBasedScrollTop = target;
+        return;
+      }
+      /** Damping fixo dá sensação suave e sem tremor entre timeupdate/raf. */
+      const alpha = 0.18;
+      markProgrammaticScroll();
+      root.scrollTop = curr + delta * alpha;
+      lastTimeBasedScrollTop = root.scrollTop;
+      timeScrollRafId = requestAnimationFrame(step);
+    };
+    timeScrollRafId = requestAnimationFrame(step);
   }
 
   function syncAutoScrollControlLabels() {
@@ -291,7 +400,9 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
 
   function remountCifraView() {
     cancelSmoothScrolling();
+    cancelTimeBasedScrollAnimation();
     lastAutoScrollTarget = null;
+    lastSmartSectionStart = null;
     lastTimeBasedScrollTop = -1;
     if (cifra && typeof cifra.clear === "function") {
       cifra.clear();
@@ -317,16 +428,18 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
    * com antecipação opcional (`lead`) sobre o eixo do tempo.
    */
   function applyTimeBasedScroll(t) {
+    const root = pickScrollContainer();
+    if (!root) return;
     const dur = getEffectiveDuration(audio, audioReady, chordTimeline.lastChordEndAudioTime);
     const leadSec = autoScrollLeadEl ? Number(autoScrollLeadEl.value) : DEFAULT_AUTO_SCROLL_LEAD_SEC;
     const lead = Number.isFinite(leadSec) ? Math.max(0, leadSec) : DEFAULT_AUTO_SCROLL_LEAD_SEC;
     const tEff = dur > 0 ? clamp(t + lead, 0, dur) : 0;
-    const maxScroll = Math.max(0, scrollRoot.scrollHeight - scrollRoot.clientHeight);
+    const maxScroll = Math.max(0, root.scrollHeight - root.clientHeight);
+    if (maxScroll <= 0) return;
     const targetTop = dur > 0 ? (tEff / dur) * maxScroll : 0;
     const y = clamp(targetTop, 0, maxScroll);
-    if (Math.abs(y - lastTimeBasedScrollTop) < 0.75) return;
-    lastTimeBasedScrollTop = y;
-    scrollRoot.scrollTop = y;
+    if (Math.abs(y - lastTimeBasedScrollTop) < 0.2 && timeScrollRafId) return;
+    requestTimeBasedScrollTo(y);
   }
 
   /**
@@ -344,18 +457,47 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
       payload.chords || [],
       payload.chordTimeOffsetSec ?? 0,
     );
-    if (el && el !== lastAutoScrollTarget) {
-      lastAutoScrollTarget = el;
-      smoothScrollToElement(
-        el,
-        Number.isFinite(durationMs) ? durationMs : DEFAULT_AUTO_SCROLL_DURATION_MS,
-        SMART_SCROLL_VIEWPORT_ANCHOR,
-      );
+    if (!(el instanceof HTMLElement)) return;
+
+    const sectionEl = el.closest(".cifra-section");
+    let targetEl = sectionEl ?? el.closest(".cifra-line") ?? el;
+    if (sectionEl instanceof HTMLElement) {
+      const sectionInner = sectionEl.querySelector(".cifra-section-inner");
+      const sectionHeaderLine =
+        sectionInner instanceof HTMLElement && sectionInner.firstElementChild instanceof HTMLElement
+          ? sectionInner.firstElementChild
+          : null;
+      if (sectionHeaderLine) targetEl = sectionHeaderLine;
     }
+
+    const root = pickScrollContainer();
+    const rootRect = root?.getBoundingClientRect();
+    const targetRect = targetEl.getBoundingClientRect();
+    const desiredY =
+      root && rootRect
+        ? targetRect.top - rootRect.top + root.scrollTop + targetRect.height / 2 - root.clientHeight * SMART_SCROLL_VIEWPORT_ANCHOR
+        : null;
+    const drift = root && desiredY != null ? Math.abs(root.scrollTop - desiredY) : Infinity;
+    const sectionStartAttr =
+      sectionEl instanceof HTMLElement ? Number(sectionEl.getAttribute("data-section-start")) : NaN;
+    const sectionKey = Number.isFinite(sectionStartAttr) ? sectionStartAttr : null;
+    const sectionChanged = sectionKey !== lastSmartSectionStart;
+
+    /** Recentraliza só ao mudar de secção ou quando o desvio é realmente grande. */
+    if (!sectionChanged && targetEl === lastAutoScrollTarget && drift < 80) return;
+
+    lastAutoScrollTarget = targetEl;
+    lastSmartSectionStart = sectionKey;
+    smoothScrollToElement(
+      targetEl,
+      Number.isFinite(durationMs) ? durationMs : DEFAULT_AUTO_SCROLL_DURATION_MS,
+      SMART_SCROLL_VIEWPORT_ANCHOR,
+    );
   }
 
   function applyAutoScroll(container, t) {
     if (!autoScrollEnabled) return;
+    if (performance.now() < userScrollPauseUntilMs) return;
     if (isSmartScrollMode()) applySmartScroll(container, t);
     else applyTimeBasedScroll(t);
   }
@@ -373,11 +515,14 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
       chordTimeOffsetSec: payload.chordTimeOffsetSec ?? 0,
       showSectionBars,
       showAllChordPositions: true,
+      slotIdsInLyricOrder: payload.slotIdsInLyricOrder,
+      chordAnchorsBySlotId: payload.chordAnchorsBySlotId,
     });
     return cifra;
   }
 
   function nowAudioTime() {
+    if (virtualPlaying) return virtualT;
     if (audioUsable && audio.src) return audio.currentTime;
     return virtualT;
   }
@@ -417,6 +562,7 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
   const onTimeUpdate = () => tick();
   const onSeekInput = () => {
     cancelSmoothScrolling();
+    cancelTimeBasedScrollAnimation();
     lastAutoScrollTarget = null;
     lastTimeBasedScrollTop = -1;
     const dur = getEffectiveDuration(audio, audioReady, chordTimeline.lastChordEndAudioTime);
@@ -431,6 +577,7 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
   };
   const onPause = () => {
     updateTransportUi();
+    ensureSilentScrollClock();
   };
   const onEnded = () => {
     updateTransportUi();
@@ -443,6 +590,7 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
       else audio.pause();
     } else {
       virtualPlaying = !virtualPlaying;
+      autoScrollVirtualClock = false;
       if (virtualPlaying) {
         lastVirtualPerfMs = 0;
         virtualRafId = requestAnimationFrame(virtualStep);
@@ -455,6 +603,7 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
   };
   const onLoadedMetadata = () => {
     const wasVirtualPlaying = virtualPlaying;
+    const wasAutoScrollVirtualClock = autoScrollVirtualClock;
     const tSync = virtualT;
     audioUsable = true;
     audioReady = true;
@@ -473,7 +622,7 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
     tick();
     playBtn.disabled = false;
     updateTransportUi();
-    if (wasVirtualPlaying) void audio.play().catch(() => { });
+    if (wasVirtualPlaying && !wasAutoScrollVirtualClock) void audio.play().catch(() => { });
   };
   const onAudioError = () => {
     audioUsable = false;
@@ -513,7 +662,18 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
   if (autoScrollBtn) {
     onAutoBtn = () => {
       autoScrollEnabled = !autoScrollEnabled;
-      if (!autoScrollEnabled) cancelSmoothScrolling();
+      if (!autoScrollEnabled) {
+        cancelSmoothScrolling();
+        cancelTimeBasedScrollAnimation();
+        if (virtualPlaying && (!audioUsable || audio.paused)) {
+          cancelVirtualPlayback();
+          updateTransportUi();
+        }
+      } else {
+        userScrollPauseUntilMs = 0;
+        lastSmartSectionStart = null;
+        ensureSilentScrollClock();
+      }
       lastAutoScrollTarget = null;
       lastTimeBasedScrollTop = -1;
       syncAutoScrollButtonUi();
@@ -534,15 +694,50 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
   const onScrollModeChange = () => {
     persistScrollMode();
     cancelSmoothScrolling();
+    cancelTimeBasedScrollAnimation();
     lastAutoScrollTarget = null;
+    lastSmartSectionStart = null;
     lastTimeBasedScrollTop = -1;
     tick();
   };
+
+  const onUserScrollIntent = () => {
+    if (performance.now() < programmaticScrollUntilMs) return;
+    pauseAutoScrollByUser();
+  };
+  const onUserWheel = () => onUserScrollIntent();
+  const onUserTouchMove = () => onUserScrollIntent();
+  const onUserKeyScroll = (e) => {
+    const k = e.key;
+    if (
+      k === "ArrowDown" ||
+      k === "ArrowUp" ||
+      k === "PageDown" ||
+      k === "PageUp" ||
+      k === "Home" ||
+      k === "End" ||
+      k === " " ||
+      k === "Spacebar"
+    ) {
+      onUserScrollIntent();
+    }
+  };
+  const onScrollCapture = () => onUserScrollIntent();
+
+  document.addEventListener("wheel", onUserWheel, { passive: true });
+  document.addEventListener("touchmove", onUserTouchMove, { passive: true });
+  document.addEventListener("keydown", onUserKeyScroll, { passive: true });
+  document.addEventListener("scroll", onScrollCapture, true);
   if (scrollModeAutomaticEl) scrollModeAutomaticEl.addEventListener("change", onScrollModeChange);
   if (scrollModeSmartEl) scrollModeSmartEl.addEventListener("change", onScrollModeChange);
 
   return () => {
+    document.removeEventListener("wheel", onUserWheel);
+    document.removeEventListener("touchmove", onUserTouchMove);
+    document.removeEventListener("keydown", onUserKeyScroll);
+    document.removeEventListener("scroll", onScrollCapture, true);
     cancelSmoothScrolling();
+    cancelTimeBasedScrollAnimation();
     cancelVirtualPlayback();
     audio.removeEventListener("loadedmetadata", onLoadedMetadata);
     audio.removeEventListener("error", onAudioError);

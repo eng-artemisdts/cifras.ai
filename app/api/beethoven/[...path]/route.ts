@@ -4,8 +4,9 @@ import { isAccessTokenLikelyJwt } from "@/lib/access-token-shape";
 import { getAuth0 } from "@/lib/auth0";
 import { isAuth0Configured } from "@/lib/auth0-env";
 
+/** Mesma porta por defeito que `beethoven-api` (evita confundir com Schubert em 3001). */
 const beethovenBase = () =>
-  (process.env.BEETHOVEN_API_BASE_URL ?? "http://127.0.0.1:3001").replace(/\/$/, "");
+  (process.env.BEETHOVEN_API_BASE_URL ?? "http://127.0.0.1:3002").replace(/\/$/, "");
 
 type RouteCtx = { params?: Promise<{ path?: string[] }> };
 
