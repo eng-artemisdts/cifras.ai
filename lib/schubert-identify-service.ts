@@ -1,4 +1,4 @@
-import { bibliotecaCifraEditHref, bibliotecaCifraHref } from "@/lib/library/biblioteca-cifra-href";
+import { cifraEditHref, cifraHref } from "@/lib/cifra/cifra-routes";
 import { fetchSchubertFromBrowser } from "@/lib/schubert-api";
 import type {
   SchubertRecognizedSong,
@@ -149,7 +149,7 @@ export function mapSchubertMatchToChordPreview(
         ? track.spotifyId.trim()
         : "";
   const q = encodeURIComponent(`${songTitle} ${artistName}`.trim());
-  const chordHref = trackId ? bibliotecaCifraHref(trackId, "a") : `/biblioteca/resultados?q=${q}`;
+  const chordHref = trackId ? cifraHref(trackId, "a") : `/biblioteca?q=${q}`;
   const tid = trackId || null;
   return {
     songTitle,
@@ -159,7 +159,7 @@ export function mapSchubertMatchToChordPreview(
       : null,
     chordHref,
     trackId: tid,
-    editHref: tid ? bibliotecaCifraEditHref(tid, "a") : null,
+    editHref: tid ? cifraEditHref(tid, "a") : null,
   };
 }
 
@@ -172,7 +172,7 @@ export function mapRecognizedSongToChordPreview(song: SchubertRecognizedSong): C
     coverImageUrl: typeof song.cover_image_url === "string" && song.cover_image_url.trim()
       ? song.cover_image_url.trim()
       : null,
-    chordHref: `/biblioteca/resultados?q=${q}`,
+    chordHref: `/biblioteca?q=${q}`,
     trackId: null,
     editHref: null,
   };

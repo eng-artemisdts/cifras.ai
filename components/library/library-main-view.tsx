@@ -10,7 +10,7 @@ import { LibraryTopNav, type LibraryTopNavUser } from "./library-top-nav";
 import { MusicCatalogCard } from "./music-catalog-card";
 import { ResultsToolbar } from "./results-toolbar";
 
-export type LibraryResultsViewProps = {
+export type LibraryMainViewProps = {
   navItems: LibraryNavItem[];
   user?: LibraryTopNavUser | null;
   billingPlan?: BillingPlan | null;
@@ -18,9 +18,9 @@ export type LibraryResultsViewProps = {
 };
 
 /**
- * Página única de catálogo: abas, barra de resultados, grid de músicas e artistas sugeridos (só UI).
+ * Página principal da biblioteca (`/biblioteca`): abas, barra de resultados, grid e artistas sugeridos (UI).
  */
-export function LibraryResultsView({ navItems, user, billingPlan, className }: LibraryResultsViewProps) {
+export function LibraryMainView({ navItems, user, billingPlan, className }: LibraryMainViewProps) {
   return (
     <div className={cn("flex min-h-dvh flex-col bg-cifra-bg text-cifra-text", className)}>
       <LibraryTopNav items={navItems} user={user} billingPlan={billingPlan ?? undefined} />

@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
 
-import { LibraryHomeView } from "@/components/library/library-home-view";
+import { LibraryMainView } from "@/components/library/library-main-view";
 import { getAuth0SessionCached } from "@/lib/auth0";
 import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-plan";
 import { libraryNavForPath } from "@/lib/library/mock-data";
-import { fetchLibraryHomeFeed } from "@/lib/library/beethoven-tracks";
 
 export const metadata: Metadata = {
   title: "Biblioteca · cifra.ai",
-  description: "Busque músicas, veja recomendações e seus últimos acessos.",
+  description: "Navegue por músicas, artistas, álbuns e playlists.",
 };
 
 export default async function BibliotecaPage() {
@@ -22,20 +21,8 @@ export default async function BibliotecaPage() {
     : null;
 
   const billingPlan = await resolveBillingPlanForSessionUser(session?.user ?? null);
-  const { recommendationItems, recentAccessItems } = await fetchLibraryHomeFeed(
-    session?.user?.sub,
-  ).catch(() => ({
-    recommendationItems: [],
-    recentAccessItems: [],
-  }));
 
   return (
-    <LibraryHomeView
-      navItems={libraryNavForPath("/biblioteca")}
-      user={user}
-      billingPlan={billingPlan}
-      recommendationItems={recommendationItems}
-      recentAccessItems={recentAccessItems}
-    />
+    <LibraryMainView navItems={libraryNavForPath("/biblioteca")} user={user} billingPlan={billingPlan} />
   );
 }

@@ -34,7 +34,7 @@ export type SchubertLyricsVariant = "ai" | "match";
 /**
  * Converte o documento `Track` da Schubert (JSON) para o payload canónico da POC.
  *
- * @param lyricsVariant Se definido (ex. pela rota `/biblioteca/cifra/a` ou `/m`), escolhe esse ramo em `lyricsVariants`;
+ * @param lyricsVariant Se definido (ex. pela rota `/cifra/a` ou `/cifra/m`), escolhe esse ramo em `lyricsVariants`;
  * caso contrário usa `meta.lyricsVariant` da faixa, com fallback para `ai`.
  */
 export function schubertTrackToDemoPayload(

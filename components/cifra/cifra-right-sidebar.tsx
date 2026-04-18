@@ -1,3 +1,5 @@
+"use client";
+
 import {
   ChevronRight,
   CircleCheck,
@@ -7,11 +9,14 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { RefObject } from "react";
+import { useLayoutEffect } from "react";
 
 import { cn } from "@/lib/utils";
 
 export type CifraRightSidebarProps = {
   className?: string;
+  /** Chamado após o painel (e refs) estarem no DOM — necessário quando o pai usa `dynamic(..., { ssr: false })`. */
+  onMount?: () => void;
   trackTitle?: string;
   /** Afinação original (texto livre), editável. */
   originalTune: string;
@@ -48,7 +53,12 @@ export function CifraRightSidebar({
   autoScrollLeadValRef,
   autoScrollDurRef,
   autoScrollDurValRef,
+  onMount,
 }: CifraRightSidebarProps) {
+  useLayoutEffect(() => {
+    onMount?.();
+  }, [onMount]);
+
   return (
     <aside
       className={cn(
@@ -81,14 +91,12 @@ export function CifraRightSidebar({
       </div>
 
       <div className="space-y-3 rounded-lg border border-white/6 bg-[#0c0c14] px-3 py-3">
-        <p className="font-mono text-[8px] font-normal uppercase tracking-[0.16em] text-cifra-muted">
-          Afinação e capo
-        </p>
-        <label className="flex flex-col gap-1">
+        <label className="flex flex-col gap-1" htmlFor="cifra-original-tune">
           <span className="text-[10px] font-medium uppercase tracking-wide text-[#7a7a98]">
-            Afinação original
+            Tom original
           </span>
           <input
+            id="cifra-original-tune"
             type="text"
             value={originalTune}
             onChange={(e) => onOriginalTuneChange(e.target.value)}

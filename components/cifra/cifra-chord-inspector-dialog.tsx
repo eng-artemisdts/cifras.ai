@@ -1,7 +1,8 @@
 "use client";
 
 import type { RefObject } from "react";
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { CifraEditInspectorPanel } from "@/components/cifra/cifra-edit-inspector-panel";
 import {
@@ -14,15 +15,25 @@ import type { MusicAiChordEvent } from "@/lib/cifra/musicai-types";
 import {
   clearChordElement,
   drawChordIntoElement,
-  resolveChordDiagram,
+  getChordDiagramVariationCount,
+  resolveChordDiagramVariation,
 } from "@/lib/cifra/chord-diagram/svguitar-from-db";
 import { chordDisplayLabel } from "@/lib/cifra/transcription-editor-model";
 import type { LyricWordSlot } from "@/lib/cifra/transcription-editor-model";
 import { cn } from "@/lib/utils";
 
 function ChordDiagramHero({ label }: { label: string }) {
-  const resolved = useMemo(() => resolveChordDiagram(label), [label]);
+  const [variationIndex, setVariationIndex] = useState(0);
+  const variationCount = useMemo(() => getChordDiagramVariationCount(label), [label]);
+  const resolved = useMemo(
+    () => resolveChordDiagramVariation(label, variationIndex),
+    [label, variationIndex],
+  );
   const hostRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setVariationIndex(0);
+  }, [label]);
 
   useLayoutEffect(() => {
     const el = hostRef.current;
@@ -39,15 +50,62 @@ function ChordDiagramHero({ label }: { label: string }) {
     );
   }
 
+  const canPrev = variationCount > 1 && variationIndex > 0;
+  const canNext = variationCount > 1 && variationIndex < variationCount - 1;
+
   return (
-    <div
-      ref={hostRef}
-      role="img"
-      aria-label={`Diagrama do acorde ${resolved.displayLabel}`}
-      className={cn(
-        "flex min-h-[132px] min-w-[116px] shrink-0 items-center justify-center [&_svg]:block",
-      )}
-    />
+    <div className="flex w-full max-w-[min(100%,20rem)] flex-col items-center gap-2">
+      <div className="flex w-full items-center justify-center gap-2">
+        {variationCount > 1 ? (
+          <button
+            type="button"
+            disabled={!canPrev}
+            aria-label="Variação anterior do diagrama"
+            className={cn(
+              "inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-white/12 text-cifra-teal transition-[background-color,opacity]",
+              canPrev ? "hover:bg-white/8" : "cursor-not-allowed opacity-35",
+            )}
+            onClick={() => canPrev && setVariationIndex((i) => i - 1)}
+          >
+            <ChevronLeft className="size-5" aria-hidden strokeWidth={1.75} />
+          </button>
+        ) : null}
+
+        <div
+          ref={hostRef}
+          role="img"
+          aria-label={
+            variationCount > 1
+              ? `Diagrama do acorde ${resolved.displayLabel}, variação ${variationIndex + 1} de ${variationCount}`
+              : `Diagrama do acorde ${resolved.displayLabel}`
+          }
+          className={cn(
+            "flex min-h-[132px] min-w-[116px] shrink-0 flex-1 items-center justify-center [&_svg]:block",
+          )}
+        />
+
+        {variationCount > 1 ? (
+          <button
+            type="button"
+            disabled={!canNext}
+            aria-label="Variação seguinte do diagrama"
+            className={cn(
+              "inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-white/12 text-cifra-teal transition-[background-color,opacity]",
+              canNext ? "hover:bg-white/8" : "cursor-not-allowed opacity-35",
+            )}
+            onClick={() => canNext && setVariationIndex((i) => i + 1)}
+          >
+            <ChevronRight className="size-5" aria-hidden strokeWidth={1.75} />
+          </button>
+        ) : null}
+      </div>
+
+      {variationCount > 1 ? (
+        <p className="font-mono text-[10px] tabular-nums tracking-tight text-cifra-muted">
+          Variação {variationIndex + 1} / {variationCount}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

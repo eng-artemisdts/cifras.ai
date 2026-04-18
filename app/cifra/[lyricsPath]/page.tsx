@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { BibliotecaCifraTrackView } from "../biblioteca-cifra-track-view";
-import { isBibliotecaCifraLyricsPath } from "@/lib/library/biblioteca-cifra-href";
+import { CifraTrackView } from "@/components/cifra/cifra-track-view";
+import { isCifraLyricsPath } from "@/lib/cifra/cifra-routes";
 
 export const metadata: Metadata = {
-  title: "Cifra · Biblioteca · cifra.ai",
+  title: "Cifra · cifra.ai",
   description: "Pré-visualização sincronizada de letra e acordes.",
 };
 
@@ -14,9 +14,9 @@ type PageProps = Readonly<{
   searchParams: Promise<{ trackId?: string }>;
 }>;
 
-export default async function BibliotecaCifraLyricsPage({ params, searchParams }: PageProps) {
+export default async function CifraLyricsPage({ params, searchParams }: PageProps) {
   const { lyricsPath: raw } = await params;
-  if (!isBibliotecaCifraLyricsPath(raw)) {
+  if (!isCifraLyricsPath(raw)) {
     notFound();
   }
   const lyricsPath = raw;
@@ -42,6 +42,6 @@ export default async function BibliotecaCifraLyricsPage({ params, searchParams }
   const lyricsVariant = lyricsPath === "m" ? "match" : "ai";
 
   return (
-    <BibliotecaCifraTrackView trackId={trackId} lyricsVariant={lyricsVariant} lyricsPath={lyricsPath} />
+    <CifraTrackView trackId={trackId} lyricsVariant={lyricsVariant} lyricsPath={lyricsPath} />
   );
 }

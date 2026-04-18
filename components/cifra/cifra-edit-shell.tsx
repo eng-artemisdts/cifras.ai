@@ -7,11 +7,11 @@ import { useCallback, useRef, useState } from "react";
 
 import { AuthMarketingSidebar } from "@/components/layout/auth-marketing-sidebar";
 import type { LibraryTopNavUser } from "@/components/library/library-top-nav";
-import { bibliotecaCifraSheetMarketingSidebar } from "@/lib/library/cifra-sheet-marketing";
-import type { BibliotecaCifraLyricsPath } from "@/lib/library/biblioteca-cifra-href";
-import { bibliotecaCifraHref } from "@/lib/library/biblioteca-cifra-href";
 import type { MusicAiDemoPayload } from "@/lib/cifra/musicai-types";
 import { normalizeDemoPayload } from "@/lib/cifra/normalize-payload";
+import type { CifraLyricsPath } from "@/lib/cifra/cifra-routes";
+import { cifraHref } from "@/lib/cifra/cifra-routes";
+import { bibliotecaCifraSheetMarketingSidebar } from "@/lib/library/cifra-sheet-marketing";
 import { fetchSchubertFromBrowser } from "@/lib/schubert-api";
 import { cn } from "@/lib/utils";
 
@@ -26,17 +26,17 @@ const editMarketing = {
     "Ajuste a letra ao duplo clique e arraste os acordes para as palavras certas. Pré-visualize com o mesmo leitor da cifra e grave na Schubert.",
 };
 
-export type BibliotecaCifraEditShellProps = {
+export type CifraEditShellProps = {
   user: LibraryTopNavUser;
   trackId: string;
-  lyricsPath: BibliotecaCifraLyricsPath;
+  lyricsPath: CifraLyricsPath;
   initialPayload: MusicAiDemoPayload;
   title: string;
   subtitle: string;
   durationLabel?: string;
 };
 
-export function BibliotecaCifraEditShell({
+export function CifraEditShell({
   user,
   trackId,
   lyricsPath,
@@ -44,7 +44,7 @@ export function BibliotecaCifraEditShell({
   title,
   subtitle,
   durationLabel,
-}: BibliotecaCifraEditShellProps) {
+}: CifraEditShellProps) {
   const router = useRouter();
   const editorRef = useRef<CifraTranscriptionEditorHandle>(null);
   const [mode, setMode] = useState<"edit" | "preview">("edit");
@@ -94,7 +94,7 @@ export function BibliotecaCifraEditShell({
         }
         throw new Error(detail || `HTTP ${res.status}`);
       }
-      router.push(bibliotecaCifraHref(trackId, lyricsPath));
+      router.push(cifraHref(trackId, lyricsPath));
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Não foi possível gravar.");
     } finally {
@@ -149,7 +149,7 @@ export function BibliotecaCifraEditShell({
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Link
-                  href={bibliotecaCifraHref(trackId, lyricsPath)}
+                  href={cifraHref(trackId, lyricsPath)}
                   className="rounded-lg border border-cifra-border px-3 py-2 text-[11px] font-semibold text-cifra-muted transition-colors hover:border-cifra-teal/30 hover:text-cifra-text"
                 >
                   Cancelar

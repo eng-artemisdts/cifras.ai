@@ -11,7 +11,7 @@ import { LibraryTopNav, type LibraryTopNavUser } from "./library-top-nav";
 import { RecentAccessSection } from "./recent-access-section";
 import { RecommendationsSection } from "./recommendations-section";
 
-export type LibraryHomeViewProps = {
+export type LibraryExploreViewProps = {
   navItems: LibraryNavItem[];
   user?: LibraryTopNavUser | null;
   billingPlan?: BillingPlan | null;
@@ -21,17 +21,17 @@ export type LibraryHomeViewProps = {
 };
 
 /**
- * Início da biblioteca: busca, recomendações e últimos acessos.
- * Catálogo completo (abas + resultados + grid) em `/biblioteca/resultados`.
+ * Explorar (público): busca, recomendações e últimos acessos.
+ * Catálogo completo na página principal `/biblioteca`.
  */
-export function LibraryHomeView({
+export function LibraryExploreView({
   navItems,
   user,
   billingPlan,
   recommendationItems,
   recentAccessItems,
   className,
-}: LibraryHomeViewProps) {
+}: LibraryExploreViewProps) {
   return (
     <div className={cn("flex min-h-dvh flex-col bg-cifra-bg text-cifra-text", className)}>
       <LibraryTopNav items={navItems} user={user} billingPlan={billingPlan ?? undefined} />
@@ -62,7 +62,7 @@ export function LibraryHomeView({
           <RecentAccessSection items={recentAccessItems} />
           <div className="mx-auto w-full max-w-[1200px] px-6 pb-10 pt-4 md:px-8">
             <Link
-              href="/biblioteca/resultados"
+              href="/biblioteca"
               className="inline-flex items-center justify-center rounded-xl border border-white/[0.07] bg-cifra-surface px-5 py-3 text-sm font-semibold text-cifra-text transition-colors hover:border-cifra-teal/40 hover:text-cifra-teal"
             >
               Ver catálogo e resultados

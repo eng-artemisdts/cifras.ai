@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-import { BibliotecaCifraEditView, resolveLyricsPathFromSearch } from "./biblioteca-cifra-edit-view";
+import { CifraEditView, resolveLyricsPathFromSearch } from "@/components/cifra/cifra-edit-view";
 
 export const metadata: Metadata = {
-  title: "Editar cifra · Biblioteca · cifra.ai",
+  title: "Editar cifra · cifra.ai",
   description: "Edite a letra e reposicione acordes antes de gravar.",
 };
 
@@ -11,7 +11,7 @@ type PageProps = Readonly<{
   searchParams: Promise<{ trackId?: string; v?: string }>;
 }>;
 
-export default async function BibliotecaCifraEditPage({ searchParams }: PageProps) {
+export default async function CifraEditPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const trackId = typeof sp.trackId === "string" && sp.trackId.trim() ? sp.trackId.trim() : null;
   if (!trackId) {
@@ -30,5 +30,5 @@ export default async function BibliotecaCifraEditPage({ searchParams }: PageProp
 
   const lyricsPath = resolveLyricsPathFromSearch(sp.v);
 
-  return <BibliotecaCifraEditView trackId={trackId} lyricsPath={lyricsPath} />;
+  return <CifraEditView trackId={trackId} lyricsPath={lyricsPath} />;
 }

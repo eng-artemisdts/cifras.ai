@@ -1,6 +1,20 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      { source: "/biblioteca/explorar", destination: "/explorar", permanent: true },
+      { source: "/biblioteca/resultados", destination: "/biblioteca", permanent: true },
+      {
+        source: "/biblioteca/cifra/edit",
+        destination: "/cifra/edit",
+        permanent: true,
+      },
+      { source: "/biblioteca/cifra/a", destination: "/cifra/a", permanent: true },
+      { source: "/biblioteca/cifra/m", destination: "/cifra/m", permanent: true },
+      { source: "/biblioteca/cifra", destination: "/cifra", permanent: true },
+    ];
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "lh3.googleusercontent.com", pathname: "/**" },

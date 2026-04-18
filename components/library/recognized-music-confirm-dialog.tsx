@@ -37,8 +37,8 @@ export type RecognizedMusicConfirmDialogProps = {
   artistName: string;
   coverImageUrl?: string | null;
   /**
-   * URL para abrir a cifra com letra IA (`/biblioteca/cifra/a?trackId=…`).
-   * Quando ausente, usa-se `onMontarComIaSemHref` (ex.: ingestão antes de ir aos resultados).
+   * URL para abrir a cifra com letra IA (`/cifra/a?trackId=…`).
+   * Quando ausente, usa-se `onMontarComIaSemHref` (ex.: ingestão antes do catálogo principal).
    */
   montarComIaHref: string | null;
   onMontarComIaSemHref?: () => Promise<void>;

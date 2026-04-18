@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { notFound, redirect, unstable_rethrow } from "next/navigation";
+import { notFound, unstable_rethrow } from "next/navigation";
 
 import { CifraSheetPageView } from "@/components/cifra/cifra-sheet-page-view";
 import { normalizeDemoPayload } from "@/lib/cifra/normalize-payload";
+import type { CifraLyricsPath } from "@/lib/cifra/cifra-routes";
+import { cifraHref } from "@/lib/cifra/cifra-routes";
 import type { SchubertLyricsVariant } from "@/lib/cifra/schubert-to-payload";
 import {
   resolveArtistNameFromSchubertTrack,
@@ -12,8 +14,6 @@ import { getAuth0SessionCached } from "@/lib/auth0";
 import { auth0LoginHref } from "@/lib/auth0-routes";
 import { isAuth0Configured } from "@/lib/auth0-env";
 import { registerLibraryTrackAccess } from "@/lib/library/beethoven-tracks";
-import type { BibliotecaCifraLyricsPath } from "@/lib/library/biblioteca-cifra-href";
-import { bibliotecaCifraHref } from "@/lib/library/biblioteca-cifra-href";
 import { publicMp3UrlForTrackId } from "@/lib/media/public-mp3-for-track";
 import { fetchSchubertTrackByKey } from "@/lib/schubert-fetch-track";
 
@@ -42,34 +42,31 @@ function lyricsVariantLabel(v: SchubertLyricsVariant): string {
 type Props = {
   trackId: string;
   lyricsVariant: SchubertLyricsVariant;
-  lyricsPath: BibliotecaCifraLyricsPath;
+  lyricsPath: CifraLyricsPath;
 };
 
-export async function BibliotecaCifraTrackView({ trackId, lyricsVariant, lyricsPath }: Props) {
+/**
+ * Visualização pública da cifra em `/cifra/...` (rota fora do bloqueio da biblioteca).
+ * A carga da faixa continua a exigir sessão na Schubert; visitantes vêem convite a entrar.
+ */
+export async function CifraTrackView({ trackId, lyricsVariant, lyricsPath }: Props) {
   if (!isAuth0Configured()) {
     notFound();
   }
 
   const session = await getAuth0SessionCached();
-  if (!session?.user) {
-    redirect(
-      auth0LoginHref({
-        returnTo: bibliotecaCifraHref(trackId, lyricsPath),
-      }),
-    );
-  }
-
-  const user = {
-    name: session.user.name ?? null,
-    email: session.user.email ?? null,
-    picture: session.user.picture ?? null,
-  };
+  const user = session?.user
+    ? {
+        name: session.user.name ?? null,
+        email: session.user.email ?? null,
+        picture: session.user.picture ?? null,
+      }
+    : null;
 
   let track: Awaited<ReturnType<typeof fetchSchubertTrackByKey>>;
 
   try {
     track = await fetchSchubertTrackByKey(trackId);
-
   } catch (error) {
     unstable_rethrow(error);
     return (
@@ -86,6 +83,21 @@ export async function BibliotecaCifraTrackView({ trackId, lyricsVariant, lyricsP
   }
 
   if (!track) {
+    if (!session?.user) {
+      return (
+        <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-cifra-bg px-6 text-center text-cifra-text">
+          <p className="max-w-md text-sm text-cifra-muted">
+            Inicie sessão para carregar esta cifra a partir da Schubert.
+          </p>
+          <Link
+            href={auth0LoginHref({ returnTo: cifraHref(trackId, lyricsPath) })}
+            className="rounded-full bg-cifra-teal px-5 py-2 text-sm font-semibold text-cifra-bg transition-opacity hover:opacity-95"
+          >
+            Entrar
+          </Link>
+        </div>
+      );
+    }
     notFound();
   }
 
@@ -106,9 +118,8 @@ export async function BibliotecaCifraTrackView({ trackId, lyricsVariant, lyricsP
   const subtitle = `${artist} · cifra sincronizada (Schubert) · ${lyricsVariantLabel(lyricsVariant)}`;
   const durationLabel = formatDurationClock(resolveDurationSeconds(track));
 
-  if (session.user.sub) {
-    // Melhor esforço: não bloqueia a renderização caso o Beethoven esteja indisponível.
-    await registerLibraryTrackAccess({ userId: session.user.sub, trackKey: trackId }).catch(() => { });
+  if (session?.user?.sub) {
+    await registerLibraryTrackAccess({ userId: session.user.sub, trackKey: trackId }).catch(() => {});
   }
 
   return (

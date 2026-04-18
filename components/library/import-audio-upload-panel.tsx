@@ -27,7 +27,7 @@ import {
   SchubertIdentifyError,
   type ChordFoundPreview,
 } from "@/lib/schubert-identify-service";
-import { bibliotecaCifraEditHref } from "@/lib/library/biblioteca-cifra-href";
+import { cifraEditHref } from "@/lib/cifra/cifra-routes";
 import { cn } from "@/lib/utils";
 
 const ACCEPT = "audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/x-m4a,.mp3,.wav,.m4a";
@@ -187,11 +187,11 @@ export function ImportAudioUploadPanel({
       handleRecognitionDialogOpenChange(false);
       clearQueue();
       if (tid) {
-        router.push(bibliotecaCifraEditHref(tid, "a"));
+        router.push(cifraEditHref(tid, "a"));
         return;
       }
       const q = encodeURIComponent(`${pendingIngest.song.title} ${pendingIngest.song.artist}`.trim());
-      router.push(`/biblioteca/resultados?q=${q}`);
+      router.push(`/biblioteca?q=${q}`);
     } catch (ingestErr) {
       if (ingestErr instanceof SchubertIdentifyError) {
         setIdentifyMessage(`Não foi possível concluir a ingestão: ${ingestErr.message}`);
@@ -224,7 +224,7 @@ export function ImportAudioUploadPanel({
     setManualTitle("");
     setManualArtist("");
     clearQueue();
-    router.push(`/biblioteca/resultados?q=${q}`);
+    router.push(`/biblioteca?q=${q}`);
   }, [manualTitle, manualArtist, router, clearQueue]);
 
   const runDetection = useCallback(async () => {

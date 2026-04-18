@@ -1,12 +1,45 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { MusicAiDemoPayload } from "@/lib/cifra/musicai-types";
 import { startCifraRuntime } from "@/lib/engine/start-cifra-runtime";
 import { cn } from "@/lib/utils";
 
-import { CifraRightSidebar } from "./cifra-right-sidebar";
+const rightSidebarLayoutClassName =
+  "mt-0 w-full border-t border-white/6 bg-cifra-surface lg:mt-0 lg:w-[300px] lg:shrink-0 lg:border-l lg:border-t-0";
+
+function CifraRightSidebarLoadPlaceholder() {
+  return (
+    <aside
+      className={cn(
+        "flex min-h-0 w-full shrink-0 flex-col gap-4 px-4 py-4 sm:px-5 lg:h-full lg:w-[300px] lg:shrink-0 lg:px-5 lg:py-5",
+        rightSidebarLayoutClassName,
+      )}
+      aria-label="Painel da faixa"
+      aria-busy="true"
+    >
+      <div className="h-3 w-40 max-w-full animate-pulse rounded bg-white/10" />
+      <div className="flex gap-2.5">
+        <div className="size-[22px] shrink-0 animate-pulse rounded-full bg-white/10" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="h-3 w-24 animate-pulse rounded bg-white/10" />
+          <div className="h-10 w-full animate-pulse rounded bg-white/5" />
+        </div>
+      </div>
+      <div className="space-y-3 rounded-lg border border-white/6 bg-[#0c0c14] px-3 py-3">
+        <div className="h-17 animate-pulse rounded-md bg-white/6" />
+        <div className="h-10 animate-pulse rounded-md bg-white/6" />
+      </div>
+    </aside>
+  );
+}
+
+const CifraRightSidebarClient = dynamic(
+  () => import("./cifra-right-sidebar").then((m) => m.CifraRightSidebar),
+  { ssr: false, loading: () => <CifraRightSidebarLoadPlaceholder /> },
+);
 
 export type CifraPocMountProps = {
   /** Chave estável (ex.: `trackId`) para remontar o runtime quando a faixa mudar. */
@@ -26,6 +59,10 @@ export function CifraPocMount({ trackKey, payload, trackTitle, className }: Cifr
   const [capoAt, setCapoAt] = useState(() =>
     Number.isFinite(payload.capo_at) ? Math.min(24, Math.max(0, Math.round(Number(payload.capo_at)))) : 0,
   );
+  const [rightSidebarMountGen, setRightSidebarMountGen] = useState(0);
+  const bumpRightSidebarMount = useCallback(() => {
+    setRightSidebarMountGen((n) => n + 1);
+  }, []);
 
   const scrollRootRef = useRef<HTMLDivElement>(null);
   const cifraRef = useRef<HTMLDivElement>(null);
@@ -87,7 +124,7 @@ export function CifraPocMount({ trackKey, payload, trackTitle, className }: Cifr
     });
 
     return destroy;
-  }, [trackKey, payload]);
+  }, [trackKey, payload, rightSidebarMountGen]);
 
   useEffect(() => {
     setOriginalTune(payload.original_tune ?? "");
@@ -151,7 +188,7 @@ export function CifraPocMount({ trackKey, payload, trackTitle, className }: Cifr
           <div id="cifra" ref={cifraRef} className="min-h-[min(12rem,30dvh)] w-full min-w-0" />
         </div>
 
-        <CifraRightSidebar
+        <CifraRightSidebarClient
           trackTitle={titleFromPayload}
           originalTune={originalTune}
           onOriginalTuneChange={setOriginalTune}
@@ -165,7 +202,8 @@ export function CifraPocMount({ trackKey, payload, trackTitle, className }: Cifr
           autoScrollLeadValRef={autoScrollLeadValRef}
           autoScrollDurRef={autoScrollDurRef}
           autoScrollDurValRef={autoScrollDurValRef}
-          className="mt-0 w-full border-t border-white/6 bg-cifra-surface lg:mt-0 lg:w-[300px] lg:shrink-0 lg:border-l lg:border-t-0"
+          onMount={bumpRightSidebarMount}
+          className={rightSidebarLayoutClassName}
         />
       </div>
     </div>

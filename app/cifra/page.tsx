@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { bibliotecaCifraHref } from "@/lib/library/biblioteca-cifra-href";
+import { cifraHref } from "@/lib/cifra/cifra-routes";
 
 export const metadata: Metadata = {
-  title: "Cifra · Biblioteca · cifra.ai",
+  title: "Cifra · cifra.ai",
   description: "Pré-visualização sincronizada de letra e acordes.",
 };
 
-export default async function BibliotecaCifraPage({
+export default async function CifraLandingPage({
   searchParams,
 }: Readonly<{
   searchParams: Promise<{ trackId?: string }>;
@@ -18,7 +18,7 @@ export default async function BibliotecaCifraPage({
   const trackId = typeof sp.trackId === "string" && sp.trackId.trim() ? sp.trackId.trim() : null;
 
   if (trackId) {
-    redirect(bibliotecaCifraHref(trackId, "a"));
+    redirect(cifraHref(trackId, "a"));
   }
 
   return (
@@ -26,11 +26,11 @@ export default async function BibliotecaCifraPage({
       <p className="max-w-md text-sm text-cifra-muted">
         Indique uma faixa na URL, por exemplo{" "}
         <code className="rounded bg-cifra-surface px-1 py-0.5 text-cifra-teal">
-          /biblioteca/cifra/a?trackId=all_i_need
+          /cifra/a?trackId=all_i_need
         </code>{" "}
         (letra IA) ou{" "}
         <code className="rounded bg-cifra-surface px-1 py-0.5 text-cifra-teal">
-          /biblioteca/cifra/m?trackId=all_i_need
+          /cifra/m?trackId=all_i_need
         </code>{" "}
         (letra match).
       </p>

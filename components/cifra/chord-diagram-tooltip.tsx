@@ -87,11 +87,11 @@ export function ChordDiagramTooltip({ label, children }: ChordDiagramTooltipProp
 
   const trigger = isValidElement(children)
     ? cloneElement(children as ReactElement<{ className?: string }>, {
-        className: cn(
-          (children as ReactElement<{ className?: string }>).props.className,
-          CHORD_DIAGRAM_TRIGGER_CN,
-        ),
-      })
+      className: cn(
+        (children as ReactElement<{ className?: string }>).props.className,
+        CHORD_DIAGRAM_TRIGGER_CN,
+      ),
+    })
     : children;
 
   return (

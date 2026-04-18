@@ -28,13 +28,13 @@ export const loginAuthSidebarFeatures: AuthSidebarFeature[] = [
 ];
 
 export const defaultAuthShellNav: AuthShellNavItem[] = [
-  { href: "/", label: "Explorar" },
+  { href: "/explorar", label: "Explorar" },
   { href: "/biblioteca", label: "Biblioteca" },
   { href: "/login", label: "Entrar", current: true },
 ];
 
 export const signupAuthShellNav: AuthShellNavItem[] = [
-  { href: "/", label: "Explorar" },
+  { href: "/explorar", label: "Explorar" },
   { href: "/biblioteca", label: "Biblioteca" },
   { href: "/cadastro", label: "Cadastro", current: true },
 ];

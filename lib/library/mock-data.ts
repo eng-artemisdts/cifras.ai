@@ -8,7 +8,7 @@ import type {
 } from "./types";
 
 const libraryNavBase: LibraryNavItem[] = [
-  { href: "/", label: "Explorar" },
+  { href: "/explorar", label: "Explorar" },
   { href: "/biblioteca", label: "Biblioteca" },
   { href: "/biblioteca/importar", label: "Importar música" },
 ];
@@ -17,6 +17,9 @@ function libraryNavItemIsCurrent(item: LibraryNavItem, activePath: string): bool
   if (item.href === "#") return false;
   if (item.href === "/biblioteca/importar") {
     return activePath.startsWith("/biblioteca/importar");
+  }
+  if (item.href === "/explorar") {
+    return activePath === "/explorar" || activePath.startsWith("/explorar/");
   }
   if (item.href === "/biblioteca") {
     return (
