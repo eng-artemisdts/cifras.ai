@@ -60,14 +60,6 @@ export function LibraryExploreView({
           <LibrarySearchHero />
           <RecommendationsSection items={recommendationItems} />
           <RecentAccessSection items={recentAccessItems} />
-          <div className="mx-auto w-full max-w-[1200px] px-6 pb-10 pt-4 md:px-8">
-            <Link
-              href="/biblioteca"
-              className="inline-flex items-center justify-center rounded-xl border border-white/[0.07] bg-cifra-surface px-5 py-3 text-sm font-semibold text-cifra-text transition-colors hover:border-cifra-teal/40 hover:text-cifra-teal"
-            >
-              Ver catálogo e resultados
-            </Link>
-          </div>
         </div>
       </main>
       <LibraryPageFooter />

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { LottieLoadingMark } from "@/components/cifra/cifra-route-loading";
 import { Popover, PopoverContent } from "@/components/ui/popover";
 import {
   fetchLibrarySearch,
@@ -142,26 +143,23 @@ export function LibraryExploreSearch({
           initialFocus={false}
           className="w-[min(100vw-3rem,720px)] max-w-[720px] gap-0 p-0 sm:w-[min(100vw-4rem,720px)]"
           role="region"
-          aria-label="Resultados rápidos da busca"
+          aria-label="Sugestões de busca"
         >
-          <div className="border-b border-white/6 px-4 py-2.5">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-cifra-muted">
-              Resultados rápidos
-            </p>
-            <p className="mt-0.5 text-[11px] leading-snug text-cifra-muted/90">
-              Até 4 faixas. Para ver tudo com paginação, use o botão no fim ou «Buscar».
-            </p>
-          </div>
-
           <div className="max-h-[min(52dvh,380px)] overflow-y-auto px-4 py-3">
             {loading ? (
-              <p className="py-6 text-center text-xs text-cifra-muted">Carregando…</p>
+              <div
+                className="flex justify-center py-8"
+                role="status"
+                aria-live="polite"
+                aria-busy="true"
+              >
+                <LottieLoadingMark className="mx-auto size-28 sm:size-32" />
+              </div>
             ) : fetchError ? (
               <p className="py-5 text-center text-xs text-red-300/90">{fetchError}</p>
             ) : items.length === 0 ? (
               <p className="py-6 text-center text-xs text-cifra-muted">
-                Nenhuma faixa encontrada para «{debounced.trim()}». Experimente na página com todos os
-                resultados.
+                Nenhuma faixa encontrada para «{debounced.trim()}». Tente outros termos ou use Buscar.
               </p>
             ) : (
               <ul className="flex flex-col gap-2" role="list">
@@ -172,17 +170,6 @@ export function LibraryExploreSearch({
                 ))}
               </ul>
             )}
-          </div>
-
-          <div className="border-t border-white/6 px-4 py-3">
-            <button
-              type="button"
-              className="w-full rounded-lg bg-cifra-teal px-4 py-2.5 text-[13px] font-semibold text-cifra-bg transition-opacity hover:opacity-95 disabled:pointer-events-none disabled:opacity-40"
-              disabled={trimmed.length < 2}
-              onClick={goToFullResults}
-            >
-              Ver todos os resultados
-            </button>
           </div>
         </PopoverContent>
       </div>

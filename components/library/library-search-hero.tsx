@@ -13,7 +13,7 @@ export type LibrarySearchHeroProps = {
 };
 
 /**
- * Bloco hero com busca (resultados rápidos abaixo do campo e página dedicada para lista completa).
+ * Bloco hero com busca (sugestões no popover; lista completa em /explorar/busca via Buscar ou Enter).
  */
 export function LibrarySearchHero({
   title = "O que você quer ouvir?",

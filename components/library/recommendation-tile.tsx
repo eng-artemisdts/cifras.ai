@@ -13,7 +13,7 @@ export type RecommendationTileProps = {
 };
 
 const hoverCard =
-  "cursor-pointer transition-all duration-200 ease-out hover:-translate-y-1 hover:border-cifra-teal/45 hover:shadow-[0_16px_42px_rgba(0,0,0,0.32)] active:translate-y-0 active:shadow-none";
+  "relative z-0 cursor-pointer transition-all duration-200 ease-out hover:z-20 hover:-translate-y-1 hover:border-cifra-teal/45 hover:shadow-[0_16px_42px_rgba(0,0,0,0.32)] active:translate-y-0 active:shadow-none";
 
 export function RecommendationTile({ item, className }: RecommendationTileProps) {
   const rawUrl = item.coverImageUrl?.trim();
