@@ -753,6 +753,124 @@ export function renumberGlobalWordIndices(timedLines) {
 }
 
 /**
+ * Mesmo pipeline que `startCifraRuntime.rebuildLayoutFromMode` para os blocos só-acordes
+ * (antes de `buildCifraRenderPlan`). Usado na edição para alinhar a grelha instrumental ao preview.
+ *
+ * @param {{
+ *   timedLines: import('./musicai-types.ts').TimedWord[][],
+ *   chords: import('./musicai-types.ts').MusicAiChordEvent[],
+ *   sectionsSorted: import('./musicai-types.ts').MusicAiSection[],
+ *   chordTimeOffsetSec?: number,
+ *   durationHintSec: number,
+ *   formatChord?: (c: import('./musicai-types.ts').MusicAiChordEvent|null|undefined) => string,
+ * }} opts
+ * @returns {{ start: number, end: number, displayLabel: string }[]}
+ */
+export function computeChordOnlyInstrumentalBlocks(opts) {
+  const {
+    timedLines,
+    chords,
+    sectionsSorted,
+    chordTimeOffsetSec = 0,
+    durationHintSec,
+    formatChord = formatChordLabel,
+  } = opts;
+
+  const vocalTimedLines = renumberGlobalWordIndices(timedLines);
+  const ch = Array.isArray(chords) ? chords : [];
+
+  let chordOnlyBlocks = buildInstrumentalBlocksFromChordLyricGaps(
+    vocalTimedLines,
+    ch,
+    durationHintSec,
+    chordTimeOffsetSec,
+    {
+      minGapSec: 0.35,
+      minGapBetweenLinesSec: 1.75,
+      includeBetweenLineGaps: true,
+      sectionsSorted,
+      labelGapsFromSections: true,
+    },
+  );
+  chordOnlyBlocks = supplementInstrumentalBlocksFromSections(
+    chordOnlyBlocks,
+    sectionsSorted,
+    ch,
+    chordTimeOffsetSec,
+  );
+  chordOnlyBlocks = collapseRedundantBetweenLineGapBlocks(
+    chordOnlyBlocks,
+    vocalTimedLines,
+    ch,
+    chordTimeOffsetSec,
+    { formatChord },
+  );
+  chordOnlyBlocks = splitInstrumentalBlocksAtSectionBoundaries(chordOnlyBlocks, sectionsSorted);
+  chordOnlyBlocks = dropMicroInstrumentalBlocksInVocalSections(chordOnlyBlocks);
+  return chordOnlyBlocks;
+}
+
+/**
+ * Células da grelha só-acordes para [zoneStart, zoneEnd], com base nos blocos instrumentais do renderPlan.
+ * Recorta cada bloco ao intervalo e usa `chordSegmentsInAudioWindow` como em `cifra-view`.
+ *
+ * @param {{ start: number, end: number, displayLabel: string }[]} chordOnlyBlocks
+ * @param {import('./musicai-types.ts').MusicAiChordEvent[]} chords
+ * @param {number} chordTimeOffsetSec
+ * @param {number} zoneStart
+ * @param {number} zoneEnd
+ * @param {(c: import('./musicai-types.ts').MusicAiChordEvent|null|undefined) => string} [formatChord]
+ * @returns {{ a0: number, a1: number, label: string, chordIdx: number }[]}
+ */
+export function instrumentalChordStripCellsForZone(
+  chordOnlyBlocks,
+  chords,
+  chordTimeOffsetSec,
+  zoneStart,
+  zoneEnd,
+  formatChord = formatChordLabel,
+) {
+  const t0 = Math.min(zoneStart, zoneEnd);
+  const t1 = Math.max(zoneStart, zoneEnd);
+  if (!Number.isFinite(t0) || !Number.isFinite(t1) || t1 <= t0) return [];
+
+  /** @type {{ a0: number, a1: number, label: string, chordIdx: number }[]} */
+  const raw = [];
+  const list = Array.isArray(chordOnlyBlocks) ? chordOnlyBlocks : [];
+  const ch = Array.isArray(chords) ? chords : [];
+
+  for (const iv of list) {
+    const w0 = Math.max(t0, iv.start);
+    const w1 = Math.min(t1, iv.end);
+    if (!(w1 > w0 + 1e-6)) continue;
+
+    const segs = chordSegmentsInAudioWindow(ch, w0, w1, chordTimeOffsetSec, { formatChord });
+    for (const seg of segs) {
+      raw.push({
+        a0: seg.a0,
+        a1: seg.a1,
+        label: seg.label,
+        chordIdx: seg.chordIdx,
+      });
+    }
+  }
+
+  raw.sort((a, b) => a.a0 - b.a0 || a.chordIdx - b.chordIdx);
+
+  /** @type {{ a0: number, a1: number, label: string, chordIdx: number }[]} */
+  const out = [];
+  for (const s of raw) {
+    const last = out[out.length - 1];
+    if (last && last.label === s.label) {
+      last.a1 = Math.max(last.a1, s.a1);
+      continue;
+    }
+    out.push({ ...s });
+  }
+  return out;
+}
+
+/**
  * @typedef {object} CifraRenderInstrumental
  * @property {'instrumental'} kind
  * @property {{ start: number, end: number, displayLabel: string }} iv

@@ -7,76 +7,13 @@
  */
 
 
-/**
- * Music.AI usa `N` em vários campos para «sem acorde» / fim da análise.
- *
- * @param {import('./musicai-types.ts').MusicAiChordEvent|null|undefined} c
- * @returns {boolean}
- */
-export function isNoChordEvent(c) {
-  if (!c || typeof c !== 'object') return false;
-  /** @type {(unknown)[]} */
-  const fields = [
-    c.chord_simple_pop,
-    c.chord_basic_pop,
-    c.chord_majmin,
-    c.chord_simple_jazz,
-    c.chord_basic_jazz,
-    c.chord_complex_pop,
-    c.chord_complex_nashville,
-    c.chord_simple_nashville,
-    c.chord_basic_nashville
-  ];
-  for (let i = 0; i < fields.length; i++) {
-    const v = fields[i];
-    if (v == null) continue;
-    const u = String(v).trim().toUpperCase();
-    if (u === 'N' || u === 'NC' || u.startsWith('N:')) return true;
-  }
-  return false;
-}
+import {
+  collapseTrailingNoChordEvents,
+  formatChordLabel,
+  isNoChordEvent,
+} from "../cifra/chord-timeline";
 
-/**
- * @param {import('./musicai-types.ts').MusicAiChordEvent|null|undefined} c
- * @returns {string}
- */
-export function formatChordLabel(c) {
-  if (!c) return '—';
-  if (isNoChordEvent(c)) return '-';
-  let s = c.chord_simple_pop || c.chord_basic_pop || '';
-  if (c.bass) s += `/${c.bass}`;
-  return s || '—';
-}
-
-/**
- * Remove cauda final de eventos sem acorde (N/NC) e estende o último acorde real até ao fim.
- * Mantém eventos "N" internos intactos.
- *
- * @param {import('./musicai-types.ts').MusicAiChordEvent[]} chords
- * @returns {import('./musicai-types.ts').MusicAiChordEvent[]}
- */
-export function collapseTrailingNoChordEvents(chords) {
-  const out = Array.isArray(chords) ? chords.map((c) => ({ ...c })) : [];
-  if (!out.length) return out;
-
-  let iLastPlayed = -1;
-  for (let i = out.length - 1; i >= 0; i--) {
-    if (!isNoChordEvent(out[i])) {
-      iLastPlayed = i;
-      break;
-    }
-  }
-
-  if (iLastPlayed >= 0 && iLastPlayed < out.length - 1) {
-    const tailEnd = Number(out[out.length - 1].end);
-    const lastPlayedEnd = Number(out[iLastPlayed].end);
-    if (Number.isFinite(tailEnd) && Number.isFinite(lastPlayedEnd) && tailEnd > lastPlayedEnd) {
-      out[iLastPlayed].end = tailEnd;
-    }
-    out.length = iLastPlayed + 1;
-  }
-  return out;
-}
+export { collapseTrailingNoChordEvents, formatChordLabel, isNoChordEvent };
 
 /**
  * @param {import('./musicai-types.ts').MusicAiChordEvent[]} chords

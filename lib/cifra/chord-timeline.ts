@@ -21,10 +21,14 @@ export function isNoChordEvent(c: MusicAiChordEvent | null | undefined): boolean
   return false;
 }
 
+/** Rótulo único para UI de edição e para o motor DOM (preview/leitor). */
 export function formatChordLabel(c: MusicAiChordEvent | null | undefined): string {
   if (!c) return "—";
   if (isNoChordEvent(c)) return "-";
-  let s = c.chord_simple_pop || c.chord_basic_pop || "";
+  const pop = typeof c.chord_simple_pop === "string" ? c.chord_simple_pop.trim() : "";
+  const basic = typeof c.chord_basic_pop === "string" ? c.chord_basic_pop.trim() : "";
+  const maj = typeof c.chord_majmin === "string" ? c.chord_majmin.trim() : "";
+  let s = pop || basic || maj || "";
   if (c.bass) s += `/${c.bass}`;
   return s || "—";
 }

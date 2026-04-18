@@ -10,7 +10,6 @@ import type {
 const libraryNavBase: LibraryNavItem[] = [
   { href: "/", label: "Explorar" },
   { href: "/biblioteca", label: "Biblioteca" },
-  { href: "#", label: "Ao vivo" },
   { href: "/biblioteca/importar", label: "Importar música" },
 ];
 

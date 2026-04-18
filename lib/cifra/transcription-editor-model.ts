@@ -339,13 +339,7 @@ export function groupSlotsForEditorDisplay(
   return buckets;
 }
 
-export function chordDisplayLabel(c: MusicAiChordEvent): string {
-  const v =
-    (typeof c.chord_simple_pop === "string" && c.chord_simple_pop.trim()) ||
-    (typeof c.chord_majmin === "string" && c.chord_majmin.trim()) ||
-    "—";
-  return v;
-}
+export { formatChordLabel, formatChordLabel as chordDisplayLabel } from "./chord-timeline";
 
 /** Cria um evento de acorde com os campos de símbolo preenchidos de forma consistente (Schubert / leitor). */
 export function createChordEvent(symbol: string, start: number, end: number): MusicAiChordEvent {

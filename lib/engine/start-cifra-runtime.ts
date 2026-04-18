@@ -26,12 +26,8 @@ function coalescePayload(raw) {
 import { sectionAtTimestamp } from "./section-timeline";
 import {
   buildCifraRenderPlan,
-  buildInstrumentalBlocksFromChordLyricGaps,
-  collapseRedundantBetweenLineGapBlocks,
-  dropMicroInstrumentalBlocksInVocalSections,
+  computeChordOnlyInstrumentalBlocks,
   renumberGlobalWordIndices,
-  splitInstrumentalBlocksAtSectionBoundaries,
-  supplementInstrumentalBlocksFromSections,
 } from "./section-layout";
 import { DEFAULT_AUDIO_URL, SEEK_SLIDER_STEPS } from "./config";
 import { formatClock, getEffectiveDuration } from "./time-format";
@@ -282,34 +278,14 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
 
   function rebuildLayoutFromMode() {
     const vocalTimedLines = renumberGlobalWordIndices(rawTimedLines);
-    let chordOnlyBlocks = buildInstrumentalBlocksFromChordLyricGaps(
-      vocalTimedLines,
-      payload.chords || [],
-      durationHintForChordGaps(),
-      payload.chordTimeOffsetSec ?? 0,
-      {
-        minGapSec: 0.35,
-        minGapBetweenLinesSec: 1.75,
-        includeBetweenLineGaps: true,
-        sectionsSorted,
-        labelGapsFromSections: true,
-      },
-    );
-    chordOnlyBlocks = supplementInstrumentalBlocksFromSections(
-      chordOnlyBlocks,
+    const chordOnlyBlocks = computeChordOnlyInstrumentalBlocks({
+      timedLines: rawTimedLines,
+      chords: payload.chords || [],
       sectionsSorted,
-      payload.chords || [],
-      payload.chordTimeOffsetSec ?? 0,
-    );
-    chordOnlyBlocks = collapseRedundantBetweenLineGapBlocks(
-      chordOnlyBlocks,
-      vocalTimedLines,
-      payload.chords || [],
-      payload.chordTimeOffsetSec ?? 0,
-      { formatChord: (c) => chordForDisplayFromEvent(c) },
-    );
-    chordOnlyBlocks = splitInstrumentalBlocksAtSectionBoundaries(chordOnlyBlocks, sectionsSorted);
-    chordOnlyBlocks = dropMicroInstrumentalBlocksInVocalSections(chordOnlyBlocks);
+      chordTimeOffsetSec: payload.chordTimeOffsetSec ?? 0,
+      durationHintSec: durationHintForChordGaps(),
+      formatChord: chordForDisplayFromEvent,
+    });
     renderPlan = buildCifraRenderPlan(chordOnlyBlocks, vocalTimedLines);
   }
 
