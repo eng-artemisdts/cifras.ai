@@ -27,7 +27,8 @@ import {
   SchubertIdentifyError,
   type ChordFoundPreview,
 } from "@/lib/schubert-identify-service";
-import { cifraEditHref } from "@/lib/cifra/cifra-routes";
+import { cifraEditHref, resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-routes";
+import type { SchubertTrackJson } from "@/lib/schubert-api";
 import { cn } from "@/lib/utils";
 
 const ACCEPT = "audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/x-m4a,.mp3,.wav,.m4a";
@@ -186,8 +187,13 @@ export function ImportAudioUploadPanel({
           : "";
       handleRecognitionDialogOpenChange(false);
       clearQueue();
+      const pair = resolveCifraSlugPairFromTrack(track as unknown as SchubertTrackJson);
+      if (pair) {
+        router.push(cifraEditHref(pair.artistSlug, pair.songSlug));
+        return;
+      }
       if (tid) {
-        router.push(cifraEditHref(tid));
+        router.push(`/cifras/edit?trackId=${encodeURIComponent(tid)}`);
         return;
       }
       const q = encodeURIComponent(`${pendingIngest.song.title} ${pendingIngest.song.artist}`.trim());

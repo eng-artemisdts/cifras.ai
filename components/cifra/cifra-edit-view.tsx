@@ -2,19 +2,22 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { CifraEditShell } from "@/components/cifra/cifra-edit-shell";
+import { resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-routes";
 import { normalizeDemoPayload } from "@/lib/cifra/normalize-payload";
-import { cifraEditHref } from "@/lib/cifra/cifra-routes";
 import {
   resolveArtistNameFromSchubertTrack,
   schubertLyricsSourceEditorLabel,
   schubertTrackToDemoPayload,
 } from "@/lib/cifra/schubert-to-payload";
 import { getAuth0SessionCached } from "@/lib/auth0";
-import { auth0LoginHref } from "@/lib/auth0-routes";
+import { appLoginHref } from "@/lib/auth0-routes";
 import { isAuth0Configured } from "@/lib/auth0-env";
 import type { SchubertLyricsSource } from "@/lib/schubert-api";
 import { publicMp3UrlForTrackId } from "@/lib/media/public-mp3-for-track";
-import { fetchSchubertTrackByKey } from "@/lib/schubert-fetch-track";
+import {
+  fetchSchubertTrackByKey,
+  fetchSchubertTrackBySlug,
+} from "@/lib/schubert-fetch-track";
 
 function formatDurationClock(sec: number | undefined): string | undefined {
   if (sec == null || !Number.isFinite(sec) || sec <= 0) return undefined;
@@ -34,27 +37,28 @@ function resolveDurationSeconds(track: {
   return Math.max(...ends);
 }
 
-function resolveLyricsSource(track: Awaited<ReturnType<typeof fetchSchubertTrackByKey>>): SchubertLyricsSource {
-  if (track && track.lyricsSource === "MATCH") return "MATCH";
+function resolveLyricsSource(track: NonNullable<Awaited<ReturnType<typeof fetchSchubertTrackBySlug>>>): SchubertLyricsSource {
+  if (track.lyricsSource === "MATCH") return "MATCH";
   return "AI";
 }
 
-type Props = {
-  trackId: string;
-};
+export type CifraEditViewProps =
+  | { artistSlug: string; songSlug: string }
+  | { trackKey: string };
 
-export async function CifraEditView({ trackId }: Props) {
+export async function CifraEditView(props: CifraEditViewProps) {
   if (!isAuth0Configured()) {
     notFound();
   }
 
   const session = await getAuth0SessionCached();
+  const returnToLogin =
+    "artistSlug" in props
+      ? `/cifras/${encodeURIComponent(props.artistSlug)}/${encodeURIComponent(props.songSlug)}/edit`
+      : `/cifras/edit?trackId=${encodeURIComponent(props.trackKey)}`;
+
   if (!session?.user) {
-    redirect(
-      auth0LoginHref({
-        returnTo: cifraEditHref(trackId),
-      }),
-    );
+    redirect(appLoginHref(returnToLogin));
   }
 
   const user = {
@@ -63,9 +67,12 @@ export async function CifraEditView({ trackId }: Props) {
     picture: session.user.picture ?? null,
   };
 
-  let track: Awaited<ReturnType<typeof fetchSchubertTrackByKey>>;
+  let track: Awaited<ReturnType<typeof fetchSchubertTrackBySlug>>;
   try {
-    track = await fetchSchubertTrackByKey(trackId);
+    track =
+      "artistSlug" in props
+        ? await fetchSchubertTrackBySlug(props.artistSlug, props.songSlug)
+        : await fetchSchubertTrackByKey(props.trackKey);
   } catch {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-cifra-bg px-6 text-center">
@@ -83,13 +90,17 @@ export async function CifraEditView({ trackId }: Props) {
     notFound();
   }
 
+  const pairFromDoc = resolveCifraSlugPairFromTrack(track);
   const lyricsSource = resolveLyricsSource(track);
+  const mp3Id =
+    typeof track.trackId === "string" && track.trackId.trim() ? track.trackId.trim() : "";
+
   const fromSchubert = schubertTrackToDemoPayload(track);
   const initialPayload = normalizeDemoPayload({
     ...fromSchubert,
     meta: {
       ...fromSchubert.meta,
-      audioUrl: publicMp3UrlForTrackId(trackId),
+      ...(mp3Id ? { audioUrl: publicMp3UrlForTrackId(mp3Id) } : {}),
     },
   });
 
@@ -101,10 +112,39 @@ export async function CifraEditView({ trackId }: Props) {
   const subtitle = `${artist} · edição de cifra · ${schubertLyricsSourceEditorLabel(lyricsSource)}`;
   const durationLabel = formatDurationClock(resolveDurationSeconds(track));
 
+  const slugForShell =
+    pairFromDoc ??
+    ("artistSlug" in props
+      ? { artistSlug: props.artistSlug.trim(), songSlug: props.songSlug.trim() }
+      : null);
+
+  if (slugForShell) {
+    return (
+      <CifraEditShell
+        user={user}
+        patchMode="slug"
+        artistSlug={slugForShell.artistSlug}
+        songSlug={slugForShell.songSlug}
+        lyricsSource={lyricsSource}
+        initialPayload={initialPayload}
+        title={title}
+        subtitle={subtitle}
+        durationLabel={durationLabel}
+      />
+    );
+  }
+
+  const fallbackKey =
+    "trackKey" in props ? props.trackKey.trim() : typeof track.trackId === "string" ? track.trackId.trim() : "";
+  if (!fallbackKey) {
+    notFound();
+  }
+
   return (
     <CifraEditShell
       user={user}
-      trackId={trackId}
+      patchMode="key"
+      trackKey={fallbackKey}
       lyricsSource={lyricsSource}
       initialPayload={initialPayload}
       title={title}
@@ -113,3 +153,4 @@ export async function CifraEditView({ trackId }: Props) {
     />
   );
 }
+

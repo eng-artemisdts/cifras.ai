@@ -1,4 +1,5 @@
-import { cifraEditHref, cifraHref } from "@/lib/cifra/cifra-routes";
+import { cifraEditHref, cifraHref, resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-routes";
+import type { SchubertTrackJson } from "@/lib/schubert-api";
 import { fetchSchubertFromBrowser } from "@/lib/schubert-api";
 import type {
   SchubertRecognizedSong,
@@ -149,8 +150,18 @@ export function mapSchubertMatchToChordPreview(
         ? track.spotifyId.trim()
         : "";
   const q = encodeURIComponent(`${songTitle} ${artistName}`.trim());
-  const chordHref = trackId ? cifraHref(trackId) : `/biblioteca?q=${q}`;
+  const pair = resolveCifraSlugPairFromTrack(track as unknown as SchubertTrackJson);
+  const chordHref = pair
+    ? cifraHref(pair.artistSlug, pair.songSlug)
+    : trackId
+      ? `/cifras?trackId=${encodeURIComponent(trackId)}`
+      : `/biblioteca?q=${q}`;
   const tid = trackId || null;
+  const editHref = pair
+    ? cifraEditHref(pair.artistSlug, pair.songSlug)
+    : tid
+      ? `/cifras/edit?trackId=${encodeURIComponent(tid)}`
+      : null;
   return {
     songTitle,
     artistName,
@@ -159,7 +170,7 @@ export function mapSchubertMatchToChordPreview(
       : null,
     chordHref,
     trackId: tid,
-    editHref: tid ? cifraEditHref(tid) : null,
+    editHref,
   };
 }
 

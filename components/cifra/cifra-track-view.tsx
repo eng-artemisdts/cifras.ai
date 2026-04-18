@@ -2,19 +2,20 @@ import Link from "next/link";
 import { notFound, unstable_rethrow } from "next/navigation";
 
 import { CifraSheetPageView } from "@/components/cifra/cifra-sheet-page-view";
+import { cifraHref, resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-routes";
 import { normalizeDemoPayload } from "@/lib/cifra/normalize-payload";
-import { cifraHref } from "@/lib/cifra/cifra-routes";
 import {
   resolveArtistNameFromSchubertTrack,
   schubertLyricsSourceLabel,
   schubertTrackToDemoPayload,
 } from "@/lib/cifra/schubert-to-payload";
 import { getAuth0SessionCached } from "@/lib/auth0";
-import { auth0LoginHref } from "@/lib/auth0-routes";
-import { isAuth0Configured } from "@/lib/auth0-env";
 import { registerLibraryTrackAccess } from "@/lib/library/beethoven-tracks";
 import { publicMp3UrlForTrackId } from "@/lib/media/public-mp3-for-track";
-import { fetchSchubertTrackByKey } from "@/lib/schubert-fetch-track";
+import {
+  fetchSchubertTrackByKey,
+  fetchSchubertTrackBySlug,
+} from "@/lib/schubert-fetch-track";
 
 function formatDurationClock(sec: number | undefined): string | undefined {
   if (sec == null || !Number.isFinite(sec) || sec <= 0) return undefined;
@@ -34,19 +35,14 @@ function resolveDurationSeconds(track: {
   return Math.max(...ends);
 }
 
-type Props = {
-  trackId: string;
-};
+export type CifraTrackViewProps =
+  | { artistSlug: string; songSlug: string }
+  | { trackKey: string };
 
 /**
- * Visualização pública da cifra em `/cifra` (rota fora do bloqueio da biblioteca).
- * A carga da faixa continua a exigir sessão na Schubert; visitantes vêem convite a entrar.
+ * Visualização pública da cifra em `/cifras/...` (rota fora do bloqueio da biblioteca).
  */
-export async function CifraTrackView({ trackId }: Props) {
-  if (!isAuth0Configured()) {
-    notFound();
-  }
-
+export async function CifraTrackView(props: CifraTrackViewProps) {
   const session = await getAuth0SessionCached();
   const user = session?.user
     ? {
@@ -56,17 +52,20 @@ export async function CifraTrackView({ trackId }: Props) {
       }
     : null;
 
-  let track: Awaited<ReturnType<typeof fetchSchubertTrackByKey>>;
+  let track: Awaited<ReturnType<typeof fetchSchubertTrackBySlug>>;
 
   try {
-    track = await fetchSchubertTrackByKey(trackId);
+    track =
+      "artistSlug" in props
+        ? await fetchSchubertTrackBySlug(props.artistSlug, props.songSlug)
+        : await fetchSchubertTrackByKey(props.trackKey);
   } catch (error) {
     unstable_rethrow(error);
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-cifra-bg px-6 text-center">
         <p className="max-w-md text-sm text-cifra-muted">
-          Não foi possível contactar a Schubert API com a sua sessão. Verifique a rede e as variáveis de ambiente,
-          ou tente novamente mais tarde.
+          Não foi possível contactar a Schubert API. Verifique a rede e as variáveis de ambiente, ou tente novamente
+          mais tarde.
         </p>
         <Link href="/biblioteca/importar/arquivo" className="text-sm font-semibold text-cifra-teal">
           Voltar à importação
@@ -76,30 +75,19 @@ export async function CifraTrackView({ trackId }: Props) {
   }
 
   if (!track) {
-    if (!session?.user) {
-      return (
-        <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-cifra-bg px-6 text-center text-cifra-text">
-          <p className="max-w-md text-sm text-cifra-muted">
-            Inicie sessão para carregar esta cifra a partir da Schubert.
-          </p>
-          <Link
-            href={auth0LoginHref({ returnTo: cifraHref(trackId) })}
-            className="rounded-full bg-cifra-teal px-5 py-2 text-sm font-semibold text-cifra-bg transition-opacity hover:opacity-95"
-          >
-            Entrar
-          </Link>
-        </div>
-      );
-    }
     notFound();
   }
+
+  const slugPair = resolveCifraSlugPairFromTrack(track);
+  const mp3Id =
+    typeof track.trackId === "string" && track.trackId.trim() ? track.trackId.trim() : "";
 
   const fromSchubert = schubertTrackToDemoPayload(track);
   const payload = normalizeDemoPayload({
     ...fromSchubert,
     meta: {
       ...fromSchubert.meta,
-      audioUrl: publicMp3UrlForTrackId(trackId),
+      ...(mp3Id ? { audioUrl: publicMp3UrlForTrackId(mp3Id) } : {}),
     },
   });
 
@@ -111,14 +99,22 @@ export async function CifraTrackView({ trackId }: Props) {
   const subtitle = `${artist} · cifra sincronizada (Schubert) · ${schubertLyricsSourceLabel(track.lyricsSource)}`;
   const durationLabel = formatDurationClock(resolveDurationSeconds(track));
 
-  if (session?.user?.sub) {
-    await registerLibraryTrackAccess({ userId: session.user.sub, trackKey: trackId }).catch(() => {});
+  const reactKey =
+    slugPair !== null
+      ? `${slugPair.artistSlug}/${slugPair.songSlug}`
+      : mp3Id || ("artistSlug" in props ? `${props.artistSlug}/${props.songSlug}` : props.trackKey);
+
+  if (session?.user?.sub && mp3Id) {
+    await registerLibraryTrackAccess({
+      userId: session.user.sub,
+      trackKey: mp3Id,
+    }).catch(() => {});
   }
 
   return (
     <CifraSheetPageView
       user={user}
-      trackKey={trackId}
+      trackKey={reactKey}
       title={title}
       subtitle={subtitle}
       durationLabel={durationLabel}

@@ -8,8 +8,8 @@ import { useCallback, useRef, useState } from "react";
 import { AuthMarketingSidebar } from "@/components/layout/auth-marketing-sidebar";
 import type { LibraryTopNavUser } from "@/components/library/library-top-nav";
 import type { MusicAiDemoPayload } from "@/lib/cifra/musicai-types";
-import { normalizeDemoPayload } from "@/lib/cifra/normalize-payload";
 import { cifraHref } from "@/lib/cifra/cifra-routes";
+import { normalizeDemoPayload } from "@/lib/cifra/normalize-payload";
 import { bibliotecaCifraSheetMarketingSidebar } from "@/lib/library/cifra-sheet-marketing";
 import { fetchSchubertFromBrowser, type SchubertLyricsSource } from "@/lib/schubert-api";
 import { cn } from "@/lib/utils";
@@ -27,23 +27,26 @@ const editMarketing = {
 
 export type CifraEditShellProps = {
   user: LibraryTopNavUser;
-  trackId: string;
   lyricsSource: SchubertLyricsSource;
   initialPayload: MusicAiDemoPayload;
   title: string;
   subtitle: string;
   durationLabel?: string;
-};
+} & (
+  | { patchMode: "slug"; artistSlug: string; songSlug: string }
+  | { patchMode: "key"; trackKey: string }
+);
 
-export function CifraEditShell({
-  user,
-  trackId,
-  lyricsSource,
-  initialPayload,
-  title,
-  subtitle,
-  durationLabel,
-}: CifraEditShellProps) {
+export function CifraEditShell(props: CifraEditShellProps) {
+  const {
+    user,
+    lyricsSource,
+    initialPayload,
+    title,
+    subtitle,
+    durationLabel,
+    patchMode,
+  } = props;
   const router = useRouter();
   const editorRef = useRef<CifraTranscriptionEditorHandle>(null);
   const [mode, setMode] = useState<"edit" | "preview">("edit");
@@ -65,13 +68,28 @@ export function CifraEditShell({
     setMode("edit");
   };
 
+  const schubertPatchPath =
+    patchMode === "slug"
+      ? `tracks/by-slug/${encodeURIComponent(props.artistSlug)}/${encodeURIComponent(props.songSlug)}`
+      : `tracks/by-key/${encodeURIComponent(props.trackKey)}`;
+
+  const cifraPublicHref =
+    patchMode === "slug"
+      ? cifraHref(props.artistSlug, props.songSlug)
+      : `/cifras?trackId=${encodeURIComponent(props.trackKey)}`;
+
+  const previewTrackKey =
+    patchMode === "slug"
+      ? `${props.artistSlug}:${props.songSlug}:${lyricsSource}`
+      : `${props.trackKey}:edit-preview`;
+
   const save = async () => {
     const p = editorRef.current?.getPayload();
     if (!p) return;
     setSaving(true);
     setMsg(null);
     try {
-      const res = await fetchSchubertFromBrowser(`tracks/by-key/${encodeURIComponent(trackId)}`, {
+      const res = await fetchSchubertFromBrowser(schubertPatchPath, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -93,7 +111,7 @@ export function CifraEditShell({
         }
         throw new Error(detail || `HTTP ${res.status}`);
       }
-      router.push(cifraHref(trackId));
+      router.push(cifraPublicHref);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Não foi possível gravar.");
     } finally {
@@ -151,7 +169,7 @@ export function CifraEditShell({
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Link
-                  href={cifraHref(trackId)}
+                  href={cifraPublicHref}
                   className="rounded-lg border border-cifra-border px-3 py-2 text-[11px] font-semibold text-cifra-muted transition-colors hover:border-cifra-teal/30 hover:text-cifra-text"
                 >
                   Cancelar
@@ -195,7 +213,7 @@ export function CifraEditShell({
               )}
             >
               <CifraPocMount
-                trackKey={`${trackId}:edit-preview:${lyricsSource}`}
+                trackKey={previewTrackKey}
                 payload={previewPayload}
                 trackTitle={title}
               />

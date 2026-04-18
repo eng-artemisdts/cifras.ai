@@ -2,7 +2,7 @@ import { Auth0Provider } from "@auth0/nextjs-auth0/client";
 
 import { getAuth0SessionCached } from "@/lib/auth0";
 
-export default async function CifraLayout({
+export default async function CifrasLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;

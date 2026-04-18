@@ -14,6 +14,8 @@ export type SchubertLyricsSource = "AI" | "MATCH";
 export type SchubertTrackJson = {
   trackId?: string;
   spotifyId?: string;
+  /** Slug da faixa (URL em conjunto com o slug do artista). */
+  slug?: string;
   name?: string;
   chords?: MusicAiChordEvent[];
   /** Segmentos de letra; o par com `lyricsSource` substitui variantes duplicadas. */
@@ -26,7 +28,14 @@ export type SchubertTrackJson = {
   original_tune?: string;
   capo_at?: number;
   is_private?: boolean;
-  artistId?: { name?: string; _id?: unknown } | string;
+  artistId?:
+    | {
+        name?: string;
+        slug?: string;
+        spotifyId?: string;
+        _id?: unknown;
+      }
+    | string;
 };
 
 /** Caminho relativo ao proxy Schubert (ex.: `tracks/identify`). */

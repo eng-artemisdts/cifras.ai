@@ -37,7 +37,7 @@ export type RecognizedMusicConfirmDialogProps = {
   artistName: string;
   coverImageUrl?: string | null;
   /**
-   * URL para abrir a cifra (`/cifra?trackId=…`).
+   * URL para abrir a cifra (`/cifras/...` ou legado `?trackId=`).
    * Quando ausente, usa-se `onMontarComIaSemHref` (ex.: ingestão antes do catálogo principal).
    */
   montarComIaHref: string | null;

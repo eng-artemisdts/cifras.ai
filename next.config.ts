@@ -7,14 +7,16 @@ const nextConfig: NextConfig = {
       { source: "/biblioteca/resultados", destination: "/biblioteca", permanent: true },
       {
         source: "/biblioteca/cifra/edit",
-        destination: "/cifra/edit",
+        destination: "/cifras/edit",
         permanent: true,
       },
-      { source: "/biblioteca/cifra/a", destination: "/cifra", permanent: true },
-      { source: "/biblioteca/cifra/m", destination: "/cifra", permanent: true },
-      { source: "/cifra/a", destination: "/cifra", permanent: true },
-      { source: "/cifra/m", destination: "/cifra", permanent: true },
-      { source: "/biblioteca/cifra", destination: "/cifra", permanent: true },
+      { source: "/biblioteca/cifra/a", destination: "/cifras", permanent: true },
+      { source: "/biblioteca/cifra/m", destination: "/cifras", permanent: true },
+      { source: "/cifra/a", destination: "/cifras", permanent: true },
+      { source: "/cifra/m", destination: "/cifras", permanent: true },
+      { source: "/cifra/edit", destination: "/cifras/edit", permanent: true },
+      { source: "/cifra", destination: "/cifras", permanent: true },
+      { source: "/biblioteca/cifra", destination: "/cifras", permanent: true },
     ];
   },
   images: {
