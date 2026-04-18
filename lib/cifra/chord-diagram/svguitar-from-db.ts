@@ -58,6 +58,8 @@ export function cifraSvguitarConfigure(baseFret: number): Partial<ChordSettings>
     tuning: ["E", "A", "D", "G", "B", "E"],
     showFretMarkers: false,
     fixedDiagramPosition: true,
+    /** Sem título no SVG — o rótulo fica no HTML (tooltip / diálogo), evita duplicar “desenho”. */
+    title: "",
     fingerSize: 0.58,
     fingerColor: "#0fd2c1",
     fingerTextColor: "#080810",
@@ -184,6 +186,7 @@ export function drawChordIntoElement(el: HTMLElement, resolved: ResolvedSvguitar
   width: number;
   height: number;
 } {
+  el.replaceChildren();
   const chart = new SVGuitarChord(el);
   chart.clear?.();
   const out = chart.configure(resolved.configure).chord(resolved.chordData).draw();
@@ -195,6 +198,7 @@ export function clearChordElement(el: HTMLElement) {
     const chart = new SVGuitarChord(el);
     chart.clear();
   } catch {
-    el.innerHTML = "";
+    /* ignore */
   }
+  el.replaceChildren();
 }

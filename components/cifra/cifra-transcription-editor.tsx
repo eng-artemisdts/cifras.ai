@@ -8,13 +8,14 @@ import {
   useEffect,
   useImperativeHandle,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
-import { patchChordSymbolAndTimes } from "@/components/cifra/cifra-chord-edit-popover";
 import { ChordDiagramTooltip } from "@/components/cifra/chord-diagram-tooltip";
-import { CifraEditInspectorPanel } from "@/components/cifra/cifra-edit-inspector-panel";
+import { CifraChordInspectorDialog } from "@/components/cifra/cifra-chord-inspector-dialog";
 import { CifraEditMetaSidebar } from "@/components/cifra/cifra-edit-meta-sidebar";
+import { CifraWordSlotInlineEditor } from "@/components/cifra/cifra-word-slot-inline-editor";
 import { Slider } from "@/components/ui/slider";
 import type {
   MusicAiChordEvent,
@@ -118,10 +119,17 @@ function SectionTimeInputs({
   step?: number;
   onCommitAll: (nextSections: MusicAiSection[]) => void;
 }) {
+  /** Durante o arrasto do slider: atualiza só o valor local; `sections` só em `onValueCommit` (sem saltar UI). */
+  const [sliderDraft, setSliderDraft] = useState<number[] | null>(null);
+
   const min = 0;
   const max = Math.max(0.1, totalMax);
   const sliderStep = step ?? 0.05;
   const minDistance = Math.max(0.05, sliderStep);
+
+  useEffect(() => {
+    setSliderDraft(null);
+  }, [sections]);
 
   const breakpoints = useMemo(() => {
     const out = new Set<number>();
@@ -131,6 +139,8 @@ function SectionTimeInputs({
     }
     return Array.from(out).sort((a, b) => a - b);
   }, [sections, min, max]);
+
+  const sliderValue = sliderDraft ?? breakpoints;
 
   const startIdxBySection = useMemo(
     () =>
@@ -153,7 +163,7 @@ function SectionTimeInputs({
   );
 
   const breakpointLabels = useMemo(() => {
-    return breakpoints.map((bp, idx) => {
+    return sliderValue.map((bp, idx) => {
       const refs: string[] = [];
       sections.forEach((sec, secIdx) => {
         const start = Math.max(min, Math.min(max, Number(sec.start)));
@@ -164,7 +174,7 @@ function SectionTimeInputs({
       const refText = refs.length ? refs.join(" • ") : `Breakpoint ${idx + 1}`;
       return `${refText} (${formatSectionTime(bp)})`;
     });
-  }, [breakpoints, sections, min, max]);
+  }, [sliderValue, sections, min, max]);
 
   const active = sections[activeSectionIdx];
   const activeStart = active ? active.start : 0;
@@ -187,6 +197,25 @@ function SectionTimeInputs({
     [sections, startIdxBySection, endIdxBySection, onCommitAll],
   );
 
+  const commitFromSlider = useCallback(
+    (next: number[]) => {
+      commitBreakpoints(next);
+      setSliderDraft(null);
+    },
+    [commitBreakpoints],
+  );
+
+  const thumbHighlightActiveSection = useCallback(
+    (thumbIndex: number) => {
+      if (!sections.length) return false;
+      const ai = Math.min(Math.max(0, activeSectionIdx), sections.length - 1);
+      const sIdx = startIdxBySection[ai];
+      const eIdx = endIdxBySection[ai];
+      return thumbIndex === sIdx || thumbIndex === eIdx;
+    },
+    [sections.length, activeSectionIdx, startIdxBySection, endIdxBySection],
+  );
+
   return (
     <div className="flex max-w-full flex-col gap-1.5 font-mono text-[9px] text-cifra-muted">
       <div className="flex items-center justify-between gap-2">
@@ -194,125 +223,19 @@ function SectionTimeInputs({
         <span className="shrink-0">Breakpoints globais</span>
       </div>
       <Slider
-        value={breakpoints}
+        value={sliderValue}
         min={min}
         max={max}
         step={sliderStep}
         thumbLabels={breakpointLabels}
+        thumbHighlight={thumbHighlightActiveSection}
         minStepsBetweenThumbs={Math.max(1, Math.round(minDistance / Math.max(0.001, step ?? 0.05)))}
-        onValueChange={commitBreakpoints}
-        onValueCommit={commitBreakpoints}
+        onValueChange={(next) => setSliderDraft(next)}
+        onValueCommit={commitFromSlider}
       />
       <span className="shrink-0 text-right tabular-nums text-cifra-muted/90">
         Secção atual: {formatSectionTime(activeStart)} — {formatSectionTime(activeEnd)}
       </span>
-    </div>
-  );
-}
-
-function WordSlotInlineEditor({
-  slot,
-  onApply,
-  onCancel,
-}: {
-  slot: LyricWordSlot;
-  onApply: (text: string, start: number, end: number) => void;
-  onCancel: () => void;
-}) {
-  const [text, setText] = useState(slot.text);
-  const [sStr, setSStr] = useState(() => String(Number(slot.start.toFixed(3))));
-  const [eStr, setEStr] = useState(() => String(Number(slot.end.toFixed(3))));
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    setText(slot.text);
-    setSStr(String(Number(slot.start.toFixed(3))));
-    setEStr(String(Number(slot.end.toFixed(3))));
-    setErr(null);
-  }, [slot.id, slot.text, slot.start, slot.end]);
-
-  const apply = () => {
-    const t = text.trim() || "·";
-    const s = parseFloat(sStr.replace(",", "."));
-    const e = parseFloat(eStr.replace(",", "."));
-    if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) {
-      setErr("Use números válidos; o fim deve ser maior que o início.");
-      return;
-    }
-    setErr(null);
-    onApply(t, s, Math.max(s + 0.02, e));
-  };
-
-  return (
-    <div className="flex w-full min-w-[8.5rem] max-w-56 flex-col gap-1.5 rounded-md border border-cifra-teal/40 bg-[#080810] p-1.5">
-      <input
-        autoFocus
-        value={text}
-        onChange={(ev) => setText(ev.target.value)}
-        onKeyDown={(ev) => {
-          if (ev.key === "Enter") {
-            ev.preventDefault();
-            apply();
-          }
-          if (ev.key === "Escape") onCancel();
-        }}
-        className="w-full rounded border border-cifra-border bg-[#0c0c16] px-1.5 py-1 text-center text-[12px] text-cifra-text outline-none focus:border-cifra-teal/40"
-        aria-label="Texto da palavra"
-      />
-      <div className="grid grid-cols-2 gap-x-1.5 gap-y-0.5">
-        <label className="col-span-2 text-[9px] font-medium text-cifra-muted">Tempos (s)</label>
-        <input
-          value={sStr}
-          onChange={(ev) => setSStr(ev.target.value)}
-          onKeyDown={(ev) => {
-            if (ev.key === "Enter") {
-              ev.preventDefault();
-              apply();
-            }
-            if (ev.key === "Escape") onCancel();
-          }}
-          inputMode="decimal"
-          placeholder="Início"
-          className="w-full rounded border border-cifra-border bg-[#0c0c16] px-1 py-0.5 font-mono text-[10px] text-cifra-text outline-none focus:border-cifra-teal/40"
-          aria-label="Início da palavra em segundos"
-        />
-        <input
-          value={eStr}
-          onChange={(ev) => setEStr(ev.target.value)}
-          onKeyDown={(ev) => {
-            if (ev.key === "Enter") {
-              ev.preventDefault();
-              apply();
-            }
-            if (ev.key === "Escape") onCancel();
-          }}
-          inputMode="decimal"
-          placeholder="Fim"
-          className="w-full rounded border border-cifra-border bg-[#0c0c16] px-1 py-0.5 font-mono text-[10px] text-cifra-text outline-none focus:border-cifra-teal/40"
-          aria-label="Fim da palavra em segundos"
-        />
-      </div>
-      {err ? (
-        <p className="text-[10px] leading-tight text-red-300/90" role="alert">
-          {err}
-        </p>
-      ) : null}
-      <div className="flex justify-end gap-1.5 pt-0.5">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded border border-cifra-border px-2 py-0.5 text-[10px] font-semibold text-cifra-muted transition-colors hover:border-cifra-teal/30 hover:text-cifra-text"
-        >
-          Cancelar
-        </button>
-        <button
-          type="button"
-          onClick={apply}
-          className="rounded bg-cifra-teal px-2.5 py-0.5 text-[10px] font-semibold text-cifra-bg transition-opacity hover:opacity-95"
-        >
-          Aplicar
-        </button>
-      </div>
     </div>
   );
 }
@@ -594,8 +517,8 @@ type AddChordContext =
   | { kind: "range"; sectionKey: string; defaultStart: number; defaultEnd: number };
 
 /**
- * Edição de letra (duplo clique), acordes no painel à direita e arrasto entre palavras/secções;
- * tempos de secção editáveis quando `sections` existem no payload.
+ * Duplo clique na palavra edita letra/tempos na própria célula; duplo clique no símbolo do acorde abre o diálogo de acorde.
+ * Arrasto entre palavras/secções; tempos de secção editáveis quando `sections` existem no payload.
  */
 export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandle, CifraTranscriptionEditorProps>(
   function CifraTranscriptionEditor({ initial, className, onRequestPreview, lyricsVariantLabel = "Letra" }, ref) {
@@ -606,6 +529,8 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
     const [chords, setChords] = useState<MusicAiChordEvent[]>(() => [...(initial.chords ?? [])]);
     const [sections, setSections] = useState<MusicAiSection[]>(() => initialSectionsState(initial.sections));
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [chordInspectorOpen, setChordInspectorOpen] = useState(false);
+    const chordInspectorAnchorRef = useRef<HTMLElement | null>(null);
     const [dragChordIdx, setDragChordIdx] = useState<number | null>(null);
     const [dragWordSlotId, setDragWordSlotId] = useState<string | null>(null);
     const [dropSlotId, setDropSlotId] = useState<string | null>(null);
@@ -623,7 +548,10 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
     const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
     const toggleSectionCollapsed = useCallback((key: string) => {
-      setCollapsedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+      setCollapsedSections((prev) => ({
+        ...prev,
+        [key]: prev[key] === false ? true : false,
+      }));
     }, []);
 
     const handleChordApply = useCallback((index: number, next: MusicAiChordEvent) => {
@@ -783,6 +711,14 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
     const activeChord = activeChordIndex != null ? chords[activeChordIndex] ?? null : null;
 
     useEffect(() => {
+      if (!chordInspectorOpen || activeChordIndex == null) return;
+      if (!chords[activeChordIndex]) {
+        setChordInspectorOpen(false);
+        chordInspectorAnchorRef.current = null;
+      }
+    }, [chordInspectorOpen, activeChordIndex, chords]);
+
+    useEffect(() => {
       if (!activeSlotId) return;
       const slot = slots.find((s) => s.id === activeSlotId);
       if (!slot) {
@@ -845,6 +781,8 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
         const slotBefore = slots.find((s) => s.id === slotId);
         if (!slotBefore) {
           setEditingId(null);
+          setChordInspectorOpen(false);
+          chordInspectorAnchorRef.current = null;
           return;
         }
         const chordIdxs = chordIndicesAttachedToSlot(slots, chords, slotBefore, chordAnchors);
@@ -942,28 +880,6 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
 
     const dragActive = dragChordIdx !== null || dragWordSlotId !== null;
 
-    const onPickDictionaryChord = useCallback(
-      (symbol: string) => {
-        if (!activeSlot) return;
-        const idxs = chordIndicesAttachedToSlot(slots, chords, activeSlot, chordAnchors);
-        if (idxs.length > 0 && activeChordIndex != null) {
-          const c = chords[activeChordIndex];
-          if (c) {
-            handleChordApply(
-              activeChordIndex,
-              patchChordSymbolAndTimes(c, Number(c.start ?? 0), Number(c.end ?? c.start + 0.1), symbol),
-            );
-          }
-          return;
-        }
-        const dt = defaultChordTimesOnWordSlot(slots, chords, activeSlot);
-        const insertIdx = chords.length;
-        setChords((prev) => [...prev, createChordEvent(symbol, dt.start, dt.end)]);
-        setActiveChordIndex(insertIdx);
-      },
-      [activeSlot, activeChordIndex, chords, handleChordApply, slots, chordAnchors],
-    );
-
     const metaPayload: MusicAiDemoPayload = {
       ...initial,
       lyrics: rebuildLyricsFromSlots(lyricsSegments, slots),
@@ -971,7 +887,13 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
       sections: finalizeSections(sections),
     };
 
+    const onChordInspectorOpenChange = useCallback((open: boolean) => {
+      setChordInspectorOpen(open);
+      if (!open) chordInspectorAnchorRef.current = null;
+    }, []);
+
     return (
+      <>
       <div className={cn("flex min-h-0 flex-1 flex-col gap-4 lg:flex-row", className)}>
         <CifraEditMetaSidebar
           payload={metaPayload}
@@ -1006,13 +928,14 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
               </button>
               {guideOpen ? (
                 <p className="mt-2 text-[10px] leading-snug text-cifra-muted">
-                  Toque numa palavra para a selecionar (painel à direita). Duplo clique edita letra e tempos. «Acorde na
-                  palavra ativa» adiciona acorde à palavra selecionada. Arraste o símbolo do acorde ou a célula da palavra
-                  para mover. Dicionário e edição em massa ficam nas colunas laterais.
+                  Toque numa palavra para a selecionar. Duplo clique na palavra edita letra e tempos na célula. Duplo
+                  clique no símbolo do acorde abre a edição completa do acorde numa janela. «Acorde na palavra ativa»
+                  adiciona acorde à palavra selecionada. Arraste o símbolo ou a célula para mover. Edição em massa à
+                  esquerda.
                 </p>
               ) : (
                 <p className="mt-1 text-[10px] leading-snug text-cifra-muted">
-                  O centro mostra só a leitura; detalhes e duração do acorde no painel à direita.
+                  Duplo clique na palavra para editar na grelha; duplo clique no acorde abre o diálogo de edição.
                 </p>
               )}
             </div>
@@ -1116,26 +1039,34 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                     ...sections.map((s) => s.end),
                     sec?.end ?? 0,
                   );
-                  const sectionCollapsed = collapsedSections[group.key] === true;
+                  const sectionCollapsed = collapsedSections[group.key] !== false;
                   return (
                     <div key={group.key} className="rounded-[14px] border border-cifra-border bg-cifra-surface p-[18px]">
                       <button
                         type="button"
                         onClick={() => toggleSectionCollapsed(group.key)}
-                        className="flex w-full items-center justify-between gap-x-3 gap-y-1 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-cifra-teal/35 focus-visible:ring-offset-2 focus-visible:ring-offset-cifra-surface"
+                        className="flex w-full cursor-pointer items-center justify-between gap-x-3 gap-y-1 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-cifra-teal/35 focus-visible:ring-offset-2 focus-visible:ring-offset-cifra-surface"
                         aria-expanded={!sectionCollapsed}
                         aria-controls={`cifra-section-body-${group.key}`}
                         id={`cifra-section-head-${group.key}`}
                       >
                         <span className="flex min-w-0 flex-1 items-center gap-2">
-                          <ChevronDown
-                            strokeWidth={2}
+                          <span
                             className={cn(
-                              "size-4 shrink-0 text-cifra-muted transition-transform duration-200",
-                              sectionCollapsed && "-rotate-90",
+                              "-ml-0.5 inline-flex shrink-0 cursor-pointer rounded-md p-1 text-cifra-muted transition-colors",
+                              "hover:bg-cifra-teal/15 hover:text-cifra-teal",
                             )}
                             aria-hidden
-                          />
+                          >
+                            <ChevronDown
+                              strokeWidth={2}
+                              className={cn(
+                                "size-4 shrink-0 transition-transform duration-200",
+                                sectionCollapsed && "-rotate-90",
+                              )}
+                              aria-hidden
+                            />
+                          </span>
                           <span className="truncate font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-cifra-teal">
                             {group.title}
                           </span>
@@ -1212,6 +1143,14 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                                 e.stopPropagation();
                                                 setActiveSlotId(null);
                                                 setActiveChordIndex(ci);
+                                              }}
+                                              onDoubleClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setActiveSlotId(null);
+                                                setActiveChordIndex(ci);
+                                                chordInspectorAnchorRef.current = e.currentTarget;
+                                                setChordInspectorOpen(true);
                                               }}
                                               className={cn(
                                                 "inline-flex cursor-grab touch-none flex-col items-start gap-1 rounded-md px-1 py-0.5 transition-colors hover:bg-cifra-teal/10 active:cursor-grabbing",
@@ -1302,6 +1241,7 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                             }}
                                             onDoubleClick={(e) => {
                                               if ((e.target as HTMLElement).closest("[data-cifra-chord-slot]")) return;
+                                              e.preventDefault();
                                               setAddChordContext((prev) =>
                                                 prev?.kind === "slot" && prev.slotId === slot.id ? null : prev,
                                               );
@@ -1350,6 +1290,14 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                                             setDropSlotId(null);
                                                             setDropSectionKey(null);
                                                           }}
+                                                          onDoubleClick={(e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            setActiveSlotId(slot.id);
+                                                            setActiveChordIndex(ci);
+                                                            chordInspectorAnchorRef.current = e.currentTarget;
+                                                            setChordInspectorOpen(true);
+                                                          }}
                                                           className={cn(
                                                             "cursor-grab touch-none rounded-md px-1.5 py-0.5 text-center font-mono text-[12px] font-semibold text-cifra-teal transition-colors hover:bg-cifra-teal/12 active:cursor-grabbing",
                                                             activeSlotId === slot.id &&
@@ -1365,7 +1313,7 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                               )}
                                             </div>
                                             {editingId === slot.id ? (
-                                              <WordSlotInlineEditor
+                                              <CifraWordSlotInlineEditor
                                                 key={slot.id}
                                                 slot={slot}
                                                 onApply={(text, start, end) => applyWordSlotEdit(slot.id, text, start, end)}
@@ -1485,16 +1433,22 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
             </div>
           </section>
         </div>
-        <CifraEditInspectorPanel
+      </div>
+
+      {activeChord != null && activeChordIndex != null ? (
+        <CifraChordInspectorDialog
+          open={chordInspectorOpen}
+          onOpenChange={onChordInspectorOpenChange}
+          anchorRef={chordInspectorAnchorRef}
           activeSlot={activeSlot}
           activeChord={activeChord}
           activeChordIndex={activeChordIndex}
           onChordApply={handleChordApply}
           onChordRemove={handleInspectChordRemove}
           onChordEndChange={handleChordEndChange}
-          onPickDictionaryChord={onPickDictionaryChord}
         />
-      </div>
+      ) : null}
+      </>
     );
   },
 );

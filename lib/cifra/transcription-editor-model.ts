@@ -285,7 +285,8 @@ export function groupSlotsForEditorDisplay(
   }
 
   const buckets: EditorSectionGroup[] = normalized.map((sec, sectionIdx) => ({
-    key: `sec-${sec.i}-${sec.start}`,
+    /** Apenas índice estável — não incluir `start`/`end` ou o estado de UI (colapsar) reinicia ao editar tempos. */
+    key: `sec-${sec.i}`,
     title: sec.label,
     start: sec.start,
     end: sec.end,
