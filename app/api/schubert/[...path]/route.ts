@@ -38,6 +38,41 @@ type SchubertForwardIdentity = {
   appPermissions: string[];
 };
 
+/**
+ * Lê o corpo para reenvio à Schubert sem corromper bytes (`req.text()` usa UTF-8 e estraga multipart).
+ * Só usa texto para JSON e `application/x-www-form-urlencoded`; todo o resto (incl. `multipart/*`
+ * com boundary) passa por `arrayBuffer()`.
+ */
+async function readProxyBody(req: Request): Promise<{
+  body: BodyInit | undefined;
+  contentType: string | null;
+}> {
+  const method = req.method;
+  if (method === "GET" || method === "HEAD") {
+    return { body: undefined, contentType: req.headers.get("content-type") };
+  }
+
+  const contentType = req.headers.get("content-type");
+  const ct = (contentType ?? "").trim().toLowerCase();
+
+  if (
+    ct.includes("application/json") ||
+    ct.includes("application/x-www-form-urlencoded")
+  ) {
+    const text = await req.text();
+    return {
+      body: text.length > 0 ? text : undefined,
+      contentType,
+    };
+  }
+
+  const buf = await req.arrayBuffer();
+  return {
+    body: buf.byteLength > 0 ? buf : undefined,
+    contentType,
+  };
+}
+
 async function proxyToSchubert(req: Request, ctx: RouteCtx, forward: SchubertForwardIdentity) {
   const audience = schubertAudience();
   if (!audience) {
@@ -52,6 +87,13 @@ async function proxyToSchubert(req: Request, ctx: RouteCtx, forward: SchubertFor
   const suffix = segments.length ? segments.join("/") : "";
   const incoming = new URL(req.url);
   const target = `${schubertBase()}/${suffix}${incoming.search}`;
+
+  /**
+   * Ler o corpo antes de `getAccessToken` (buffer completo antes de esperar pelo Auth0) e usar
+   * bytes brutos para multipart — `text()` invalida o boundary e o busboy falha com
+   * «Multipart: Unexpected end of form».
+   */
+  const { body, contentType } = await readProxyBody(req);
 
   const { token } = await getAuth0().getAccessToken({ audience });
 
@@ -72,20 +114,8 @@ async function proxyToSchubert(req: Request, ctx: RouteCtx, forward: SchubertFor
     "x-cifra-billing-plan": forward.billingPlan,
     "x-cifra-app-permissions": JSON.stringify(forward.appPermissions),
   };
-  const contentType = req.headers.get("content-type");
   if (contentType) {
     headers["content-type"] = contentType;
-  }
-
-  let body: BodyInit | undefined;
-
-  if (!["GET", "HEAD"].includes(req.method)) {
-    if (contentType?.toLowerCase().includes("multipart/form-data")) {
-      body = await req.arrayBuffer();
-    } else {
-      const text = await req.text();
-      body = text.length > 0 ? text : undefined;
-    }
   }
 
   const upstream = await fetch(target, {

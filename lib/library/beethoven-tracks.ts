@@ -22,6 +22,7 @@ type BeethovenTrack = {
   name?: string;
   artistId?: { name?: string } | string | null;
   updatedAt?: string;
+  lastAccessAt?: string;
 };
 
 const coverTones: RecommendationTile["coverTone"][] = ["navy", "navyAlt", "surface", "tealGlow"];
@@ -115,7 +116,7 @@ function mapTrackToRecentAccess(track: BeethovenTrack, index: number): RecentAcc
   const fallbackId = `${track.trackId ?? "recent"}-${index}`;
   const title = track.name?.trim() || "Sem nome";
   const artistName = resolveTrackArtistName(track);
-  const timeLabel = formatRelativeTime(track.updatedAt);
+  const timeLabel = formatRelativeTime(track.lastAccessAt ?? track.updatedAt);
   return {
     id: track._id ?? track.id ?? fallbackId,
     title,

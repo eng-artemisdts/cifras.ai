@@ -883,6 +883,32 @@ export function instrumentalChordStripCellsForZone(
  */
 
 /**
+ * Hiato mínimo para dedupe na fronteira instrumental -> letra (preview + editor).
+ */
+export const SECTION_BOUNDARY_INSTRUMENTAL_LYRIC_DEDUPE_MIN_GAP_SEC = 0.35;
+
+/**
+ * Devolve o último rótulo visível num strip instrumental já comprimindo repetições consecutivas.
+ *
+ * @param {{ label: string }[]} cells
+ * @param {string|null|undefined} [initialPrevLabel]
+ * @returns {string|null}
+ */
+export function lastVisibleChordLabelInstrumentalStrip(cells, initialPrevLabel = null) {
+  if (!Array.isArray(cells) || !cells.length) return null;
+  let prev = initialPrevLabel != null ? String(initialPrevLabel) : null;
+  let lastVisible = null;
+  for (let i = 0; i < cells.length; i++) {
+    const c = cells[i];
+    const lab = c && c.label != null ? String(c.label) : '';
+    const show = prev === null || lab !== prev;
+    prev = lab;
+    if (show) lastVisible = lab;
+  }
+  return lastVisible != null && String(lastVisible).trim() !== '' ? String(lastVisible) : null;
+}
+
+/**
  * Ordena blocos instrumentais e linhas vocais no eixo do tempo.
  *
  * @param {{ start: number, end: number, displayLabel: string }[]} instrumentalBlocks

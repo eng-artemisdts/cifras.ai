@@ -7,8 +7,8 @@ import type {
   SchubertTrackIngestResponse,
 } from "@/lib/schubert-identify-types";
 
-/** Alinhado ao limite AudD / `tracks/identify` na schubert-api (~10 MB). */
-const MAX_SCHUBERT_BYTES = 10 * 1024 * 1024;
+/** Alinhado ao `MAX_MP3_UPLOAD_BYTES` da schubert-api (Multer). */
+const MAX_SCHUBERT_BYTES = 50 * 1024 * 1024;
 
 export class SchubertIdentifyError extends Error {
   constructor(
@@ -29,7 +29,7 @@ function isMp3(file: File): boolean {
 
 /**
  * Envia um MP3 ao endpoint `POST /tracks/identify` da Schubert API (reconhecimento + match na base).
- * Limite de 10 MB imposto pelo servidor Schubert (AudD).
+ * Limite de upload multipart no servidor (50 MB); a AudD só processa ~25 s após truncagem.
  */
 export async function identifyTrackFromMp3(file: File): Promise<SchubertTrackIdentifyResponse> {
   if (!isMp3(file)) {
@@ -41,7 +41,7 @@ export async function identifyTrackFromMp3(file: File): Promise<SchubertTrackIde
   }
   if (file.size > MAX_SCHUBERT_BYTES) {
     throw new SchubertIdentifyError(
-      "O ficheiro excede o limite de 10 MB para identificação.",
+      "O ficheiro excede o limite de 50 MB para identificação.",
       400,
       null,
     );
@@ -89,7 +89,7 @@ export async function postTrackIngestWithMeta(
   }
   if (file.size > MAX_SCHUBERT_BYTES) {
     throw new SchubertIdentifyError(
-      "O ficheiro excede o limite de 10 MB para ingestão.",
+      "O ficheiro excede o limite de 50 MB para ingestão.",
       400,
       null,
     );

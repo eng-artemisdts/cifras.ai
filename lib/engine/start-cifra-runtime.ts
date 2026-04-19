@@ -6,7 +6,7 @@
 import {
   applyCifraPlaybackHighlight,
   mountCifraView,
-  resolveCifraSmartScrollTarget,
+  resolveCifraScrollTarget,
 } from "./cifra-view";
 import { createChordTimeline, formatChordLabel, isNoChordEvent } from "./chord-timeline";
 import { buildLyricModel } from "./lyric-timeline";
@@ -41,8 +41,12 @@ const LS_AUTO_SCROLL_DURATION_MS = "cifra-ai:autoScrollDurationMs";
 const LS_SCROLL_MODE = "cifra-ai:scrollMode";
 const DEFAULT_AUTO_SCROLL_LEAD_SEC = 0.4;
 const DEFAULT_AUTO_SCROLL_DURATION_MS = 450;
-/** Rolagem «inteligente»: manter secção activa centrada no viewport. */
-const SMART_SCROLL_VIEWPORT_ANCHOR = 0.5;
+/**
+ * Rolagem «inteligente»: ancoragem vertical do alvo no viewport.
+ * 0.38 = ligeiramente acima do meio (mesmo valor que a POC); mantém contexto visível abaixo
+ * da linha actual sem colar ao topo.
+ */
+const SMART_SCROLL_VIEWPORT_ANCHOR = 0.38;
 /** Tempo mínimo (ms) sem auto-scroll após gesto manual do utilizador. */
 const USER_SCROLL_PAUSE_MS = 1400;
 
@@ -135,29 +139,57 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
   const meta = payload.meta;
 
   /**
-   * Contentor que realmente rola verticalmente. Se `scrollRoot` não rola (layout flex em que o ancestral
-   * cresce com o conteúdo), sobe a árvore até encontrar um ancestral com `overflow-y: auto|scroll` e
-   * `scrollHeight > clientHeight`. Fallback: `document.scrollingElement` (rolagem da página).
+   * Contentor que realmente rola verticalmente.
    *
-   * @returns {HTMLElement | null}
+   * Prioridade: o `scrollRoot` designado quando **puder rolar agora** (tem `overflow-y`
+   * e `scrollHeight > clientHeight`). Caso contrário (layouts em que o `flex-1` do `scrollRoot`
+   * não limita altura — ex.: mobile), sobe a árvore até encontrar um ancestral rolável; fallback
+   * para `document.scrollingElement`. O último resultado é cacheado para estabilidade entre frames
+   * (evita saltar entre contentores durante uma animação).
+   *
+   * Devolve `null` quando nada rola neste instante — chamadores devem nessa altura saltar
+   * sem scroll (não aplicar `scrollTop` em elementos que não movem).
+   *
+   * @type {HTMLElement | null}
    */
+  let cachedScrollContainer = null;
+
   function pickScrollContainer() {
-    function canScroll(el) {
+    function hasOverflowScrollStyle(el) {
       if (!(el instanceof HTMLElement)) return false;
       const cs = getComputedStyle(el);
       const oy = cs.overflowY;
-      const overflowable = oy === "auto" || oy === "scroll" || oy === "overlay";
-      return overflowable && el.scrollHeight - el.clientHeight > 1;
+      return oy === "auto" || oy === "scroll" || oy === "overlay";
     }
-    if (canScroll(scrollRoot)) return scrollRoot;
+    function canScrollNow(el) {
+      return hasOverflowScrollStyle(el) && el.scrollHeight - el.clientHeight > 1;
+    }
+    if (canScrollNow(scrollRoot)) {
+      cachedScrollContainer = scrollRoot;
+      return scrollRoot;
+    }
+    if (
+      cachedScrollContainer instanceof HTMLElement &&
+      cachedScrollContainer.isConnected &&
+      canScrollNow(cachedScrollContainer)
+    ) {
+      return cachedScrollContainer;
+    }
     /** @type {HTMLElement | null} */
     let node = scrollRoot.parentElement;
     while (node && node !== document.body && node !== document.documentElement) {
-      if (canScroll(node)) return node;
+      if (canScrollNow(node)) {
+        cachedScrollContainer = node;
+        return node;
+      }
       node = node.parentElement;
     }
     const se = document.scrollingElement instanceof HTMLElement ? document.scrollingElement : null;
-    return se && se.scrollHeight - se.clientHeight > 1 ? se : scrollRoot;
+    if (se && se.scrollHeight - se.clientHeight > 1) {
+      cachedScrollContainer = se;
+      return se;
+    }
+    return null;
   }
 
   let virtualT = 0;
@@ -443,14 +475,16 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
   }
 
   /**
-   * Rolagem inteligente: alinha o viewport ao nó do acorde activo (célula de track), como na POC,
-   * com animação suave e duração configurável.
+   * Rolagem inteligente (paridade com a POC `startMusicAiApp.ts`):
+   * - alvo = `.cifra-line` da célula de acorde em destaque (com antecipação opcional);
+   * - só dispara scroll quando o alvo muda (sem recálculos de drift que podiam descentralizar);
+   * - `smoothScrollToElement` usa sempre o `scrollRoot` designado via `pickScrollContainer`.
    */
   function applySmartScroll(container, t) {
     const leadSec = autoScrollLeadEl ? Number(autoScrollLeadEl.value) : DEFAULT_AUTO_SCROLL_LEAD_SEC;
     const lead = Number.isFinite(leadSec) ? Math.max(0, leadSec) : DEFAULT_AUTO_SCROLL_LEAD_SEC;
     const durationMs = autoScrollDurEl ? Number(autoScrollDurEl.value) : DEFAULT_AUTO_SCROLL_DURATION_MS;
-    const el = resolveCifraSmartScrollTarget(
+    const el = resolveCifraScrollTarget(
       container,
       t,
       lead,
@@ -458,38 +492,12 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
       payload.chordTimeOffsetSec ?? 0,
     );
     if (!(el instanceof HTMLElement)) return;
+    if (el === lastAutoScrollTarget) return;
 
-    const sectionEl = el.closest(".cifra-section");
-    let targetEl = sectionEl ?? el.closest(".cifra-line") ?? el;
-    if (sectionEl instanceof HTMLElement) {
-      const sectionInner = sectionEl.querySelector(".cifra-section-inner");
-      const sectionHeaderLine =
-        sectionInner instanceof HTMLElement && sectionInner.firstElementChild instanceof HTMLElement
-          ? sectionInner.firstElementChild
-          : null;
-      if (sectionHeaderLine) targetEl = sectionHeaderLine;
-    }
-
-    const root = pickScrollContainer();
-    const rootRect = root?.getBoundingClientRect();
-    const targetRect = targetEl.getBoundingClientRect();
-    const desiredY =
-      root && rootRect
-        ? targetRect.top - rootRect.top + root.scrollTop + targetRect.height / 2 - root.clientHeight * SMART_SCROLL_VIEWPORT_ANCHOR
-        : null;
-    const drift = root && desiredY != null ? Math.abs(root.scrollTop - desiredY) : Infinity;
-    const sectionStartAttr =
-      sectionEl instanceof HTMLElement ? Number(sectionEl.getAttribute("data-section-start")) : NaN;
-    const sectionKey = Number.isFinite(sectionStartAttr) ? sectionStartAttr : null;
-    const sectionChanged = sectionKey !== lastSmartSectionStart;
-
-    /** Recentraliza só ao mudar de secção ou quando o desvio é realmente grande. */
-    if (!sectionChanged && targetEl === lastAutoScrollTarget && drift < 80) return;
-
-    lastAutoScrollTarget = targetEl;
-    lastSmartSectionStart = sectionKey;
+    lastAutoScrollTarget = el;
+    lastSmartSectionStart = null;
     smoothScrollToElement(
-      targetEl,
+      el,
       Number.isFinite(durationMs) ? durationMs : DEFAULT_AUTO_SCROLL_DURATION_MS,
       SMART_SCROLL_VIEWPORT_ANCHOR,
     );

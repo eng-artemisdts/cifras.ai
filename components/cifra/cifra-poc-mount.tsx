@@ -66,7 +66,11 @@ export function CifraPocMount({ trackKey, payload, trackTitle, className }: Cifr
   }, []);
 
   const payloadForRuntime = useMemo(() => {
-    const previewAnchors = buildPreviewChordAnchors(payload.lyrics, payload.chords);
+    const previewAnchors = buildPreviewChordAnchors(
+      payload.lyrics,
+      payload.chords,
+      payload.sections,
+    );
     return {
       ...payload,
       slotIdsInLyricOrder: previewAnchors.slotIdsInLyricOrder,

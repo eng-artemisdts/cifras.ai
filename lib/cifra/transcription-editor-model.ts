@@ -462,66 +462,226 @@ export function chordIndicesInSectionWithoutWordAnchor(
     .sort((a, b) => chords[a]!.start - chords[b]!.start);
 }
 
+/** Secção que contém o instante `t` (ou `null` se `sections` estiver vazio/indefinido). */
+function sectionBoundsAtTime(
+  sections: MusicAiSection[] | null | undefined,
+  t: number,
+): { start: number; end: number } | null {
+  if (!sections || !sections.length) return null;
+  for (const s of sections) {
+    if (!Number.isFinite(s.start) || !Number.isFinite(s.end)) continue;
+    if (t >= s.start && t < s.end) {
+      return { start: Number(s.start), end: Math.max(Number(s.start) + 0.01, Number(s.end)) };
+    }
+  }
+  return null;
+}
+
+/** Verifica se o ponto médio do acorde está dentro do intervalo da secção (ou `true` se `bounds` for `null`). */
+function chordMidInSection(
+  c: MusicAiChordEvent,
+  bounds: { start: number; end: number } | null,
+): boolean {
+  if (!bounds) return true;
+  const mid = (c.start + c.end) / 2;
+  return mid >= bounds.start - 1e-3 && mid < bounds.end + 1e-3;
+}
+
 /**
- * Reposiciona um acorde sobre o slot.
- * Regra: move o `start` para o início da palavra e preserva a duração original do acorde
- * (só limita para evitar colisão com o acorde seguinte).
+ * Aplica um drag-drop de acorde respeitando:
+ * 1. Sem gaps entre acordes consecutivos — fecha gap à esquerda (`new_prev.end = c.start`) e à
+ *    direita (`new_next.start = c.end`) na posição nova, e estende o acorde que ficou antes da
+ *    posição original para preencher o espaço deixado.
+ * 2. O acorde nunca ultrapassa os limites da secção de destino (clamp de `start`/`end`).
+ *
+ * `targetSection` é a secção onde o acorde fica após o drag; `originSection` é a secção original
+ * (usada para decidir se faz sentido estender o acorde anterior na posição antiga). Se `null`,
+ * a verificação de secção correspondente é ignorada.
+ */
+function applyChordDragWithGapClosing(
+  chords: MusicAiChordEvent[],
+  chordIndex: number,
+  newStart: number,
+  targetSection: { start: number; end: number } | null,
+  originSection: { start: number; end: number } | null,
+): MusicAiChordEvent[] {
+  const next = chords.map((c) => ({ ...c }));
+  const c = next[chordIndex];
+  if (!c) return next;
+
+  const origStart = c.start;
+  const origEnd = c.end;
+  const prevDur = Math.max(0.05, origEnd - origStart);
+
+  /** Vizinho imediatamente antes do arrastado, usando tempos originais. */
+  let oldPrevIdx = -1;
+  {
+    let maxBefore = -Infinity;
+    for (let i = 0; i < chords.length; i++) {
+      if (i === chordIndex) continue;
+      const s = chords[i]!.start;
+      if (s < origStart - 1e-6 && s > maxBefore) {
+        maxBefore = s;
+        oldPrevIdx = i;
+      }
+    }
+  }
+
+  /** `start` clamped ao intervalo da secção de destino. */
+  let cStart = newStart;
+  if (targetSection) {
+    cStart = Math.max(targetSection.start, Math.min(targetSection.end - 0.1, cStart));
+  }
+  c.start = cStart;
+
+  /** Vizinhos imediatos pós-movimento (ordem temporal atual). */
+  let newPrevIdx = -1;
+  let newNextIdx = -1;
+  {
+    let maxBefore = -Infinity;
+    let minAfter = Infinity;
+    for (let i = 0; i < next.length; i++) {
+      if (i === chordIndex) continue;
+      const s = next[i]!.start;
+      if (s <= c.start - 1e-6 && s > maxBefore) {
+        maxBefore = s;
+        newPrevIdx = i;
+      } else if (s > c.start + 1e-6 && s < minAfter) {
+        minAfter = s;
+        newNextIdx = i;
+      }
+    }
+  }
+
+  /** `end` = `start + duração original`, capado por secção e pelo vizinho seguinte. */
+  let cEnd = c.start + prevDur;
+  if (targetSection) cEnd = Math.min(cEnd, targetSection.end);
+  if (newNextIdx >= 0) {
+    const newNext = next[newNextIdx]!;
+    if (chordMidInSection(newNext, targetSection)) {
+      /** Vai deslocar-se `newNext.start = c.end`; então `c.end < newNext.end`. */
+      cEnd = Math.min(cEnd, newNext.end - 0.05);
+    } else {
+      /** Vizinho em secção diferente: não invadir o seu intervalo. */
+      cEnd = Math.min(cEnd, newNext.start - 0.02);
+    }
+  }
+  c.end = Math.max(c.start + 0.05, cEnd);
+
+  /** Fecha o gap à esquerda: `new_prev.end = c.start`. */
+  if (newPrevIdx >= 0) {
+    const newPrev = next[newPrevIdx]!;
+    if (chordMidInSection(newPrev, targetSection)) {
+      newPrev.end = Math.max(newPrev.start + 0.05, c.start);
+    }
+  }
+
+  /** Fecha o gap à direita: `new_next.start = c.end` (desloca o início do seguinte). */
+  if (newNextIdx >= 0) {
+    const newNext = next[newNextIdx]!;
+    if (chordMidInSection(newNext, targetSection)) {
+      newNext.start = Math.max(0, Math.min(newNext.end - 0.05, c.end));
+    }
+  }
+
+  /**
+   * Fecha o gap deixado na posição original quando `c` saiu mesmo de lá. Estende o `end` do
+   * `old_prev` até ao `start` do acorde que agora ocupa essa zona (ou `origEnd`, o que for menor).
+   */
+  const cMovedAwayFromOldPos = c.start >= origEnd - 1e-3 || c.end <= origStart + 1e-3;
+  if (
+    cMovedAwayFromOldPos &&
+    oldPrevIdx >= 0 &&
+    oldPrevIdx !== newPrevIdx &&
+    oldPrevIdx !== newNextIdx
+  ) {
+    const oldPrev = next[oldPrevIdx]!;
+    if (chordMidInSection(oldPrev, originSection)) {
+      let minStartAfterOldPrev = Infinity;
+      for (let i = 0; i < next.length; i++) {
+        if (i === oldPrevIdx) continue;
+        const s = next[i]!.start;
+        if (s > oldPrev.start + 1e-6 && s < minStartAfterOldPrev) {
+          minStartAfterOldPrev = s;
+        }
+      }
+      const cap = Number.isFinite(minStartAfterOldPrev)
+        ? Math.max(oldPrev.start + 0.05, minStartAfterOldPrev - 0.02)
+        : Infinity;
+      let capFinal = Math.min(origEnd, cap);
+      if (originSection) capFinal = Math.min(capFinal, originSection.end);
+      capFinal = Math.max(oldPrev.start + 0.05, capFinal);
+      if (capFinal > oldPrev.end + 1e-6) {
+        oldPrev.end = capFinal;
+      }
+    }
+  }
+
+  return next;
+}
+
+/**
+ * Reposiciona um acorde sobre o slot. Preserva a duração original do acorde e, depois da
+ * movimentação, aplica a regra "sem gaps" (estende `new_prev.end = c.start` e desloca
+ * `new_next.start = c.end`) e limita o acorde à secção de destino.
  */
 export function moveChordToSlot(
   chords: MusicAiChordEvent[],
   chordIndex: number,
   targetSlot: LyricWordSlot,
-  sortedChordIndices: number[],
+  _sortedChordIndices: number[],
+  sections?: MusicAiSection[] | null,
 ): MusicAiChordEvent[] {
-  const next = chords.map((c) => ({ ...c }));
-  const c = next[chordIndex];
-  if (!c) return next;
-  const ordered = [...sortedChordIndices].sort((a, b) => next[a].start - next[b].start);
-  const pos = ordered.indexOf(chordIndex);
-  const nextChordStart =
-    pos >= 0 && pos < ordered.length - 1 ? next[ordered[pos + 1]!].start : Infinity;
-  const newStart = targetSlot.start;
-  const prevDur = Math.max(0.05, c.end - c.start);
-  const noOverlapEnd = Number.isFinite(nextChordStart)
-    ? Math.max(newStart + 0.05, nextChordStart - 0.02)
-    : Infinity;
-  const newEnd = Math.min(newStart + prevDur, noOverlapEnd);
-  c.start = newStart;
-  c.end = Math.max(newStart + 0.05, newEnd);
-  return next;
+  void _sortedChordIndices;
+  const origStart = chords[chordIndex]?.start ?? targetSlot.start;
+  const targetSection = sectionBoundsAtTime(sections, targetSlot.start);
+  const originSection = sectionBoundsAtTime(sections, origStart);
+  return applyChordDragWithGapClosing(
+    chords,
+    chordIndex,
+    targetSlot.start,
+    targetSection,
+    originSection,
+  );
 }
 
 /**
- * Posiciona o acorde num intervalo temporal (ex.: intro/instrumental sem palavras).
- * Regra: move o `start` para o início do intervalo e preserva duração original
- * (limitando para caber no intervalo e não colidir com o acorde seguinte).
+ * Posiciona o acorde num intervalo temporal (ex.: intro/instrumental sem palavras). O intervalo
+ * `[rangeStart, rangeEnd]` é tratado como os limites da secção de destino. A regra "sem gaps"
+ * aplica-se aos vizinhos imediatos.
  */
 export function moveChordToTimeRange(
   chords: MusicAiChordEvent[],
   chordIndex: number,
   rangeStart: number,
   rangeEnd: number,
-  sortedChordIndices: number[],
+  _sortedChordIndices: number[],
+  sections?: MusicAiSection[] | null,
 ): MusicAiChordEvent[] {
-  const next = chords.map((c) => ({ ...c }));
-  const c = next[chordIndex];
-  if (!c) return next;
+  void _sortedChordIndices;
   const lo = Math.min(rangeStart, rangeEnd);
   const hi = Math.max(rangeStart, rangeEnd);
-  const ordered = [...sortedChordIndices].sort((a, b) => next[a].start - next[b].start);
-  const pos = ordered.indexOf(chordIndex);
-  const nextChordStart =
-    pos >= 0 && pos < ordered.length - 1 ? next[ordered[pos + 1]!].start : Infinity;
-  const newStart = lo;
-  const prevDur = Math.max(0.05, c.end - c.start);
-  const intervalEnd = Math.max(newStart + 0.05, hi);
-  const noOverlapEnd = Number.isFinite(nextChordStart)
-    ? Math.max(newStart + 0.05, nextChordStart - 0.02)
-    : Infinity;
-  const newEnd = Math.min(newStart + prevDur, intervalEnd, noOverlapEnd);
-  c.start = newStart;
-  c.end = Math.max(newStart + 0.05, newEnd);
-  return next;
+  const targetSection = { start: lo, end: Math.max(lo + 0.01, hi) };
+  const origStart = chords[chordIndex]?.start ?? lo;
+  const originSection = sectionBoundsAtTime(sections, origStart) ?? targetSection;
+  return applyChordDragWithGapClosing(chords, chordIndex, lo, targetSection, originSection);
+}
+
+/**
+ * Move o acorde para um instante temporal específico dentro de uma secção (ex.: drop numa célula
+ * da faixa só-instrumental). Os limites da secção são inferidos de `sections` (quando fornecido);
+ * a regra "sem gaps" aplica-se aos vizinhos imediatos.
+ */
+export function moveChordToTime(
+  chords: MusicAiChordEvent[],
+  chordIndex: number,
+  newStart: number,
+  sections?: MusicAiSection[] | null,
+): MusicAiChordEvent[] {
+  const origStart = chords[chordIndex]?.start ?? newStart;
+  const targetSection = sectionBoundsAtTime(sections, newStart);
+  const originSection = sectionBoundsAtTime(sections, origStart);
+  return applyChordDragWithGapClosing(chords, chordIndex, newStart, targetSection, originSection);
 }
 
 /**

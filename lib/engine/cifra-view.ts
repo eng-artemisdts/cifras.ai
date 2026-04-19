@@ -119,8 +119,18 @@ function createInstrumentalChordStrip(
   const outer = document.createElement('div');
   outer.className = embeddedInSection ? 'mb-0' : 'mb-6';
 
+  const off = Number.isFinite(chordOffsetSec) ? Number(chordOffsetSec) : 0;
+  /**
+   * Acordes que começam antes do bloco são descartados (mesma regra do editor: o acorde aparece
+   * só na secção onde o `start` cai, sem transpassar para a seguinte).
+   */
   const segs = chordSegmentsInAudioWindow(chords, iv.start, iv.end, chordOffsetSec, {
     formatChord: formatChordEvent
+  }).filter((s) => {
+    const c = chords[s.chordIdx];
+    if (!c) return false;
+    const cA0 = Number(c.start) + off;
+    return Number.isFinite(cA0) && cA0 >= Number(iv.start) - 1e-3;
   });
   const row = document.createElement('div');
   row.className = 'cifra-line flex flex-wrap items-end gap-x-3 gap-y-4';
