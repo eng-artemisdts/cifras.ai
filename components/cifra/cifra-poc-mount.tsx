@@ -271,13 +271,13 @@ export function CifraPocMount({
     let disposed = false;
     let controller:
       | {
-          addListener: (event: string, cb: (event: Record<string, unknown>) => void) => void;
-          loadUri?: (uri: string) => void;
-          play?: () => void;
-          pause?: () => void;
-          resume?: () => void;
-          seek?: (seconds: number) => void;
-        }
+        addListener: (event: string, cb: (event: Record<string, unknown>) => void) => void;
+        loadUri?: (uri: string) => void;
+        play?: () => void;
+        pause?: () => void;
+        resume?: () => void;
+        seek?: (seconds: number) => void;
+      }
       | null = null;
 
     const onPlaybackUpdate = (evt: Record<string, unknown>) => {
@@ -404,14 +404,14 @@ export function CifraPocMount({
         const adapter =
           selectedProvider === "spotify" && spotifyHostRef.current && spotifyTrackId
             ? createSpotifyAdapter({
-                hostEl: spotifyHostRef.current,
-                trackId: spotifyTrackId,
-                durationHintSec:
-                  typeof payload.meta?.duration_seconds === "number" &&
+              hostEl: spotifyHostRef.current,
+              trackId: spotifyTrackId,
+              durationHintSec:
+                typeof payload.meta?.duration_seconds === "number" &&
                   Number.isFinite(payload.meta.duration_seconds)
-                    ? payload.meta.duration_seconds
-                    : undefined,
-              })
+                  ? payload.meta.duration_seconds
+                  : undefined,
+            })
             : selectedProvider === "youtube" && youtubeHostRef.current && youtubeVideoId
               ? createYoutubeAdapter({ hostEl: youtubeHostRef.current, videoId: youtubeVideoId })
               : createInternalAudioAdapter({ audioEl: readyAudioEl, audioUrl: payload.meta?.audioUrl });
