@@ -14,6 +14,10 @@ export type SchubertLyricsSource = "AI" | "MATCH";
 export type SchubertTrackJson = {
   trackId?: string;
   spotifyId?: string;
+  youtubeVideoId?: string;
+  youtubeUrl?: string;
+  spotifyTrackId?: string;
+  spotifyUrl?: string;
   /** Slug da faixa (URL em conjunto com o slug do artista). */
   slug?: string;
   name?: string;

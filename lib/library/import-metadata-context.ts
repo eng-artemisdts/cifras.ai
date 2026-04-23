@@ -5,7 +5,8 @@ export type ImportMetadataMode = "ingest" | "variation";
 
 /** Estado partilhado entre detecção e o passo de revisão de metadados. */
 export type ImportMetadataContext = {
-  file: File;
+  /** Obrigatório em `ingest`; em `variation` pode não existir quando o fluxo inicia por deep-link. */
+  file?: File;
   mode: ImportMetadataMode;
   /** Metadados AudD / formulário; podem estar vazios se não houve detecção. */
   song: SchubertRecognizedSong;

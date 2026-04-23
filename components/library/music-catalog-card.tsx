@@ -41,6 +41,10 @@ export function MusicCatalogCard({ item, onDeleted, className }: MusicCatalogCar
   const [confirmMode, setConfirmMode] = useState<"delete-version" | "remove-library">("delete-version");
   const canManageVersion = item.isOwnerVersion === true && Boolean(item.trackKey?.trim());
   const canManageLibraryItem = item.isOwnerVersion !== true && Boolean(item.accessHref || item.isSaved);
+  const createVariationHref =
+    item.isOwnerVersion !== true && item.trackKey?.trim()
+      ? `/biblioteca/importar/arquivo?baseTrackId=${encodeURIComponent(item.trackKey.trim())}`
+      : null;
 
   async function handleDelete() {
     const trackKey = item.trackKey?.trim();
@@ -122,6 +126,15 @@ export function MusicCatalogCard({ item, onDeleted, className }: MusicCatalogCar
                   >
                     <Pencil className="size-3.5 text-cifra-muted" />
                     Editar versão
+                  </Link>
+                ) : null}
+                {createVariationHref ? (
+                  <Link
+                    href={createVariationHref}
+                    className="inline-flex items-center gap-2 rounded-md px-2.5 py-2 text-xs text-cifra-text transition-colors hover:bg-white/6"
+                  >
+                    <Pencil className="size-3.5 text-cifra-muted" />
+                    Criar variação
                   </Link>
                 ) : null}
                 {canManageVersion ? (

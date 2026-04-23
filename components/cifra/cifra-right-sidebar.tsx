@@ -29,6 +29,7 @@ export type CifraRightSidebarProps = {
   onCapoAtChange: (value: number) => void;
   /** Cifra marcada como privada (Pro). */
   isPrivate?: boolean;
+  isProUser?: boolean;
   scrollModeAutomaticRef: RefObject<HTMLInputElement | null>;
   scrollModeSmartRef: RefObject<HTMLInputElement | null>;
   autoScrollBtnRef: RefObject<HTMLButtonElement | null>;
@@ -48,6 +49,7 @@ export function CifraRightSidebar({
   capoAt,
   onCapoAtChange,
   isPrivate,
+  isProUser = false,
   scrollModeAutomaticRef,
   scrollModeSmartRef,
   autoScrollBtnRef,
@@ -189,14 +191,20 @@ export function CifraRightSidebar({
               type="radio"
               name="cifra-scroll-mode"
               value="smart"
+              disabled={!isProUser}
               className="mt-0.5 size-3.5 shrink-0 accent-cifra-teal"
             />
             <span className="min-w-0">
-              <span className="block text-[11px] font-semibold text-cifra-text">Rolagem inteligente</span>
+              <span className="block text-[11px] font-semibold text-cifra-text">
+                Rolagem inteligente{" "}
+                {!isProUser ? (
+                  <span className="rounded border border-cifra-gold/40 bg-cifra-gold/10 px-1 py-0.5 font-mono text-[8px] uppercase tracking-wide text-cifra-gold">
+                    PRO
+                  </span>
+                ) : null}
+              </span>
               <span className="mt-0.5 block text-[10px] leading-snug text-cifra-muted">
-                Centra a vista na célula do acorde em destaque (como na POC com{" "}
-                <code className="font-mono text-[9px] text-cifra-teal/90">pickActiveChordTrackCell</code>
-                ).
+                Centra a vista na célula do acorde em destaque
               </span>
             </span>
           </label>

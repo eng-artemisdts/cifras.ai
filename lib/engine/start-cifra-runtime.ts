@@ -373,16 +373,21 @@ export function startCifraRuntime(opts: StartCifraRuntimeOptions): () => void {
     else lsSet(LS_SCROLL_MODE, "automatic");
   }
 
+  function canUseSmartScrollMode() {
+    return Boolean(scrollModeSmartEl && !scrollModeSmartEl.disabled);
+  }
+
   function initScrollModeRadios() {
     if (!scrollModeAutomaticEl && !scrollModeSmartEl) return;
     const raw = lsGet(LS_SCROLL_MODE);
-    const smart = raw === "smart";
+    const smart = canUseSmartScrollMode() && raw === "smart";
     if (scrollModeSmartEl) scrollModeSmartEl.checked = smart;
     if (scrollModeAutomaticEl) scrollModeAutomaticEl.checked = !smart;
+    if (!smart) lsSet(LS_SCROLL_MODE, "automatic");
   }
 
   function isSmartScrollMode() {
-    return Boolean(scrollModeSmartEl?.checked);
+    return canUseSmartScrollMode() && Boolean(scrollModeSmartEl?.checked);
   }
 
   function initAutoScrollControls() {

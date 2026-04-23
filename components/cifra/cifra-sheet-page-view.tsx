@@ -74,6 +74,7 @@ export function CifraSheetPageView({
             libraryTrackKey={libraryTrackKey}
             payload={payload}
             trackTitle={title}
+            billingPlan={billingPlan}
             variationSidebarAccessory={variationSidebarAccessory}
           />
         </CifraCenterChrome>

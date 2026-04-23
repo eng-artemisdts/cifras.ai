@@ -8,6 +8,8 @@ import type { BillingPlan } from "@/lib/billing/plan-types";
 import type { AuthSidebarFeature } from "@/lib/auth-layout/types";
 import type { LibraryNavItem } from "@/lib/library/types";
 import type { ImportMetadataContext } from "@/lib/library/import-metadata-context";
+import { recognizedSongForVariation } from "@/lib/library/import-metadata-context";
+import type { SchubertTrackJson } from "@/lib/schubert-api";
 import { cn } from "@/lib/utils";
 
 import { ImportAudioUploadPanel, type QueuedFile } from "./import-audio-upload-panel";
@@ -41,6 +43,8 @@ export type ImportAudioLibraryFlowProps = {
   billingPlan?: BillingPlan | null;
   className?: string;
   existingChordDialogLayout?: ExistingChordDialogLayout;
+  initialVariationBaseTrackId?: string | null;
+  initialVariationBaseTrack?: SchubertTrackJson | null;
 };
 
 export function ImportAudioLibraryFlow({
@@ -49,8 +53,22 @@ export function ImportAudioLibraryFlow({
   billingPlan,
   className,
   existingChordDialogLayout,
+  initialVariationBaseTrackId,
+  initialVariationBaseTrack,
 }: ImportAudioLibraryFlowProps) {
-  const [metadataContext, setMetadataContext] = useState<ImportMetadataContext | null>(null);
+  const initialBaseTrackId = initialVariationBaseTrackId?.trim() ?? "";
+  const canStartOnVariation =
+    Boolean(initialBaseTrackId) &&
+    Boolean(initialVariationBaseTrack && typeof initialVariationBaseTrack === "object");
+  const [metadataContext, setMetadataContext] = useState<ImportMetadataContext | null>(() => {
+    if (!canStartOnVariation || !initialVariationBaseTrack) return null;
+    return {
+      mode: "variation",
+      song: recognizedSongForVariation(initialVariationBaseTrack, null),
+      variationBaseTrack: initialVariationBaseTrack,
+      variationBaseTrackId: initialBaseTrackId,
+    };
+  });
   const [restoreQueue, setRestoreQueue] = useState<QueuedFile[] | null>(null);
   const [uploadPanelKey, setUploadPanelKey] = useState(0);
 
@@ -71,10 +89,13 @@ export function ImportAudioLibraryFlow({
 
   const metadataStepKey = useMemo(() => {
     if (!metadataContext) return "";
+    const fileToken = metadataContext.file
+      ? `${metadataContext.file.name}-${metadataContext.file.size}`
+      : "no-file";
     const v =
       metadataContext.variationBaseTrackId?.trim() ??
-      `${metadataContext.file.name}-${metadataContext.file.size}-${metadataContext.mode}`;
-    return `${metadataContext.file.name}-${metadataContext.file.size}-${metadataContext.mode}-${v}`;
+      `${fileToken}-${metadataContext.mode}`;
+    return `${fileToken}-${metadataContext.mode}-${v}`;
   }, [metadataContext]);
 
   const isMetadata = Boolean(metadataContext);

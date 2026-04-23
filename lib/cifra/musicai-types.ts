@@ -46,6 +46,10 @@ export type MusicAiMeta = {
   trackId?: string;
   lyricsVariant?: string;
   audioUrl?: string;
+  youtubeVideoId?: string;
+  youtubeUrl?: string;
+  spotifyTrackId?: string;
+  spotifyUrl?: string;
   duration_seconds?: number;
 };
 

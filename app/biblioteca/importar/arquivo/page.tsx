@@ -4,6 +4,7 @@ import { LibraryImportAudioUploadView } from "@/components/library/library-impor
 import { getAuth0SessionCached } from "@/lib/auth0";
 import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-plan";
 import { libraryNavForPath } from "@/lib/library/mock-data";
+import { fetchSchubertTrackByKey } from "@/lib/schubert-fetch-track";
 
 export const metadata: Metadata = {
   title: "Enviar áudio · Importar música · cifra.ai",
@@ -11,7 +12,14 @@ export const metadata: Metadata = {
     "Carregue um arquivo MP3, WAV ou M4A para detecção de cifra. Máximo 50 MB.",
 };
 
-export default async function BibliotecaImportarArquivoPage() {
+type PageProps = {
+  searchParams?: Promise<{ baseTrackId?: string | string[] }>;
+};
+
+export default async function BibliotecaImportarArquivoPage({ searchParams }: PageProps) {
+  const sp = searchParams ? await searchParams : {};
+  const rawBaseTrackId = Array.isArray(sp.baseTrackId) ? sp.baseTrackId[0] : sp.baseTrackId;
+  const baseTrackId = typeof rawBaseTrackId === "string" ? rawBaseTrackId.trim() : "";
   const session = await getAuth0SessionCached();
   const user = session?.user
     ? {
@@ -22,12 +30,15 @@ export default async function BibliotecaImportarArquivoPage() {
     : null;
 
   const billingPlan = await resolveBillingPlanForSessionUser(session?.user ?? null);
+  const initialVariationBaseTrack = baseTrackId ? await fetchSchubertTrackByKey(baseTrackId).catch(() => null) : null;
 
   return (
     <LibraryImportAudioUploadView
       navItems={libraryNavForPath("/biblioteca/importar/arquivo")}
       user={user}
       billingPlan={billingPlan}
+      initialVariationBaseTrackId={baseTrackId || null}
+      initialVariationBaseTrack={initialVariationBaseTrack}
     />
   );
 }

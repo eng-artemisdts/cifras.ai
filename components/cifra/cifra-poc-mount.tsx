@@ -1,12 +1,22 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import type { BillingPlan } from "@/lib/billing/plan-types";
 import type { MusicAiDemoPayload } from "@/lib/cifra/musicai-types";
 import { buildPreviewChordAnchors } from "@/lib/cifra/preview-chord-anchors";
-import { startCifraRuntime } from "@/lib/engine/start-cifra-runtime";
+import {
+  createInternalAudioAdapter,
+  createSpotifyAdapter,
+  createYoutubeAdapter,
+  extractYoutubeVideoId,
+  type PlaybackProvider,
+} from "@/lib/engine/playback-adapters";
+import { startCifraRuntimeV2 } from "@/lib/engine/start-cifra-runtime-v2";
 import { cn } from "@/lib/utils";
 
 const rightSidebarLayoutClassName =
@@ -53,6 +63,7 @@ export type CifraPocMountProps = {
   trackTitle?: string;
   /** Ex.: selector de versão da cifra (Radix/shadcn) no painel lateral. */
   variationSidebarAccessory?: ReactNode;
+  billingPlan?: BillingPlan | null;
   className?: string;
 };
 
@@ -66,13 +77,28 @@ export function CifraPocMount({
   payload,
   trackTitle,
   variationSidebarAccessory,
+  billingPlan,
   className,
 }: CifraPocMountProps) {
-  const [originalTune, setOriginalTune] = useState(() => payload.original_tune ?? "");
-  const [capoAt, setCapoAt] = useState(() =>
-    Number.isFinite(payload.capo_at) ? Math.min(24, Math.max(0, Math.round(Number(payload.capo_at)))) : 0,
-  );
+  const isProUser = billingPlan === "pro";
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [trackDraft, setTrackDraft] = useState(() => ({
+    trackKey,
+    originalTune: payload.original_tune ?? "",
+    capoAt: Number.isFinite(payload.capo_at) ? Math.min(24, Math.max(0, Math.round(Number(payload.capo_at)))) : 0,
+  }));
   const [rightSidebarMountGen, setRightSidebarMountGen] = useState(0);
+  const [providerNotice, setProviderNotice] = useState<string>("");
+  const [spotifyStatus, setSpotifyStatus] = useState<{
+    loading: boolean;
+    connected: boolean;
+    premium: boolean;
+  }>({
+    loading: false,
+    connected: false,
+    premium: false,
+  });
   const bumpRightSidebarMount = useCallback(() => {
     setRightSidebarMountGen((n) => n + 1);
   }, []);
@@ -105,11 +131,69 @@ export function CifraPocMount({
   const autoScrollDurValRef = useRef<HTMLSpanElement>(null);
   const scrollModeAutomaticRef = useRef<HTMLInputElement>(null);
   const scrollModeSmartRef = useRef<HTMLInputElement>(null);
+  const youtubeHostRef = useRef<HTMLDivElement>(null);
+  const spotifyHostRef = useRef<HTMLDivElement>(null);
+
+  const spotifyTrackId = useMemo(() => payload.meta?.spotifyTrackId?.trim() ?? "", [payload.meta?.spotifyTrackId]);
+  const youtubeVideoId = useMemo(() => {
+    const raw = payload.meta?.youtubeVideoId?.trim() ?? payload.meta?.youtubeUrl?.trim() ?? "";
+    return extractYoutubeVideoId(raw);
+  }, [payload.meta?.youtubeVideoId, payload.meta?.youtubeUrl]);
+
+  const availableProviders = useMemo<PlaybackProvider[]>(() => {
+    const providers: PlaybackProvider[] = ["internal"];
+    if (youtubeVideoId) providers.push("youtube");
+    if (spotifyTrackId) providers.push("spotify");
+    return providers;
+  }, [spotifyTrackId, youtubeVideoId]);
+
+  const defaultProvider = useMemo<PlaybackProvider>(() => {
+    if (availableProviders.includes("spotify")) return "spotify";
+    if (availableProviders.includes("youtube")) return "youtube";
+    return "internal";
+  }, [availableProviders]);
+  const [providerChoice, setProviderChoice] = useState<{ trackKey: string; provider: PlaybackProvider } | null>(
+    null,
+  );
+  const selectedProvider =
+    providerChoice && providerChoice.trackKey === trackKey && availableProviders.includes(providerChoice.provider)
+      ? providerChoice.provider
+      : defaultProvider;
+  const returnToForSpotifyConnect = useMemo(() => {
+    const qs = searchParams?.toString() ?? "";
+    return `${pathname || "/explorar"}${qs ? `?${qs}` : ""}`;
+  }, [pathname, searchParams]);
+
+  useEffect(() => {
+    if (!spotifyTrackId) return;
+    let cancelled = false;
+    setSpotifyStatus((prev) => ({ ...prev, loading: true }));
+    fetch("/api/spotify/status", { credentials: "include" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("spotify_status_failed");
+        return (await res.json()) as { connected?: boolean; premium?: boolean };
+      })
+      .then((json) => {
+        if (cancelled) return;
+        setSpotifyStatus({
+          loading: false,
+          connected: json.connected === true,
+          premium: json.premium === true,
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSpotifyStatus({ loading: false, connected: false, premium: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [spotifyTrackId, trackKey]);
 
   useEffect(() => {
     const scrollRoot = scrollRootRef.current;
     const cifraContainer = cifraRef.current;
-    const audio = audioRef.current;
+    const audioEl = audioRef.current;
     const playBtn = playBtnRef.current;
     const seek = seekRef.current;
     const timeLabel = timeLabelRef.current;
@@ -118,7 +202,7 @@ export function CifraPocMount({
     if (
       !scrollRoot ||
       !cifraContainer ||
-      !audio ||
+      !audioEl ||
       !playBtn ||
       !seek ||
       !timeLabel ||
@@ -128,36 +212,105 @@ export function CifraPocMount({
       return;
     }
 
-    const destroy = startCifraRuntime({
-      payloadInput: payloadForRuntime as unknown as Record<string, unknown>,
-      els: {
-        scrollRoot,
-        cifraContainer,
-        audio,
-        playBtn,
-        seek,
-        timeLabel,
-        currentSectionEl,
-        currentChordEl,
-        autoScrollBtn: autoScrollBtnRef.current,
-        autoScrollLeadEl: autoScrollLeadRef.current,
-        autoScrollLeadValEl: autoScrollLeadValRef.current,
-        autoScrollDurEl: autoScrollDurRef.current,
-        autoScrollDurValEl: autoScrollDurValRef.current,
-        scrollModeAutomaticEl: scrollModeAutomaticRef.current,
-        scrollModeSmartEl: scrollModeSmartRef.current,
-      },
-    });
+    let destroy: (() => void) | null = null;
+    let cancelled = false;
 
-    return destroy;
-  }, [trackKey, payloadForRuntime, rightSidebarMountGen]);
+    async function mountRuntime() {
+      try {
+        if (
+          selectedProvider === "spotify" &&
+          spotifyTrackId &&
+          !spotifyStatus.loading &&
+          (!spotifyStatus.connected || !spotifyStatus.premium)
+        ) {
+          throw new Error("spotify_account_not_ready");
+        }
+        const adapter =
+          selectedProvider === "spotify" && spotifyHostRef.current && spotifyTrackId
+            ? createSpotifyAdapter({ hostEl: spotifyHostRef.current, trackId: spotifyTrackId })
+            : selectedProvider === "youtube" && youtubeHostRef.current && youtubeVideoId
+              ? createYoutubeAdapter({ hostEl: youtubeHostRef.current, videoId: youtubeVideoId })
+              : createInternalAudioAdapter({ audioEl, audioUrl: payload.meta?.audioUrl });
 
-  useEffect(() => {
-    setOriginalTune(payload.original_tune ?? "");
-    setCapoAt(
-      Number.isFinite(payload.capo_at) ? Math.min(24, Math.max(0, Math.round(Number(payload.capo_at)))) : 0,
-    );
-  }, [trackKey, payload.original_tune, payload.capo_at]);
+        if (cancelled) return;
+        setProviderNotice("");
+        destroy = startCifraRuntimeV2({
+          payloadInput: payloadForRuntime as unknown as Record<string, unknown>,
+          els: {
+            scrollRoot,
+            cifraContainer,
+            playback: adapter,
+            playBtn,
+            seek,
+            timeLabel,
+            currentSectionEl,
+            currentChordEl,
+            autoScrollBtn: autoScrollBtnRef.current,
+            autoScrollLeadEl: autoScrollLeadRef.current,
+            autoScrollLeadValEl: autoScrollLeadValRef.current,
+            autoScrollDurEl: autoScrollDurRef.current,
+            autoScrollDurValEl: autoScrollDurValRef.current,
+            scrollModeAutomaticEl: scrollModeAutomaticRef.current,
+            scrollModeSmartEl: scrollModeSmartRef.current,
+          },
+        });
+      } catch {
+        if (cancelled) return;
+        setProviderNotice(
+          selectedProvider === "spotify" && (!spotifyStatus.connected || !spotifyStatus.premium)
+            ? "Conecte uma conta Spotify Premium para reprodução completa."
+            : "Não foi possível carregar este player. Voltámos para o player interno.",
+        );
+        const fallbackAdapter = createInternalAudioAdapter({ audioEl, audioUrl: payload.meta?.audioUrl });
+        destroy = startCifraRuntimeV2({
+          payloadInput: payloadForRuntime as unknown as Record<string, unknown>,
+          els: {
+            scrollRoot,
+            cifraContainer,
+            playback: fallbackAdapter,
+            playBtn,
+            seek,
+            timeLabel,
+            currentSectionEl,
+            currentChordEl,
+            autoScrollBtn: autoScrollBtnRef.current,
+            autoScrollLeadEl: autoScrollLeadRef.current,
+            autoScrollLeadValEl: autoScrollLeadValRef.current,
+            autoScrollDurEl: autoScrollDurRef.current,
+            autoScrollDurValEl: autoScrollDurValRef.current,
+            scrollModeAutomaticEl: scrollModeAutomaticRef.current,
+            scrollModeSmartEl: scrollModeSmartRef.current,
+          },
+        });
+      }
+    }
+
+    void mountRuntime();
+    return () => {
+      cancelled = true;
+      destroy?.();
+    };
+  }, [
+    trackKey,
+    payloadForRuntime,
+    rightSidebarMountGen,
+    selectedProvider,
+    spotifyTrackId,
+    spotifyStatus.loading,
+    spotifyStatus.connected,
+    spotifyStatus.premium,
+    youtubeVideoId,
+    payload.meta?.audioUrl,
+  ]);
+
+  const effectiveOriginalTune =
+    trackDraft.trackKey === trackKey ? trackDraft.originalTune : payload.original_tune ?? "";
+  const effectiveCapoAt =
+    trackDraft.trackKey === trackKey
+      ? trackDraft.capoAt
+      : Number.isFinite(payload.capo_at)
+        ? Math.min(24, Math.max(0, Math.round(Number(payload.capo_at))))
+        : 0;
 
   const titleFromPayload =
     typeof payload.meta?.name === "string" && payload.meta.name.trim()
@@ -172,6 +325,28 @@ export function CifraPocMount({
         className="cifra-transport-panel flex shrink-0 flex-wrap items-center gap-3 rounded-2xl border border-white/8 bg-[#0c0c16] px-4 py-3 sm:gap-4 sm:px-5 sm:py-3.5"
       >
         <audio ref={audioRef} className="hidden" preload="metadata" />
+        <div className="flex shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/5 p-1">
+          {(["spotify", "youtube", "internal"] as PlaybackProvider[]).map((provider) => {
+            const enabled = availableProviders.includes(provider);
+            const active = selectedProvider === provider;
+            const label = provider === "internal" ? "Interno" : provider === "youtube" ? "YouTube" : "Spotify";
+            return (
+              <button
+                key={provider}
+                type="button"
+                disabled={!enabled}
+                onClick={() => setProviderChoice({ trackKey, provider })}
+                className={cn(
+                  "rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] transition",
+                  active ? "bg-cifra-teal text-cifra-bg" : "text-cifra-muted hover:text-cifra-text",
+                  !enabled && "cursor-not-allowed opacity-35",
+                )}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
         <button
           ref={playBtnRef}
           type="button"
@@ -205,6 +380,36 @@ export function CifraPocMount({
           </p>
         </div>
       </div>
+      {providerNotice ? (
+        <p className="rounded-lg border border-cifra-teal/25 bg-cifra-teal/10 px-3 py-2 text-[11px] text-cifra-teal">
+          {providerNotice}
+        </p>
+      ) : null}
+      {selectedProvider === "spotify" && spotifyTrackId && (!spotifyStatus.connected || !spotifyStatus.premium) ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-[#0d0d18] px-3 py-2">
+          <p className="text-[11px] text-cifra-muted">
+            {!spotifyStatus.connected
+              ? "Conecte sua conta Spotify para tocar a faixa completa."
+              : "A conta Spotify conectada precisa ser Premium para reprodução completa."}
+          </p>
+          <Link
+            href={`/api/spotify/connect?returnTo=${encodeURIComponent(returnToForSpotifyConnect)}`}
+            className="rounded-full bg-cifra-teal px-3 py-1.5 text-[11px] font-semibold text-cifra-bg"
+          >
+            {spotifyStatus.loading ? "Verificando..." : "Conectar Spotify"}
+          </Link>
+        </div>
+      ) : null}
+      <div className="rounded-lg border border-white/6 bg-[#0d0d18] p-2">
+        <div
+          ref={spotifyHostRef}
+          className={cn("min-h-[152px] w-full", selectedProvider === "spotify" ? "block" : "hidden")}
+        />
+        <div
+          ref={youtubeHostRef}
+          className={cn("aspect-video w-full", selectedProvider === "youtube" ? "block" : "hidden")}
+        />
+      </div>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-white/6 bg-[#12121f] lg:flex-row lg:items-stretch">
         <div
@@ -218,11 +423,29 @@ export function CifraPocMount({
           libraryTrackKey={libraryTrackKey}
           trackTitle={titleFromPayload}
           variationSlot={variationSidebarAccessory}
-          originalTune={originalTune}
-          onOriginalTuneChange={setOriginalTune}
-          capoAt={capoAt}
-          onCapoAtChange={(n) => setCapoAt(Math.min(24, Math.max(0, Math.round(n))))}
+          originalTune={effectiveOriginalTune}
+          onOriginalTuneChange={(value) =>
+            setTrackDraft((prev) => ({
+              trackKey,
+              capoAt:
+                prev.trackKey === trackKey
+                  ? prev.capoAt
+                  : Number.isFinite(payload.capo_at)
+                    ? Math.min(24, Math.max(0, Math.round(Number(payload.capo_at))))
+                    : 0,
+              originalTune: value,
+            }))
+          }
+          capoAt={effectiveCapoAt}
+          onCapoAtChange={(n) =>
+            setTrackDraft((prev) => ({
+              trackKey,
+              originalTune: prev.trackKey === trackKey ? prev.originalTune : payload.original_tune ?? "",
+              capoAt: Math.min(24, Math.max(0, Math.round(n))),
+            }))
+          }
           isPrivate={payload.is_private === true}
+          isProUser={isProUser}
           scrollModeAutomaticRef={scrollModeAutomaticRef}
           scrollModeSmartRef={scrollModeSmartRef}
           autoScrollBtnRef={autoScrollBtnRef}

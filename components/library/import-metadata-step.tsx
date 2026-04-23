@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useId, useState } from "react";
 
+import { ChordIngestLoadingOverlay } from "@/components/library/chord-ingest-loading-overlay";
 import { createBeethovenVariationFromSchubertTrack } from "@/lib/beethoven-variations";
 import { isPaidPlan, type BillingPlan } from "@/lib/billing/plan-types";
 import { cifraEditHref, resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-routes";
@@ -87,6 +88,7 @@ export function ImportMetadataStep({
   const baseId = useId();
   const song = context.song;
   const isVariation = context.mode === "variation";
+  const isIngest = context.mode === "ingest";
   const paid = isPaidPlan(billingPlan ?? "free");
 
   const [title, setTitle] = useState(song.title?.trim() ?? "");
@@ -238,8 +240,12 @@ export function ImportMetadataStep({
       }
 
       const capoClamped = Math.min(24, Math.max(0, Math.round(Number(capoAt))));
+      const ingestFile = context.file;
+      if (!ingestFile) {
+        throw new Error("Arquivo de áudio em falta para ingestão.");
+      }
 
-      const { track } = await postTrackIngestWithMeta(context.file, mergedSong, {
+      const { track } = await postTrackIngestWithMeta(ingestFile, mergedSong, {
         capo_at: capoClamped,
       });
       const tid =
@@ -297,7 +303,14 @@ export function ImportMetadataStep({
         </div>
 
         {/* fc — cartão principal */}
-        <div className="flex min-h-0 flex-1 flex-col rounded-[14px] border border-cifra-border bg-cifra-surface p-5 shadow-sm md:p-[22px]">
+        <div className="relative flex min-h-0 flex-1 flex-col rounded-[14px] border border-cifra-border bg-cifra-surface p-5 shadow-sm md:p-[22px]">
+          {submitting && isIngest ? (
+            <ChordIngestLoadingOverlay
+              songTitle={title.trim() || "Música sem título"}
+              artistName={artist.trim() || "Artista desconhecido"}
+              className="z-40 rounded-[14px]"
+            />
+          ) : null}
           <div className="flex flex-col gap-4 md:gap-[14px]">
             <SectionMonoLabel>Informações da música</SectionMonoLabel>
 

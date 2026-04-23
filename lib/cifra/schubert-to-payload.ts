@@ -25,11 +25,45 @@ export function schubertLyricsSourceEditorLabel(src: SchubertLyricsSource | unde
 export function schubertTrackToDemoPayload(track: SchubertTrackJson): MusicAiDemoPayload {
   const lyrics = isLyricSegmentArray(track.lyrics) ? track.lyrics : [];
   const source: SchubertLyricsSource = track.lyricsSource === "MATCH" ? "MATCH" : "AI";
+  const spotifyTrackId =
+    typeof track.spotifyTrackId === "string" && track.spotifyTrackId.trim()
+      ? track.spotifyTrackId.trim()
+      : typeof track.spotifyId === "string" && track.spotifyId.trim()
+        ? track.spotifyId.trim()
+        : typeof track.meta?.spotifyTrackId === "string" && track.meta.spotifyTrackId.trim()
+          ? track.meta.spotifyTrackId.trim()
+          : "";
+  const spotifyUrl =
+    typeof track.spotifyUrl === "string" && track.spotifyUrl.trim()
+      ? track.spotifyUrl.trim()
+      : typeof track.meta?.spotifyUrl === "string" && track.meta.spotifyUrl.trim()
+        ? track.meta.spotifyUrl.trim()
+        : spotifyTrackId
+          ? `https://open.spotify.com/track/${spotifyTrackId}`
+          : "";
+  const youtubeVideoId =
+    typeof track.youtubeVideoId === "string" && track.youtubeVideoId.trim()
+      ? track.youtubeVideoId.trim()
+      : typeof track.meta?.youtubeVideoId === "string" && track.meta.youtubeVideoId.trim()
+        ? track.meta.youtubeVideoId.trim()
+        : "";
+  const youtubeUrl =
+    typeof track.youtubeUrl === "string" && track.youtubeUrl.trim()
+      ? track.youtubeUrl.trim()
+      : typeof track.meta?.youtubeUrl === "string" && track.meta.youtubeUrl.trim()
+        ? track.meta.youtubeUrl.trim()
+        : youtubeVideoId
+          ? `https://www.youtube.com/watch?v=${youtubeVideoId}`
+          : "";
   const meta: MusicAiMeta = {
     ...(track.meta && typeof track.meta === "object" ? track.meta : {}),
     trackId: track.trackId ?? track.meta?.trackId,
     name: track.name ?? track.meta?.name,
     lyricsVariant: source === "MATCH" ? "match" : "ai",
+    ...(spotifyTrackId ? { spotifyTrackId } : {}),
+    ...(spotifyUrl ? { spotifyUrl } : {}),
+    ...(youtubeVideoId ? { youtubeVideoId } : {}),
+    ...(youtubeUrl ? { youtubeUrl } : {}),
   };
 
   return {

@@ -7,6 +7,10 @@ type Auth0AppMetadataPatch = {
   subscription_status?: string | null;
 };
 
+type Auth0UserDocument = {
+  app_metadata?: Record<string, unknown>;
+};
+
 /** Leitura direta do `app_metadata` (atualizado pelo webhook Stripe). */
 export type Auth0BillingSnapshot = {
   plan?: BillingPlan;
@@ -61,30 +65,31 @@ async function getManagementToken(): Promise<string> {
   return json.access_token;
 }
 
-/**
- * Atualiza `app_metadata` do utilizador (sincronizado pelo webhook Stripe).
- * Requer aplicação M2M com `update:users` na Management API.
- */
-export async function patchAuth0UserAppMetadata(
-  auth0UserId: string,
-  patch: Auth0AppMetadataPatch,
-): Promise<void> {
-  if (!isMgmtConfigured()) {
-    return;
-  }
+async function getAuth0UserDocument(auth0UserId: string): Promise<Auth0UserDocument> {
   const domain = auth0Domain();
   const token = await getManagementToken();
   const existingRes = await fetch(
     `https://${domain}/api/v2/users/${encodeURIComponent(auth0UserId)}`,
     {
       headers: { authorization: `Bearer ${token}` },
+      cache: "no-store",
     },
   );
   if (!existingRes.ok) {
     const t = await existingRes.text();
     throw new Error(`Auth0 get user falhou (${existingRes.status}): ${t}`);
   }
-  const existing = (await existingRes.json()) as { app_metadata?: Record<string, unknown> };
+  return (await existingRes.json()) as Auth0UserDocument;
+}
+
+async function patchAuth0UserAppMetadataRecord(
+  auth0UserId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  if (!isMgmtConfigured()) return;
+  const domain = auth0Domain();
+  const token = await getManagementToken();
+  const existing = await getAuth0UserDocument(auth0UserId);
   const nextMeta = { ...(existing.app_metadata ?? {}), ...patch };
   const patchRes = await fetch(
     `https://${domain}/api/v2/users/${encodeURIComponent(auth0UserId)}`,
@@ -103,8 +108,38 @@ export async function patchAuth0UserAppMetadata(
   }
 }
 
+/**
+ * Atualiza `app_metadata` do utilizador (sincronizado pelo webhook Stripe).
+ * Requer aplicação M2M com `update:users` na Management API.
+ */
+export async function patchAuth0UserAppMetadata(
+  auth0UserId: string,
+  patch: Auth0AppMetadataPatch,
+): Promise<void> {
+  await patchAuth0UserAppMetadataRecord(auth0UserId, patch);
+}
+
 export function isAuth0ManagementConfigured(): boolean {
   return isMgmtConfigured();
+}
+
+export async function fetchAuth0UserAppMetadata(
+  auth0UserId: string,
+): Promise<Record<string, unknown> | null> {
+  if (!isMgmtConfigured()) return null;
+  try {
+    const user = await getAuth0UserDocument(auth0UserId);
+    return user.app_metadata ?? {};
+  } catch {
+    return null;
+  }
+}
+
+export async function patchAuth0UserAppMetadataGeneric(
+  auth0UserId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  await patchAuth0UserAppMetadataRecord(auth0UserId, patch);
 }
 
 /**
@@ -118,16 +153,8 @@ export async function fetchAuth0UserBillingSnapshot(
   if (!isMgmtConfigured()) return null;
   try {
     const domain = auth0Domain();
-    const token = await getManagementToken();
-    const res = await fetch(
-      `https://${domain}/api/v2/users/${encodeURIComponent(auth0UserId)}`,
-      {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      },
-    );
-    if (!res.ok) return null;
-    const u = (await res.json()) as { app_metadata?: Record<string, unknown> };
+    if (!domain) return null;
+    const u = await getAuth0UserDocument(auth0UserId);
     const meta = u.app_metadata ?? {};
     let plan: BillingPlan | undefined;
     const rawPlan = meta.plan;

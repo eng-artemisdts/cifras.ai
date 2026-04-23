@@ -2,6 +2,7 @@ import type { BillingPlan } from "@/lib/billing/plan-types";
 import type { LibraryNavItem } from "@/lib/library/types";
 
 import type { ExistingChordDialogLayout } from "@/components/library/library-import-dialog-layout";
+import type { SchubertTrackJson } from "@/lib/schubert-api";
 
 import type { LibraryTopNavUser } from "./library-top-nav";
 
@@ -14,6 +15,8 @@ export type LibraryImportAudioUploadViewProps = {
   className?: string;
   /** Variante do modal de confirmação da música; ver frame `vK9pq` no Pencil. */
   existingChordDialogLayout?: ExistingChordDialogLayout;
+  initialVariationBaseTrackId?: string | null;
+  initialVariationBaseTrack?: SchubertTrackJson | null;
 };
 
 /**
@@ -26,6 +29,8 @@ export function LibraryImportAudioUploadView({
   billingPlan,
   className,
   existingChordDialogLayout,
+  initialVariationBaseTrackId,
+  initialVariationBaseTrack,
 }: LibraryImportAudioUploadViewProps) {
   return (
     <ImportAudioLibraryFlow
@@ -34,6 +39,8 @@ export function LibraryImportAudioUploadView({
       billingPlan={billingPlan}
       className={className}
       existingChordDialogLayout={existingChordDialogLayout}
+      initialVariationBaseTrackId={initialVariationBaseTrackId}
+      initialVariationBaseTrack={initialVariationBaseTrack}
     />
   );
 }

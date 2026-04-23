@@ -2,7 +2,7 @@ import { fetchBeethovenFromServer } from "@/lib/beethoven-server-api";
 import { cifraHref, resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-routes";
 import type { RecentAccessItem, RecommendationTile } from "@/lib/library/types";
 import type { SchubertTrackJson } from "@/lib/schubert-api";
-import { fetchSchubertTrackByKey } from "@/lib/schubert-fetch-track";
+import { fetchSchubertTrackByKeyPublic } from "@/lib/schubert-fetch-track";
 
 function cifraHrefFromSchubertTrack(
   schubert: SchubertTrackJson | null,
@@ -74,7 +74,7 @@ async function enrichRecommendationTilesFromSchubert(
       const track = tracks[index];
       const key = typeof track?.trackId === "string" ? track.trackId.trim() : "";
       if (!key) return tile;
-      const schubert = await fetchSchubertTrackByKey(key).catch(() => null);
+      const schubert = await fetchSchubertTrackByKeyPublic(key).catch(() => null);
       const url =
         schubert && typeof schubert.coverImageUrl === "string" && schubert.coverImageUrl.trim()
           ? schubert.coverImageUrl.trim()
@@ -140,7 +140,7 @@ async function enrichRecentAccessFromSchubert(
       const track = tracks[index];
       const key = schubertLookupKeyForRecentAccess(track);
       if (!key) return item;
-      const schubert = await fetchSchubertTrackByKey(key).catch(() => null);
+      const schubert = await fetchSchubertTrackByKeyPublic(key).catch(() => null);
       const url =
         schubert && typeof schubert.coverImageUrl === "string" && schubert.coverImageUrl.trim()
           ? schubert.coverImageUrl.trim()

@@ -33,6 +33,19 @@ type BeethovenLibraryCatalogResponse = {
 const coverTones: MusicCatalogCard["coverTone"][] = ["navy", "navyTeal", "surface"];
 const avatarTones: ArtistSuggestion["avatarTone"][] = ["navy", "tealGradient"];
 
+function normalizeCatalogKeyPart(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function preferredTrack(a: CatalogTrack, b: CatalogTrack): CatalogTrack {
+  const score = (track: CatalogTrack): number => {
+    if (track.isOwnerVersion === true) return 3;
+    if (track.isSaved === true) return 2;
+    return 1;
+  };
+  return score(b) > score(a) ? b : a;
+}
+
 export async function fetchLibraryCatalog(params: {
   userId?: string;
   tab: CatalogTabId;
@@ -50,8 +63,21 @@ export async function fetchLibraryCatalog(params: {
     throw new Error(`beethoven_library_catalog_failed:${res.status}`);
   }
   const data = (await res.json()) as BeethovenLibraryCatalogResponse;
-  const tracksRaw = Array.isArray(data.tracks) ? data.tracks : [];
+  const tracksRawBase = Array.isArray(data.tracks) ? data.tracks : [];
   const artistsRaw = Array.isArray(data.artists) ? data.artists : [];
+  const tracksRaw =
+    params.tab === "musicas"
+      ? (() => {
+          const dedup = new Map<string, CatalogTrack>();
+          for (const track of tracksRawBase) {
+            const key = `${normalizeCatalogKeyPart(track.name)}::${normalizeCatalogKeyPart(track.artistName)}`;
+            if (!key || key === "::") continue;
+            const prev = dedup.get(key);
+            dedup.set(key, prev ? preferredTrack(prev, track) : track);
+          }
+          return [...dedup.values()];
+        })()
+      : tracksRawBase;
 
   const tracks = tracksRaw.map((track, index): MusicCatalogCard => {
     const isPrivate = track.isPrivate === true;
@@ -99,6 +125,6 @@ export async function fetchLibraryCatalog(params: {
   return {
     tracks,
     artists,
-    total: Number.isFinite(data.total) ? Number(data.total) : params.tab === "artistas" ? artists.length : tracks.length,
+    total: params.tab === "musicas" ? tracks.length : Number.isFinite(data.total) ? Number(data.total) : artists.length,
   };
 }

@@ -61,12 +61,47 @@ async function fetchSchubertTrackRead(pathRelative: string): Promise<SchubertTra
   return (await res.json()) as SchubertTrackJson;
 }
 
+async function fetchSchubertTrackReadPublic(pathRelative: string): Promise<SchubertTrackJson | null> {
+  const path = pathRelative.replace(/^\/+/, "");
+  const directUrl = `${schubertApiBase()}/${path}`;
+  const res = await fetch(directUrl, {
+    next: { revalidate: 600 },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`schubert_track_fetch_failed:${res.status}`);
+  }
+  return (await res.json()) as SchubertTrackJson;
+}
+
+const schubertPublicByKeyCache = new Map<string, Promise<SchubertTrackJson | null>>();
+
 /** Obtém o JSON da faixa por `trackId` ou `spotifyId` (legado / redirecionamentos). */
 export async function fetchSchubertTrackByKey(trackKey: string): Promise<SchubertTrackJson | null> {
   const key = trackKey.trim();
   if (!key) return null;
   const urlPath = `tracks/by-key/${encodeURIComponent(key)}`;
   return fetchSchubertTrackRead(urlPath);
+}
+
+/**
+ * Leitura pública da faixa por chave, com cache em memória do processo para evitar chamadas
+ * repetidas durante o mesmo ciclo de renderização.
+ */
+export function fetchSchubertTrackByKeyPublic(trackKey: string): Promise<SchubertTrackJson | null> {
+  const key = trackKey.trim();
+  if (!key) return Promise.resolve(null);
+
+  const cached = schubertPublicByKeyCache.get(key);
+  if (cached) return cached;
+
+  const urlPath = `tracks/by-key/${encodeURIComponent(key)}`;
+  const pending = fetchSchubertTrackReadPublic(urlPath).catch((error) => {
+    schubertPublicByKeyCache.delete(key);
+    throw error;
+  });
+  schubertPublicByKeyCache.set(key, pending);
+  return pending;
 }
 
 /** Obtém a faixa por slugs do artista e da música (`GET /tracks/by-slug/...`). */
