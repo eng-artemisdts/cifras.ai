@@ -9,9 +9,12 @@ export const metadata: Metadata = {
 
 type PageProps = Readonly<{
   params: Promise<{ artistSlug: string; songSlug: string }>;
+  searchParams: Promise<{ v?: string }>;
 }>;
 
-export default async function CifrasSongPage({ params }: PageProps) {
+export default async function CifrasSongPage({ params, searchParams }: PageProps) {
   const { artistSlug, songSlug } = await params;
-  return <CifraTrackView artistSlug={artistSlug} songSlug={songSlug} />;
+  const sp = await searchParams;
+  const variationTrackId = typeof sp.v === "string" && sp.v.trim() ? sp.v.trim() : null;
+  return <CifraTrackView artistSlug={artistSlug} songSlug={songSlug} variationTrackId={variationTrackId} />;
 }

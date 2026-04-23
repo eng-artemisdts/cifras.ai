@@ -59,6 +59,7 @@ export function LibraryImportStreamingView({
       <AuthMarketingSidebar
         contextLabel="cifra · lab"
         contextUppercase={false}
+        showBrandCaption={false}
         titleLine1="Importar"
         titleLine2="música"
         titleLine3="do streaming"

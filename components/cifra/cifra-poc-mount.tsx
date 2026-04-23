@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { MusicAiDemoPayload } from "@/lib/cifra/musicai-types";
@@ -48,6 +49,8 @@ export type CifraPocMountProps = {
   payload: MusicAiDemoPayload;
   /** Título da faixa para copy no painel direito (frame `2Zui4`). */
   trackTitle?: string;
+  /** Ex.: selector de versão da cifra (Radix/shadcn) no painel lateral. */
+  variationSidebarAccessory?: ReactNode;
   className?: string;
 };
 
@@ -55,7 +58,13 @@ export type CifraPocMountProps = {
  * Monta a cifra com o mesmo motor DOM da POC (`mountCifraView`), destaque em reprodução e auto-rolagem.
  * Painel direito completo (Pencil `sideR`) com controlos de rolagem automática.
  */
-export function CifraPocMount({ trackKey, payload, trackTitle, className }: CifraPocMountProps) {
+export function CifraPocMount({
+  trackKey,
+  payload,
+  trackTitle,
+  variationSidebarAccessory,
+  className,
+}: CifraPocMountProps) {
   const [originalTune, setOriginalTune] = useState(() => payload.original_tune ?? "");
   const [capoAt, setCapoAt] = useState(() =>
     Number.isFinite(payload.capo_at) ? Math.min(24, Math.max(0, Math.round(Number(payload.capo_at)))) : 0,
@@ -204,6 +213,7 @@ export function CifraPocMount({ trackKey, payload, trackTitle, className }: Cifr
 
         <CifraRightSidebarClient
           trackTitle={titleFromPayload}
+          variationSlot={variationSidebarAccessory}
           originalTune={originalTune}
           onOriginalTuneChange={setOriginalTune}
           capoAt={capoAt}

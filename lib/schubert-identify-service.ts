@@ -79,6 +79,7 @@ export async function identifyTrackFromMp3(file: File): Promise<SchubertTrackIde
 export async function postTrackIngestWithMeta(
   file: File,
   song: SchubertRecognizedSong,
+  options?: { variationOfTrackId?: string | null; variationLabel?: string | null },
 ): Promise<SchubertTrackIngestResponse> {
   if (!isMp3(file)) {
     throw new SchubertIdentifyError(
@@ -97,7 +98,20 @@ export async function postTrackIngestWithMeta(
 
   const form = new FormData();
   form.append("file", file, file.name);
-  form.append("meta", JSON.stringify(song));
+  form.append(
+    "meta",
+    JSON.stringify({
+      ...song,
+      ...(options?.variationOfTrackId?.trim()
+        ? {
+            variationOfTrackId: options.variationOfTrackId.trim(),
+            ...(options.variationLabel?.trim()
+              ? { variationLabel: options.variationLabel.trim().slice(0, 120) }
+              : {}),
+          }
+        : {}),
+    }),
+  );
 
   const res = await fetchSchubertFromBrowser("tracks/ingest", {
     method: "POST",

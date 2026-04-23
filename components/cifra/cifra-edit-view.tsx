@@ -9,10 +9,17 @@ import {
   schubertLyricsSourceEditorLabel,
   schubertTrackToDemoPayload,
 } from "@/lib/cifra/schubert-to-payload";
+import {
+  type BeethovenVariationJson,
+} from "@/lib/beethoven-variations";
+import {
+  fetchBeethovenVariationByTrackIdFromServer,
+  fetchBeethovenVariationsByBaseTrackIdFromServer,
+} from "@/lib/beethoven-variations.server";
 import { getAuth0SessionCached } from "@/lib/auth0";
 import { appLoginHref } from "@/lib/auth0-routes";
 import { isAuth0Configured } from "@/lib/auth0-env";
-import type { SchubertLyricsSource } from "@/lib/schubert-api";
+import type { SchubertLyricsSource, SchubertTrackJson } from "@/lib/schubert-api";
 import { publicMp3UrlForTrackId } from "@/lib/media/public-mp3-for-track";
 import {
   fetchSchubertTrackByKey,
@@ -42,8 +49,34 @@ function resolveLyricsSource(track: NonNullable<Awaited<ReturnType<typeof fetchS
   return "AI";
 }
 
+/**
+ * Variações persistidas na Beethoven trazem `baseArtistSlug` / `baseSongSlug`; documentos Schubert não.
+ * Também cobre o caso em que a variação foi carregada só por id (fetch direto) e não entrou na lista agregada.
+ */
+function isBeethovenVariationResolved(
+  resolved: unknown,
+  variationTrackKey: string,
+  beethovenVariations: BeethovenVariationJson[],
+): boolean {
+  const key = variationTrackKey.trim();
+  if (!key) return false;
+  if (
+    beethovenVariations.some((v) => typeof v.trackId === "string" && v.trackId.trim() === key)
+  ) {
+    return true;
+  }
+  if (!resolved || typeof resolved !== "object") return false;
+  const r = resolved as BeethovenVariationJson;
+  return Boolean(
+    typeof r.baseArtistSlug === "string" &&
+      r.baseArtistSlug.trim() &&
+      typeof r.baseSongSlug === "string" &&
+      r.baseSongSlug.trim(),
+  );
+}
+
 export type CifraEditViewProps =
-  | { artistSlug: string; songSlug: string }
+  | { artistSlug: string; songSlug: string; variationTrackId?: string | null }
   | { trackKey: string };
 
 export async function CifraEditView(props: CifraEditViewProps) {
@@ -90,12 +123,49 @@ export async function CifraEditView(props: CifraEditViewProps) {
     notFound();
   }
 
-  const pairFromDoc = resolveCifraSlugPairFromTrack(track);
-  const lyricsSource = resolveLyricsSource(track);
-  const mp3Id =
-    typeof track.trackId === "string" && track.trackId.trim() ? track.trackId.trim() : "";
+  const sessionSub = session.user.sub?.trim() || "";
+  const requestedVariationId =
+    "artistSlug" in props && typeof props.variationTrackId === "string"
+      ? props.variationTrackId.trim()
+      : "";
+  const baseTrackId = typeof track.trackId === "string" ? track.trackId.trim() : "";
+  const schubertVariations = Array.isArray(track.variations) ? track.variations : [];
+  const beethovenVariations: BeethovenVariationJson[] =
+    baseTrackId && "artistSlug" in props
+      ? await fetchBeethovenVariationsByBaseTrackIdFromServer(baseTrackId).catch(() => [])
+      : [];
+  const variations = [...schubertVariations, ...beethovenVariations];
+  const ownerVariation = variations.find((v) => {
+    const owner =
+      typeof v.userId === "string"
+        ? v.userId.trim()
+        : "owner" in v && typeof v.owner === "string"
+          ? v.owner.trim()
+          : "";
+    return owner && owner === sessionSub;
+  });
+  let selectedVariation =
+    (requestedVariationId
+      ? variations.find((v) => typeof v.trackId === "string" && v.trackId.trim() === requestedVariationId)
+      : null) ?? ownerVariation ?? null;
+  if ("artistSlug" in props && requestedVariationId && !selectedVariation) {
+    const directSchubert = await fetchSchubertTrackByKey(requestedVariationId).catch(() => null);
+    selectedVariation =
+      directSchubert ??
+      ((await fetchBeethovenVariationByTrackIdFromServer(requestedVariationId).catch(() => null)) as
+        | (typeof selectedVariation)
+        | null);
+  }
+  const resolvedTrack = selectedVariation ?? track;
 
-  const fromSchubert = schubertTrackToDemoPayload(track);
+  const pairFromDoc = resolveCifraSlugPairFromTrack(track);
+  const lyricsSource = resolveLyricsSource(resolvedTrack);
+  const mp3Id =
+    typeof resolvedTrack.trackId === "string" && resolvedTrack.trackId.trim()
+      ? resolvedTrack.trackId.trim()
+      : "";
+
+  const fromSchubert = schubertTrackToDemoPayload(resolvedTrack as SchubertTrackJson);
   const initialPayload = normalizeDemoPayload({
     ...fromSchubert,
     meta: {
@@ -105,18 +175,31 @@ export async function CifraEditView(props: CifraEditViewProps) {
   });
 
   const title =
-    typeof track.name === "string" && track.name.trim()
-      ? track.name.trim()
-      : (track.meta?.name ?? "Faixa sem título");
-  const artist = resolveArtistNameFromSchubertTrack(track);
+    typeof resolvedTrack.name === "string" && resolvedTrack.name.trim()
+      ? resolvedTrack.name.trim()
+      : (resolvedTrack.meta?.name ?? "Faixa sem título");
+  const artist = resolveArtistNameFromSchubertTrack(resolvedTrack as SchubertTrackJson);
   const subtitle = `${artist} · edição de cifra · ${schubertLyricsSourceEditorLabel(lyricsSource)}`;
-  const durationLabel = formatDurationClock(resolveDurationSeconds(track));
+  const durationLabel = formatDurationClock(resolveDurationSeconds(resolvedTrack));
 
   const slugForShell =
     pairFromDoc ??
     ("artistSlug" in props
       ? { artistSlug: props.artistSlug.trim(), songSlug: props.songSlug.trim() }
       : null);
+
+  const variationMeta =
+    typeof resolvedTrack.variationOfTrackId === "string" && resolvedTrack.variationOfTrackId.trim() && mp3Id
+      ? {
+          variationTrackKey: mp3Id,
+          initialLabel:
+            typeof resolvedTrack.variationLabel === "string" ? resolvedTrack.variationLabel.trim() : "",
+          initialIsPrivate: resolvedTrack.is_private ?? true,
+          source: isBeethovenVariationResolved(resolvedTrack, mp3Id, beethovenVariations)
+            ? ("beethoven" as const)
+            : ("schubert" as const),
+        }
+      : undefined;
 
   if (slugForShell) {
     return (
@@ -130,12 +213,17 @@ export async function CifraEditView(props: CifraEditViewProps) {
         title={title}
         subtitle={subtitle}
         durationLabel={durationLabel}
+        variationMeta={variationMeta}
       />
     );
   }
 
   const fallbackKey =
-    "trackKey" in props ? props.trackKey.trim() : typeof track.trackId === "string" ? track.trackId.trim() : "";
+    "trackKey" in props
+      ? props.trackKey.trim()
+      : typeof resolvedTrack.trackId === "string"
+        ? resolvedTrack.trackId.trim()
+        : "";
   if (!fallbackKey) {
     notFound();
   }
@@ -150,6 +238,7 @@ export async function CifraEditView(props: CifraEditViewProps) {
       title={title}
       subtitle={subtitle}
       durationLabel={durationLabel}
+      variationMeta={variationMeta}
     />
   );
 }

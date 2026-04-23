@@ -1,4 +1,4 @@
-import { fetchBeethovenFromServer } from "@/lib/beethoven-api";
+import { fetchBeethovenFromServer } from "@/lib/beethoven-server-api";
 import { cifraHref, resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-routes";
 import type { RecentAccessItem, RecommendationTile } from "@/lib/library/types";
 import type { SchubertTrackJson } from "@/lib/schubert-api";
@@ -19,6 +19,7 @@ type BeethovenTrack = {
   _id?: string;
   id?: string;
   trackId?: string;
+  variationOfTrackId?: string;
   name?: string;
   artistId?: { name?: string } | string | null;
   updatedAt?: string;
@@ -50,6 +51,20 @@ function mapTrackToRecommendation(track: BeethovenTrack, index: number): Recomme
   };
 }
 
+function dedupeByHrefOrTitle<T extends { href?: string | null; title: string; subtitle: string }>(
+  items: T[],
+): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const item of items) {
+    const key = item.href?.trim() || `${item.title}::${item.subtitle}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+  return out;
+}
+
 async function enrichRecommendationTilesFromSchubert(
   tracks: BeethovenTrack[],
   tiles: RecommendationTile[],
@@ -74,6 +89,48 @@ async function enrichRecommendationTilesFromSchubert(
   );
 }
 
+/**
+ * Id público Schubert da “obra” (faixa base): mesma chave para base e variações.
+ */
+function schubertLookupKeyForRecentAccess(track: BeethovenTrack | undefined): string {
+  if (!track) return "";
+  const fromVariation =
+    typeof track.variationOfTrackId === "string" ? track.variationOfTrackId.trim() : "";
+  if (fromVariation) return fromVariation;
+  return typeof track.trackId === "string" ? track.trackId.trim() : "";
+}
+
+function canonicalWorkKey(track: BeethovenTrack): string {
+  const base = schubertLookupKeyForRecentAccess(track);
+  if (base) return `work:${base}`;
+  return `id:${String(track._id ?? track.id ?? "")}`;
+}
+
+function parseAccessTimeMs(track: BeethovenTrack): number {
+  const iso = track.lastAccessAt ?? track.updatedAt;
+  if (!iso) return 0;
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? 0 : t;
+}
+
+/** Uma linha por música (base): junta acessos à faixa base e às variações da mesma obra. */
+function dedupeRecentTracksByCanonicalWork(tracks: BeethovenTrack[]): BeethovenTrack[] {
+  const best = new Map<string, BeethovenTrack>();
+  const bestTime = new Map<string, number>();
+  for (const track of tracks) {
+    const key = canonicalWorkKey(track);
+    const t = parseAccessTimeMs(track);
+    const prev = bestTime.get(key);
+    if (prev === undefined || t >= prev) {
+      bestTime.set(key, t);
+      best.set(key, track);
+    }
+  }
+  return [...best.entries()]
+    .sort((a, b) => (bestTime.get(b[0]) ?? 0) - (bestTime.get(a[0]) ?? 0))
+    .map(([, tr]) => tr);
+}
+
 async function enrichRecentAccessFromSchubert(
   tracks: BeethovenTrack[],
   items: RecentAccessItem[],
@@ -81,7 +138,7 @@ async function enrichRecentAccessFromSchubert(
   return Promise.all(
     items.map(async (item, index) => {
       const track = tracks[index];
-      const key = typeof track?.trackId === "string" ? track.trackId.trim() : "";
+      const key = schubertLookupKeyForRecentAccess(track);
       if (!key) return item;
       const schubert = await fetchSchubertTrackByKey(key).catch(() => null);
       const url =
@@ -158,13 +215,15 @@ export async function fetchLibraryHomeFeed(
   const recommendationTiles = recommended.map((track, index) =>
     mapTrackToRecommendation(track, index),
   );
-  const recommendationItems = await enrichRecommendationTilesFromSchubert(
+  const recommendationItemsRaw = await enrichRecommendationTilesFromSchubert(
     recommended,
     recommendationTiles,
   );
+  const recommendationItems = dedupeByHrefOrTitle(recommendationItemsRaw);
 
-  const recentRows = recent.map((track, index) => mapTrackToRecentAccess(track, index));
-  const recentAccessItems = await enrichRecentAccessFromSchubert(recent, recentRows);
+  const recentDeduped = dedupeRecentTracksByCanonicalWork(recent);
+  const recentRows = recentDeduped.map((track, index) => mapTrackToRecentAccess(track, index));
+  const recentAccessItems = await enrichRecentAccessFromSchubert(recentDeduped, recentRows);
 
   return {
     recommendationItems,

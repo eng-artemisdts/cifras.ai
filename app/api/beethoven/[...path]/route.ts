@@ -18,6 +18,16 @@ function isPublicLibraryCatalogSearch(method: string, segments: string[]): boole
   return segments.length === 2 && segments[0] === "library-home" && segments[1] === "search";
 }
 
+function isPublicVariationRead(method: string, segments: string[]): boolean {
+  if (method !== "GET" && method !== "HEAD") return false;
+  return (
+    segments.length === 4 &&
+    segments[0] === "tracks" &&
+    segments[1] === "variations" &&
+    (segments[2] === "by-base-key" || segments[2] === "by-track-id")
+  );
+}
+
 /**
  * Catálogo: busca de faixas para visitantes (sem sessão).
  * O Nest em `library-home/search` não exige JWT; o BFF antes bloqueava tudo com `withApiAuthRequired`.
@@ -142,7 +152,7 @@ async function runAuthed(req: Request, ctx: RouteCtx) {
 async function dispatchGet(req: Request, ctx: RouteCtx) {
   const resolved = await ctx.params;
   const segments = resolved?.path ?? [];
-  if (isPublicLibraryCatalogSearch(req.method, segments)) {
+  if (isPublicLibraryCatalogSearch(req.method, segments) || isPublicVariationRead(req.method, segments)) {
     return proxyPublicLibraryCatalogSearch(req, ctx);
   }
   return runAuthed(req, ctx);
@@ -151,7 +161,7 @@ async function dispatchGet(req: Request, ctx: RouteCtx) {
 async function dispatchHead(req: Request, ctx: RouteCtx) {
   const resolved = await ctx.params;
   const segments = resolved?.path ?? [];
-  if (isPublicLibraryCatalogSearch(req.method, segments)) {
+  if (isPublicLibraryCatalogSearch(req.method, segments) || isPublicVariationRead(req.method, segments)) {
     return proxyPublicLibraryCatalogSearch(req, ctx);
   }
   return runAuthed(req, ctx);

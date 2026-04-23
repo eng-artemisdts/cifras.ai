@@ -15,6 +15,10 @@ import type { DragEvent } from "react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import type { SchubertRecognizedSong } from "@/lib/schubert-identify-types";
+import {
+  createBeethovenVariationFromSchubertTrack,
+  fetchMyBeethovenVariationByBaseTrackIdFromBrowser,
+} from "@/lib/beethoven-variations";
 
 import { ChordFoundAccessDialog } from "@/components/library/chord-found-access-dialog";
 import type { ExistingChordDialogLayout } from "@/components/library/library-import-dialog-layout";
@@ -93,6 +97,10 @@ export function ImportAudioUploadPanel({
   const [confirmIaLoading, setConfirmIaLoading] = useState(false);
   const [matchedChordPreview, setMatchedChordPreview] = useState<ChordFoundPreview | null>(null);
   const [matchedChordOpen, setMatchedChordOpen] = useState(false);
+  const [canCreateVariation, setCanCreateVariation] = useState(false);
+  const [variationBaseTrackId, setVariationBaseTrackId] = useState<string | null>(null);
+  const [variationBaseTrack, setVariationBaseTrack] = useState<SchubertTrackJson | null>(null);
+  const [createVariationLoading, setCreateVariationLoading] = useState(false);
   const [manualMetaOpen, setManualMetaOpen] = useState(false);
   const [manualTitle, setManualTitle] = useState("");
   const [manualArtist, setManualArtist] = useState("");
@@ -119,6 +127,10 @@ export function ImportAudioUploadPanel({
     setPendingIngest(null);
     setMatchedChordPreview(null);
     setMatchedChordOpen(false);
+    setCanCreateVariation(false);
+    setVariationBaseTrackId(null);
+    setVariationBaseTrack(null);
+    setCreateVariationLoading(false);
     setManualMetaOpen(false);
     setManualTitle("");
     setManualArtist("");
@@ -139,6 +151,10 @@ export function ImportAudioUploadPanel({
     setPendingIngest(null);
     setMatchedChordPreview(null);
     setMatchedChordOpen(false);
+    setCanCreateVariation(false);
+    setVariationBaseTrackId(null);
+    setVariationBaseTrack(null);
+    setCreateVariationLoading(false);
     setManualMetaOpen(false);
     setManualTitle("");
     setManualArtist("");
@@ -154,6 +170,10 @@ export function ImportAudioUploadPanel({
     setPendingIngest(null);
     setMatchedChordPreview(null);
     setMatchedChordOpen(false);
+    setCanCreateVariation(false);
+    setVariationBaseTrackId(null);
+    setVariationBaseTrack(null);
+    setCreateVariationLoading(false);
     setManualMetaOpen(false);
     setManualTitle("");
     setManualArtist("");
@@ -214,8 +234,45 @@ export function ImportAudioUploadPanel({
     if (!open) {
       setMatchedChordPreview(null);
       setRecognizedSong(null);
+      setCanCreateVariation(false);
+      setVariationBaseTrackId(null);
+      setVariationBaseTrack(null);
+      setCreateVariationLoading(false);
     }
   }, []);
+
+  const handleCreateVariation = useCallback(async () => {
+    const baseTrackId = variationBaseTrackId?.trim();
+    const baseTrack = variationBaseTrack;
+    if (!baseTrackId || !baseTrack) return;
+    setCreateVariationLoading(true);
+    setIdentifyMessage(null);
+    try {
+      const pair = resolveCifraSlugPairFromTrack(baseTrack);
+      if (!pair) {
+        throw new Error("Não foi possível resolver os slugs da faixa base.");
+      }
+      const track = await createBeethovenVariationFromSchubertTrack({
+        baseTrackId,
+        baseArtistSlug: pair.artistSlug,
+        baseSongSlug: pair.songSlug,
+        sourceTrack: baseTrack,
+      });
+      const tid =
+        track && typeof track === "object" && "trackId" in track && typeof track.trackId === "string"
+          ? track.trackId.trim()
+          : "";
+      clearQueue();
+      setMatchedChordOpen(false);
+      if (tid) {
+        router.push(`${cifraEditHref(pair.artistSlug, pair.songSlug)}?v=${encodeURIComponent(tid)}`);
+      }
+    } catch (e) {
+      setIdentifyMessage(`Não foi possível criar a variação: ${e instanceof Error ? e.message : "erro inesperado"}.`);
+    } finally {
+      setCreateVariationLoading(false);
+    }
+  }, [variationBaseTrackId, variationBaseTrack, clearQueue, router]);
 
   const handleManualContinue = useCallback(() => {
     const t = manualTitle.trim();
@@ -243,6 +300,10 @@ export function ImportAudioUploadPanel({
     setPendingIngest(null);
     setMatchedChordPreview(null);
     setMatchedChordOpen(false);
+    setCanCreateVariation(false);
+    setVariationBaseTrackId(null);
+    setVariationBaseTrack(null);
+    setCreateVariationLoading(false);
     setManualMetaOpen(false);
     setManualTitle("");
     setManualArtist("");
@@ -252,7 +313,30 @@ export function ImportAudioUploadPanel({
       const res = await identifyTrackFromMp3(item.file);
       if (res.recognized && res.song && res.track) {
         setRecognizedSong(res.song);
-        setMatchedChordPreview(mapSchubertMatchToChordPreview(res.track, res.song));
+        const preview = mapSchubertMatchToChordPreview(res.track, res.song);
+        const matchedTrack = res.track as { trackId?: unknown };
+        const resolvedTrackId =
+          typeof matchedTrack.trackId === "string" && matchedTrack.trackId.trim()
+            ? matchedTrack.trackId.trim()
+            : null;
+        const ownedVariation =
+          resolvedTrackId && !res.canEditTrack
+            ? await fetchMyBeethovenVariationByBaseTrackIdFromBrowser(resolvedTrackId).catch(() => null)
+            : null;
+        const ownedVariationTrackId =
+          ownedVariation && typeof ownedVariation.trackId === "string" ? ownedVariation.trackId.trim() : "";
+        setMatchedChordPreview({
+          ...preview,
+          editHref:
+            res.canEditTrack
+              ? preview.editHref
+              : ownedVariationTrackId && preview.editHref
+                ? `${preview.editHref}?v=${encodeURIComponent(ownedVariationTrackId)}`
+                : null,
+        });
+        setVariationBaseTrackId(resolvedTrackId);
+        setVariationBaseTrack(res.track as unknown as SchubertTrackJson);
+        setCanCreateVariation(Boolean(res.canCreateVariation && resolvedTrackId));
         setMatchedChordOpen(true);
         return;
       }
@@ -299,6 +383,9 @@ export function ImportAudioUploadPanel({
           chordHref={matchedChordPreview.chordHref}
           editHref={matchedChordPreview.editHref}
           onAccessClick={clearQueue}
+          canCreateVariation={canCreateVariation}
+          creatingVariation={createVariationLoading}
+          onCreateVariation={canCreateVariation ? handleCreateVariation : undefined}
           layout={existingChordDialogLayout}
         />
       ) : null}

@@ -11,6 +11,7 @@ import type { MusicAiDemoPayload } from "@/lib/cifra/musicai-types";
 import { cifraHref } from "@/lib/cifra/cifra-routes";
 import { normalizeDemoPayload } from "@/lib/cifra/normalize-payload";
 import { bibliotecaCifraSheetMarketingSidebar } from "@/lib/library/cifra-sheet-marketing";
+import { patchBeethovenVariationFromBrowser } from "@/lib/beethoven-variations";
 import { fetchSchubertFromBrowser, type SchubertLyricsSource } from "@/lib/schubert-api";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +33,15 @@ export type CifraEditShellProps = {
   title: string;
   subtitle: string;
   durationLabel?: string;
+  /** Metadados só para documentos com `variationOfTrackId` (nome + visibilidade). */
+  variationMeta?: {
+    /** `trackId` público da versão (query `v=` na volta à cifra). */
+    variationTrackKey: string;
+    initialLabel: string;
+    /** `true` = privada (apenas o criador vê na lista/público não). */
+    initialIsPrivate: boolean;
+    source: "schubert" | "beethoven";
+  };
 } & (
   | { patchMode: "slug"; artistSlug: string; songSlug: string }
   | { patchMode: "key"; trackKey: string }
@@ -46,6 +56,7 @@ export function CifraEditShell(props: CifraEditShellProps) {
     subtitle,
     durationLabel,
     patchMode,
+    variationMeta,
   } = props;
   const router = useRouter();
   const editorRef = useRef<CifraTranscriptionEditorHandle>(null);
@@ -53,6 +64,8 @@ export function CifraEditShell(props: CifraEditShellProps) {
   const [previewPayload, setPreviewPayload] = useState(() => normalizeDemoPayload(initialPayload));
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [variationLabel, setVariationLabel] = useState(variationMeta?.initialLabel ?? "");
+  const [isPrivate, setIsPrivate] = useState(variationMeta?.initialIsPrivate ?? true);
 
   const syncPreviewFromEditor = useCallback(() => {
     const p = editorRef.current?.getPayload();
@@ -75,7 +88,9 @@ export function CifraEditShell(props: CifraEditShellProps) {
 
   const cifraPublicHref =
     patchMode === "slug"
-      ? cifraHref(props.artistSlug, props.songSlug)
+      ? variationMeta
+        ? `${cifraHref(props.artistSlug, props.songSlug)}?v=${encodeURIComponent(variationMeta.variationTrackKey)}`
+        : cifraHref(props.artistSlug, props.songSlug)
       : `/cifras?trackId=${encodeURIComponent(props.trackKey)}`;
 
   const previewTrackKey =
@@ -89,27 +104,37 @@ export function CifraEditShell(props: CifraEditShellProps) {
     setSaving(true);
     setMsg(null);
     try {
-      const res = await fetchSchubertFromBrowser(schubertPatchPath, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chords: p.chords,
-          lyrics: p.lyrics,
-          lyricsSource,
-          sections: p.sections,
-        }),
-      });
-      if (!res.ok) {
-        const raw = await res.text();
-        let detail = raw;
-        try {
-          const j = JSON.parse(raw) as { message?: unknown };
-          if (Array.isArray(j.message)) detail = j.message.join("; ");
-          else if (typeof j.message === "string") detail = j.message;
-        } catch {
-          /* ignore */
+      const body: Record<string, unknown> = {
+        chords: p.chords,
+        lyrics: p.lyrics,
+        lyricsSource,
+        sections: p.sections,
+      };
+      if (variationMeta) {
+        body.variationLabel = variationLabel.trim();
+        body.is_private = isPrivate;
+      }
+
+      if (variationMeta?.source === "beethoven") {
+        await patchBeethovenVariationFromBrowser(variationMeta.variationTrackKey, body);
+      } else {
+        const res = await fetchSchubertFromBrowser(schubertPatchPath, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const raw = await res.text();
+          let detail = raw;
+          try {
+            const j = JSON.parse(raw) as { message?: unknown };
+            if (Array.isArray(j.message)) detail = j.message.join("; ");
+            else if (typeof j.message === "string") detail = j.message;
+          } catch {
+            /* ignore */
+          }
+          throw new Error(detail || `HTTP ${res.status}`);
         }
-        throw new Error(detail || `HTTP ${res.status}`);
       }
       router.push(cifraPublicHref);
     } catch (e) {
@@ -138,6 +163,41 @@ export function CifraEditShell(props: CifraEditShellProps) {
           className="min-h-0 flex-1 border-l-0"
         >
           <div className="mb-4 flex min-h-0 flex-1 flex-col gap-3">
+            {variationMeta ? (
+              <div className="rounded-xl border border-cifra-border bg-cifra-surface-2/40 px-3 py-3 sm:px-4">
+                <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-cifra-teal">
+                  Versão personalizada
+                </p>
+                <div className="mt-2 space-y-2">
+                  <div className="space-y-1">
+                    <label htmlFor="cifra-variation-label" className="block text-[10px] text-cifra-muted">
+                      Nome desta versão
+                    </label>
+                    <input
+                      id="cifra-variation-label"
+                      type="text"
+                      value={variationLabel}
+                      onChange={(e) => setVariationLabel(e.target.value.slice(0, 120))}
+                      autoComplete="off"
+                      placeholder="Ex.: Acústico · capo 2"
+                      className="w-full rounded-lg border border-cifra-border bg-[#0c0c16] px-3 py-2 text-[12px] text-cifra-text outline-none ring-cifra-teal/25 focus:border-cifra-teal/40 focus:ring-1"
+                    />
+                  </div>
+                  <label className="flex cursor-pointer items-start gap-2.5 text-[11px] leading-snug text-cifra-muted">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 size-3.5 shrink-0 rounded border-cifra-border bg-[#0c0c16] text-cifra-teal focus:ring-cifra-teal/40"
+                      checked={!isPrivate}
+                      onChange={(e) => setIsPrivate(!e.target.checked)}
+                    />
+                    <span>
+                      <span className="font-medium text-cifra-text">Tornar pública</span> — outros utilizadores
+                      podem abrir esta versão no selector da mesma música (continua a ser a sua cópia para editar).
+                    </span>
+                  </label>
+                </div>
+              </div>
+            ) : null}
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap gap-2">
                 <button

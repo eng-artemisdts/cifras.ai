@@ -8,7 +8,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import { useLayoutEffect } from "react";
 
 import { cn } from "@/lib/utils";
@@ -18,6 +18,8 @@ export type CifraRightSidebarProps = {
   /** Chamado após o painel (e refs) estarem no DOM — necessário quando o pai usa `dynamic(..., { ssr: false })`. */
   onMount?: () => void;
   trackTitle?: string;
+  /** Conteúdo opcional sob o estado «Sincronizado» (ex.: selector de versão da cifra). */
+  variationSlot?: ReactNode;
   /** Afinação original (texto livre), editável. */
   originalTune: string;
   onOriginalTuneChange: (value: string) => void;
@@ -41,6 +43,7 @@ export type CifraRightSidebarProps = {
 export function CifraRightSidebar({
   className,
   trackTitle,
+  variationSlot,
   originalTune,
   onOriginalTuneChange,
   capoAt,
@@ -89,6 +92,10 @@ export function CifraRightSidebar({
           ) : null}
         </div>
       </div>
+
+      {variationSlot ? (
+        <div className="min-w-0 rounded-lg border border-white/6 bg-[#0c0c14] px-3 py-3">{variationSlot}</div>
+      ) : null}
 
       <div className="space-y-3 rounded-lg border border-white/6 bg-[#0c0c14] px-3 py-3">
         <label className="flex flex-col gap-1" htmlFor="cifra-original-tune">

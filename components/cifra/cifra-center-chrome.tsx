@@ -10,6 +10,8 @@ export type CifraCenterChromeProps = {
   title: string;
   subtitle: string;
   durationLabel?: string;
+  /** Secção opcional sob o subtítulo (ex.: selector de variação). */
+  headerAccessory?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 };
@@ -22,6 +24,7 @@ export function CifraCenterChrome({
   title,
   subtitle,
   durationLabel,
+  headerAccessory,
   children,
   className,
 }: CifraCenterChromeProps) {
@@ -52,6 +55,9 @@ export function CifraCenterChrome({
                 <span className="ml-1 font-mono text-[10px] text-cifra-muted"> · {durationLabel}</span>
               ) : null}
             </p>
+            {headerAccessory ? (
+              <div className="mt-2.5 min-w-0 max-w-full">{headerAccessory}</div>
+            ) : null}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2 pt-0.5 sm:gap-2.5 sm:pt-0">

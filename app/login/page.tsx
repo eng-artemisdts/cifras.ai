@@ -25,7 +25,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const returnTo = sanitizeAuthReturnTo(rawReturn);
 
   if (session?.user) {
-    redirect(returnTo ?? "/biblioteca");
+    redirect(returnTo ?? "/explorar");
   }
 
   return (

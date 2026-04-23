@@ -25,6 +25,7 @@ export type SchubertTrackJson = {
   meta?: MusicAiMeta;
   chordTimeOffsetSec?: number;
   userId?: string;
+  owner?: string;
   original_tune?: string;
   capo_at?: number;
   is_private?: boolean;
@@ -38,6 +39,11 @@ export type SchubertTrackJson = {
     | string;
   /** Capa persistida na ingestão (AudD `cover_image_url`). */
   coverImageUrl?: string;
+  variationKey?: string;
+  variationOfTrackId?: string;
+  /** Nome da versão no selector (variações). */
+  variationLabel?: string;
+  variations?: SchubertTrackJson[];
 };
 
 /** Caminho relativo ao proxy Schubert (ex.: `tracks/identify`). */

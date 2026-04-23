@@ -22,6 +22,8 @@ export type AuthMarketingSidebarProps = {
   introText?: string;
   features?: AuthSidebarFeature[];
   brandName?: string;
+  /** Exibe o texto da marca abaixo do logo (ex.: «cifra.ai»). */
+  showBrandCaption?: boolean;
   footerNote?: string;
   className?: string;
 };
@@ -35,6 +37,7 @@ export function AuthMarketingSidebar({
   introText,
   features = defaultAuthSidebarFeatures,
   brandName = "cifra.ai",
+  showBrandCaption = true,
   footerNote = "© 2026 Artemis Digital Tech",
   className,
 }: AuthMarketingSidebarProps) {
@@ -159,7 +162,9 @@ export function AuthMarketingSidebar({
         </div>
         {!collapsed && (
           <>
-            <p className="font-serif text-[15px] text-cifra-teal">{brandName}</p>
+            {showBrandCaption ? (
+              <p className="font-serif text-[15px] text-cifra-teal">{brandName}</p>
+            ) : null}
             <p className="font-mono text-[9px] text-[#6a6a88]">{footerNote}</p>
           </>
         )}

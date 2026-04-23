@@ -19,6 +19,8 @@ export type SchubertTrackIdentifyResponse = {
   song: SchubertRecognizedSong | null;
   /** Presente quando `recognized` e existe `Track` na base Mongo. */
   track: Record<string, unknown> | null;
+  canCreateVariation?: boolean;
+  canEditTrack?: boolean;
 };
 
 /** Resposta de `POST /tracks/ingest` (áudio + `meta` JSON). */

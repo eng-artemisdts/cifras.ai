@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 
 export default async function CadastroPage() {
   const session = await getAuth0Session();
-  if (session?.user) redirect("/biblioteca");
+  if (session?.user) redirect("/explorar");
 
   return (
     <AuthSplitShell

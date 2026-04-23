@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { AuthMarketingSidebarProps } from "@/components/layout/auth-marketing-sidebar";
 import { AuthMarketingSidebar } from "@/components/layout/auth-marketing-sidebar";
 import {
@@ -19,6 +21,8 @@ export type CifraSheetPageViewProps = {
   subtitle: string;
   durationLabel?: string;
   payload: MusicAiDemoPayload;
+  /** Selector de variação no painel direito (Painel da faixa). */
+  variationSidebarAccessory?: ReactNode;
   /**
    * Conteúdo da `AuthMarketingSidebar` (mesmo padrão que `/login` e importação por áudio).
    * Omitir usa o copy da biblioteca; mesclar parcialmente com `{ ...bibliotecaCifraSheetMarketingSidebar, titleLine1: "..." }`.
@@ -27,7 +31,7 @@ export type CifraSheetPageViewProps = {
 };
 
 /**
- * Layout: sidebar de marketing (AuthMarketingSidebar) · coluna central (header + cifra com painel `2Zui4` no `CifraPocMount`).
+ * Layout: sidebar de marketing · coluna central (header + cifra + painel direito `CifraPocMount`).
  */
 export function CifraSheetPageView({
   user,
@@ -36,6 +40,7 @@ export function CifraSheetPageView({
   subtitle,
   durationLabel,
   payload,
+  variationSidebarAccessory,
   marketingSidebar,
 }: CifraSheetPageViewProps) {
   const sidebarProps: AuthMarketingSidebarProps = {
@@ -58,7 +63,12 @@ export function CifraSheetPageView({
           durationLabel={durationLabel}
           className="min-h-0 flex-1 border-l-0"
         >
-          <CifraPocMount trackKey={trackKey} payload={payload} trackTitle={title} />
+          <CifraPocMount
+            trackKey={trackKey}
+            payload={payload}
+            trackTitle={title}
+            variationSidebarAccessory={variationSidebarAccessory}
+          />
         </CifraCenterChrome>
       </div>
     </div>
