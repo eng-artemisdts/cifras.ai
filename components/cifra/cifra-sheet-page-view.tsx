@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import type { AuthMarketingSidebarProps } from "@/components/layout/auth-marketing-sidebar";
 import { AuthMarketingSidebar } from "@/components/layout/auth-marketing-sidebar";
+import type { BillingPlan } from "@/lib/billing/plan-types";
 import {
   bibliotecaCifraSheetMarketingSidebar,
 } from "@/lib/library/cifra-sheet-marketing";
@@ -16,7 +17,9 @@ import type { LibraryTopNavUser } from "@/components/library/library-top-nav";
 
 export type CifraSheetPageViewProps = {
   user?: LibraryTopNavUser | null;
+  billingPlan?: BillingPlan | null;
   trackKey: string;
+  libraryTrackKey?: string;
   title: string;
   subtitle: string;
   durationLabel?: string;
@@ -35,7 +38,9 @@ export type CifraSheetPageViewProps = {
  */
 export function CifraSheetPageView({
   user,
+  billingPlan,
   trackKey,
+  libraryTrackKey,
   title,
   subtitle,
   durationLabel,
@@ -58,6 +63,7 @@ export function CifraSheetPageView({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-h-dvh lg:border-l lg:border-white/7">
         <CifraCenterChrome
           user={user}
+          billingPlan={billingPlan}
           title={title}
           subtitle={subtitle}
           durationLabel={durationLabel}
@@ -65,6 +71,7 @@ export function CifraSheetPageView({
         >
           <CifraPocMount
             trackKey={trackKey}
+            libraryTrackKey={libraryTrackKey}
             payload={payload}
             trackTitle={title}
             variationSidebarAccessory={variationSidebarAccessory}

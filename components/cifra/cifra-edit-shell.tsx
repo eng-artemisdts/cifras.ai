@@ -8,6 +8,7 @@ import { useCallback, useRef, useState } from "react";
 import { AuthMarketingSidebar } from "@/components/layout/auth-marketing-sidebar";
 import type { LibraryTopNavUser } from "@/components/library/library-top-nav";
 import type { MusicAiDemoPayload } from "@/lib/cifra/musicai-types";
+import type { BillingPlan } from "@/lib/billing/plan-types";
 import { cifraHref } from "@/lib/cifra/cifra-routes";
 import { normalizeDemoPayload } from "@/lib/cifra/normalize-payload";
 import { bibliotecaCifraSheetMarketingSidebar } from "@/lib/library/cifra-sheet-marketing";
@@ -28,6 +29,7 @@ const editMarketing = {
 
 export type CifraEditShellProps = {
   user: LibraryTopNavUser;
+  billingPlan?: BillingPlan | null;
   lyricsSource: SchubertLyricsSource;
   initialPayload: MusicAiDemoPayload;
   title: string;
@@ -38,8 +40,6 @@ export type CifraEditShellProps = {
     /** `trackId` público da versão (query `v=` na volta à cifra). */
     variationTrackKey: string;
     initialLabel: string;
-    /** `true` = privada (apenas o criador vê na lista/público não). */
-    initialIsPrivate: boolean;
     source: "schubert" | "beethoven";
   };
 } & (
@@ -50,6 +50,7 @@ export type CifraEditShellProps = {
 export function CifraEditShell(props: CifraEditShellProps) {
   const {
     user,
+    billingPlan,
     lyricsSource,
     initialPayload,
     title,
@@ -65,7 +66,6 @@ export function CifraEditShell(props: CifraEditShellProps) {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [variationLabel, setVariationLabel] = useState(variationMeta?.initialLabel ?? "");
-  const [isPrivate, setIsPrivate] = useState(variationMeta?.initialIsPrivate ?? true);
 
   const syncPreviewFromEditor = useCallback(() => {
     const p = editorRef.current?.getPayload();
@@ -112,7 +112,6 @@ export function CifraEditShell(props: CifraEditShellProps) {
       };
       if (variationMeta) {
         body.variationLabel = variationLabel.trim();
-        body.is_private = isPrivate;
       }
 
       if (variationMeta?.source === "beethoven") {
@@ -157,6 +156,7 @@ export function CifraEditShell(props: CifraEditShellProps) {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-h-dvh lg:border-l lg:border-white/7">
         <CifraCenterChrome
           user={user}
+          billingPlan={billingPlan}
           title={title}
           subtitle={subtitle}
           durationLabel={durationLabel}
@@ -183,18 +183,6 @@ export function CifraEditShell(props: CifraEditShellProps) {
                       className="w-full rounded-lg border border-cifra-border bg-[#0c0c16] px-3 py-2 text-[12px] text-cifra-text outline-none ring-cifra-teal/25 focus:border-cifra-teal/40 focus:ring-1"
                     />
                   </div>
-                  <label className="flex cursor-pointer items-start gap-2.5 text-[11px] leading-snug text-cifra-muted">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 size-3.5 shrink-0 rounded border-cifra-border bg-[#0c0c16] text-cifra-teal focus:ring-cifra-teal/40"
-                      checked={!isPrivate}
-                      onChange={(e) => setIsPrivate(!e.target.checked)}
-                    />
-                    <span>
-                      <span className="font-medium text-cifra-text">Tornar pública</span> — outros utilizadores
-                      podem abrir esta versão no selector da mesma música (continua a ser a sua cópia para editar).
-                    </span>
-                  </label>
                 </div>
               </div>
             ) : null}

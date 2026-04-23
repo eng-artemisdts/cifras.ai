@@ -17,6 +17,7 @@ import {
   fetchBeethovenVariationsByBaseTrackIdFromServer,
 } from "@/lib/beethoven-variations.server";
 import { getAuth0SessionCached } from "@/lib/auth0";
+import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-plan";
 import { publicMp3UrlForTrackId } from "@/lib/media/public-mp3-for-track";
 import type { SchubertTrackJson } from "@/lib/schubert-api";
 import {
@@ -69,6 +70,7 @@ export type CifraTrackViewProps =
  */
 export async function CifraTrackView(props: CifraTrackViewProps) {
   const session = await getAuth0SessionCached();
+  const billingPlan = await resolveBillingPlanForSessionUser(session?.user ?? null);
   const user = session?.user
     ? {
         name: session.user.name ?? null,
@@ -217,7 +219,9 @@ export async function CifraTrackView(props: CifraTrackViewProps) {
       ) : null}
       <CifraSheetPageView
         user={user}
+        billingPlan={billingPlan}
         trackKey={reactKey}
+        libraryTrackKey={mp3Id || undefined}
         title={title}
         subtitle={subtitle}
         durationLabel={durationLabel}

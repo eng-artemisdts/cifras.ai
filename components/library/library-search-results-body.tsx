@@ -16,7 +16,15 @@ import { LibrarySearchTrackRow } from "./library-search-track-row";
 
 const PAGE_SIZE = 12;
 
-export function LibrarySearchResultsBody() {
+export type LibrarySearchResultsBodyProps = {
+  routeBasePath?: string;
+  backHref?: string;
+};
+
+export function LibrarySearchResultsBody({
+  routeBasePath = "/explorar/busca",
+  backHref = "/explorar",
+}: LibrarySearchResultsBodyProps) {
   const searchParams = useSearchParams();
   const search = searchParams.get("search")?.trim() ?? "";
   const pageRaw = searchParams.get("page");
@@ -64,7 +72,7 @@ export function LibrarySearchResultsBody() {
     const q = new URLSearchParams();
     q.set("search", search);
     if (p > 1) q.set("page", String(p));
-    return `/explorar/busca?${q.toString()}`;
+    return `${routeBasePath}?${q.toString()}`;
   }
 
   const prevHref = page > 1 ? buildPageHref(page - 1) : null;
@@ -77,14 +85,14 @@ export function LibrarySearchResultsBody() {
         <p className="text-sm text-cifra-muted">
           Indique pelo menos 2 caracteres na URL, por exemplo{" "}
           <Link
-            href="/explorar/busca?search=música"
+            href={`${routeBasePath}?search=música`}
             className="text-cifra-teal underline-offset-2 hover:underline"
           >
-            /explorar/busca?search=…
+            {routeBasePath}?search=…
           </Link>
           , ou volte a{" "}
-          <Link href="/explorar" className="text-cifra-teal underline-offset-2 hover:underline">
-            Explorar
+          <Link href={backHref} className="text-cifra-teal underline-offset-2 hover:underline">
+            Biblioteca
           </Link>{" "}
           para pesquisar.
         </p>

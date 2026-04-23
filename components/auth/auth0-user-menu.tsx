@@ -93,8 +93,8 @@ export function Auth0UserMenu({ user: serverUser, className }: Auth0UserMenuProp
                 ) : null}
               </div>
               <Menu.Group className="py-1">
-                <Menu.LinkItem href="/" closeOnClick className={linkItemClass}>
-                  Início
+                <Menu.LinkItem href="/explorar" closeOnClick className={linkItemClass}>
+                  Explorar
                 </Menu.LinkItem>
                 <Menu.LinkItem href="/biblioteca" closeOnClick className={linkItemClass}>
                   Biblioteca

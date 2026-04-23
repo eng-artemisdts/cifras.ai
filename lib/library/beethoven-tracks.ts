@@ -250,3 +250,23 @@ export async function registerLibraryTrackAccess(params: {
     throw new Error(`beethoven_library_access_failed:${res.status}:${errorBody}`);
   }
 }
+
+export async function saveTrackInLibrary(params: {
+  userId: string;
+  trackKey: string;
+}): Promise<void> {
+  const userId = params.userId.trim();
+  const trackKey = params.trackKey.trim();
+  if (!userId || !trackKey) return;
+
+  const res = await fetchBeethovenFromServer("library-home/saved/by-track-key", {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, trackKey }),
+  });
+  if (!res.ok) {
+    const errorBody = (await res.text()).slice(0, 500);
+    throw new Error(`beethoven_library_save_failed:${res.status}:${errorBody}`);
+  }
+}

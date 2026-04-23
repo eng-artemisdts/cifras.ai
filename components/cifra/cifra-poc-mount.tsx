@@ -46,6 +46,8 @@ const CifraRightSidebarClient = dynamic(
 export type CifraPocMountProps = {
   /** Chave estável (ex.: `trackId`) para remontar o runtime quando a faixa mudar. */
   trackKey: string;
+  /** Chave pública para "Salvar na minha biblioteca". */
+  libraryTrackKey?: string;
   payload: MusicAiDemoPayload;
   /** Título da faixa para copy no painel direito (frame `2Zui4`). */
   trackTitle?: string;
@@ -60,6 +62,7 @@ export type CifraPocMountProps = {
  */
 export function CifraPocMount({
   trackKey,
+  libraryTrackKey,
   payload,
   trackTitle,
   variationSidebarAccessory,
@@ -212,6 +215,7 @@ export function CifraPocMount({
         </div>
 
         <CifraRightSidebarClient
+          libraryTrackKey={libraryTrackKey}
           trackTitle={titleFromPayload}
           variationSlot={variationSidebarAccessory}
           originalTune={originalTune}

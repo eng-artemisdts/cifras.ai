@@ -3,10 +3,12 @@ import Link from "next/link";
 
 import { Auth0UserMenu } from "@/components/auth/auth0-user-menu";
 import type { LibraryTopNavUser } from "@/components/library/library-top-nav";
+import type { BillingPlan } from "@/lib/billing/plan-types";
 import { cn } from "@/lib/utils";
 
 export type CifraCenterChromeProps = {
   user?: LibraryTopNavUser | null;
+  billingPlan?: BillingPlan | null;
   title: string;
   subtitle: string;
   durationLabel?: string;
@@ -21,6 +23,7 @@ export type CifraCenterChromeProps = {
  */
 export function CifraCenterChrome({
   user,
+  billingPlan,
   title,
   subtitle,
   durationLabel,
@@ -28,6 +31,15 @@ export function CifraCenterChrome({
   children,
   className,
 }: CifraCenterChromeProps) {
+  const planLabel = billingPlan === "pro" ? "PRO" : billingPlan === "starter" ? "STARTER" : "FREE";
+  const planClassName =
+    billingPlan === "pro"
+      ? "border-cifra-gold/55 bg-cifra-gold/12 text-cifra-gold"
+      : billingPlan === "starter"
+        ? "border-cifra-teal/45 bg-cifra-teal/12 text-cifra-teal"
+        : "border-[#F0B42944] text-cifra-gold";
+  const planStyle = billingPlan === "free" || !billingPlan ? { backgroundColor: "#F0B42918" } : undefined;
+
   return (
     <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col", className)}>
       <header className="flex w-full shrink-0 items-start justify-between gap-3 border-b border-white/7 px-4 py-3 sm:items-center sm:gap-4 sm:px-6 sm:py-3.5 md:px-8">
@@ -62,10 +74,13 @@ export function CifraCenterChrome({
         </div>
         <div className="flex shrink-0 items-center gap-2 pt-0.5 sm:gap-2.5 sm:pt-0">
           <span
-            className="shrink-0 rounded-full border border-[#F0B42944] px-2.5 py-0.5 font-mono text-[8px] font-semibold uppercase tracking-[0.12em] text-cifra-gold sm:px-3 sm:py-1 sm:text-[9px]"
-            style={{ backgroundColor: "#F0B42918" }}
+            className={cn(
+              "shrink-0 rounded-full border px-2.5 py-0.5 font-mono text-[8px] font-semibold uppercase tracking-[0.12em] sm:px-3 sm:py-1 sm:text-[9px]",
+              planClassName,
+            )}
+            style={planStyle}
           >
-            Free
+            {planLabel}
           </span>
           {user ? (
             <Auth0UserMenu user={user} />

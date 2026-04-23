@@ -44,6 +44,12 @@ export type MusicCatalogCard = {
   tagLabel: string;
   tagVariant: "teal" | "amber";
   coverTone: "navy" | "navyTeal" | "surface";
+  coverImageUrl?: string | null;
+  isOwnerVersion?: boolean;
+  isSaved?: boolean;
+  accessHref?: string | null;
+  editHref?: string | null;
+  trackKey?: string | null;
 };
 
 /** Linha “Artistas sugeridos”. */
@@ -53,4 +59,5 @@ export type ArtistSuggestion = {
   description: string;
   followState: "idle" | "following";
   avatarTone: "navy" | "tealGradient";
+  avatarImageUrl?: string | null;
 };

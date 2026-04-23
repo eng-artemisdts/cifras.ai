@@ -19,6 +19,7 @@ import {
 import { getAuth0SessionCached } from "@/lib/auth0";
 import { appLoginHref } from "@/lib/auth0-routes";
 import { isAuth0Configured } from "@/lib/auth0-env";
+import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-plan";
 import type { SchubertLyricsSource, SchubertTrackJson } from "@/lib/schubert-api";
 import { publicMp3UrlForTrackId } from "@/lib/media/public-mp3-for-track";
 import {
@@ -99,6 +100,7 @@ export async function CifraEditView(props: CifraEditViewProps) {
     email: session.user.email ?? null,
     picture: session.user.picture ?? null,
   };
+  const billingPlan = await resolveBillingPlanForSessionUser(session.user);
 
   let track: Awaited<ReturnType<typeof fetchSchubertTrackBySlug>>;
   try {
@@ -194,7 +196,6 @@ export async function CifraEditView(props: CifraEditViewProps) {
           variationTrackKey: mp3Id,
           initialLabel:
             typeof resolvedTrack.variationLabel === "string" ? resolvedTrack.variationLabel.trim() : "",
-          initialIsPrivate: resolvedTrack.is_private ?? true,
           source: isBeethovenVariationResolved(resolvedTrack, mp3Id, beethovenVariations)
             ? ("beethoven" as const)
             : ("schubert" as const),
@@ -205,6 +206,7 @@ export async function CifraEditView(props: CifraEditViewProps) {
     return (
       <CifraEditShell
         user={user}
+        billingPlan={billingPlan}
         patchMode="slug"
         artistSlug={slugForShell.artistSlug}
         songSlug={slugForShell.songSlug}
@@ -231,6 +233,7 @@ export async function CifraEditView(props: CifraEditViewProps) {
   return (
     <CifraEditShell
       user={user}
+      billingPlan={billingPlan}
       patchMode="key"
       trackKey={fallbackKey}
       lyricsSource={lyricsSource}

@@ -105,6 +105,7 @@ export function ImportAudioLibraryFlow({
             context={metadataContext}
             onBack={handleBackFromMetadata}
             onDoneNavigation={handleDoneNavigation}
+            billingPlan={billingPlan}
             className="min-h-0 min-w-0 w-full flex-1 overflow-auto px-5 py-1 md:px-10 md:pb-3 md:pt-1"
           />
         ) : (

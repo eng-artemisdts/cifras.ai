@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 
 import { LottieLoadingMark } from "@/components/cifra/cifra-route-loading";
 import { Popover, PopoverContent } from "@/components/ui/popover";
@@ -17,11 +18,13 @@ import { LibrarySearchTrackRow as LibrarySearchTrackRowUi } from "./library-sear
 
 export type LibraryExploreSearchProps = {
   placeholder?: string;
+  resultsBasePath?: string;
   className?: string;
 };
 
 export function LibraryExploreSearch({
   placeholder = "Buscar faixas, artistas, álbuns…",
+  resultsBasePath = "/explorar/busca",
   className,
 }: LibraryExploreSearchProps) {
   const router = useRouter();
@@ -81,8 +84,8 @@ export function LibraryExploreSearch({
   const popoverOpen = eligible && !userDismissed;
   const resultsHref =
     trimmed.length >= 2
-      ? `/explorar/busca?search=${encodeURIComponent(trimmed)}`
-      : "/explorar/busca";
+      ? `${resultsBasePath}?search=${encodeURIComponent(trimmed)}`
+      : resultsBasePath;
 
   function goToFullResults() {
     if (trimmed.length < 2) return;
@@ -159,7 +162,11 @@ export function LibraryExploreSearch({
               <p className="py-5 text-center text-xs text-red-300/90">{fetchError}</p>
             ) : items.length === 0 ? (
               <p className="py-6 text-center text-xs text-cifra-muted">
-                Nenhuma faixa encontrada para «{debounced.trim()}». Tente outros termos ou use Buscar.
+                Nenhuma faixa encontrada para «{debounced.trim()}». Tente outros termos, use Buscar ou{" "}
+                <Link href="/biblioteca/importar" className="font-semibold text-cifra-teal hover:text-cifra-teal-hover">
+                  importe a música
+                </Link>
+                .
               </p>
             ) : (
               <ul className="flex flex-col gap-2" role="list">

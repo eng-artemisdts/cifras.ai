@@ -2,6 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { AudioWaveform, Menu, Music2, Sparkles, X } from "lucide-react";
 
+import type { Auth0UserMenuUser } from "@/components/auth/auth0-user-menu";
+import { Auth0UserMenu } from "@/components/auth/auth0-user-menu";
 import LightRays from "@/components/LightRays";
 import { SubscribePlanButton } from "@/components/billing/subscribe-plan-button";
 import { ArtemisFooterBrand } from "@/components/layout/artemis-footer-brand";
@@ -12,14 +14,19 @@ const navLinks = [
   { href: "#faq", label: "FAQ" },
 ];
 
-export function LandingPage() {
+export type LandingPageProps = {
+  /** Quando definido, o header mostra avatar + menu em vez de Entrar / demo / cadastro. */
+  user?: Auth0UserMenuUser | null;
+};
+
+export function LandingPage({ user = null }: LandingPageProps) {
   return (
     <div className="flex min-h-dvh flex-col bg-cifra-bg text-cifra-text">
       <header className="sticky top-0 z-50 border-b border-cifra-border bg-cifra-bg/80 backdrop-blur-md motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-2 motion-safe:duration-500 motion-safe:fill-mode-both">
-        <div className="mx-auto flex h-[72px] max-w-[1200px] items-center justify-between px-6 lg:px-8">
+        <div className="mx-auto grid h-[72px] w-full max-w-[1200px] grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 lg:px-8">
           <Link
             href="/"
-            className="flex items-center transition-opacity duration-200 hover:opacity-90 motion-reduce:transition-none"
+            className="flex w-fit items-center gap-2.5 transition-opacity duration-200 hover:opacity-90 motion-reduce:transition-none"
           >
             <Image
               src="/logo.svg"
@@ -31,9 +38,12 @@ export function LandingPage() {
               priority
               unoptimized
             />
+            <span className="inline-flex h-5 self-center items-center rounded-md border border-cifra-teal/45 bg-cifra-teal/12 px-2 font-mono text-[9px] font-bold leading-none tracking-widest text-cifra-teal">
+              BETA
+            </span>
           </Link>
 
-          <nav className="hidden items-center gap-10 md:flex">
+          <nav className="hidden items-center justify-center gap-10 md:flex">
             {navLinks.map((l) => (
               <a
                 key={l.href}
@@ -45,65 +55,92 @@ export function LandingPage() {
             ))}
           </nav>
 
-          <div className="hidden items-center gap-2 sm:flex sm:gap-3">
-            <Link
-              href="/login"
-              className="rounded-lg border border-cifra-border px-4 py-2 text-sm font-medium text-cifra-text transition-all duration-200 ease-out hover:border-cifra-teal/40 hover:text-cifra-teal active:scale-[0.98] motion-reduce:active:scale-100"
-            >
-              Entrar
-            </Link>
-            <a
-              href="#demo"
-              className="rounded-lg border border-cifra-border px-4 py-2 text-sm font-medium text-cifra-text transition-all duration-200 ease-out hover:border-cifra-teal/40 hover:text-cifra-teal active:scale-[0.98] motion-reduce:active:scale-100"
-            >
-              Ver demo
-            </a>
-            <Link
-              href="/cadastro"
-              className="rounded-lg bg-cifra-teal px-4 py-2 text-sm font-semibold text-cifra-bg shadow-sm shadow-cifra-teal/20 transition-all duration-200 ease-out hover:bg-cifra-teal-hover hover:shadow-md hover:shadow-cifra-teal/25 active:scale-[0.98] motion-reduce:hover:shadow-sm motion-reduce:active:scale-100"
-            >
-              Começar agora
-            </Link>
-          </div>
-
-          <details className="group relative sm:hidden">
-            <summary className="list-none [&::-webkit-details-marker]:hidden">
-              <span className="flex size-10 cursor-pointer items-center justify-center rounded-lg border border-cifra-border text-cifra-text transition-colors duration-200 hover:border-cifra-teal/35 hover:bg-cifra-surface">
-                <Menu className="size-5 group-open:hidden" />
-                <X className="hidden size-5 group-open:block" />
-              </span>
-            </summary>
-            <div className="absolute right-0 top-12 z-50 w-56 rounded-xl border border-cifra-border bg-cifra-surface-2 p-3 shadow-xl">
-              {navLinks.map((l) => (
-                <a
-                  key={l.href}
-                  href={l.href}
-                  className="block rounded-lg px-3 py-2 text-sm text-cifra-muted transition-colors duration-150 hover:bg-cifra-surface hover:text-cifra-text"
-                >
-                  {l.label}
-                </a>
-              ))}
-              <hr className="my-2 border-cifra-border" />
-              <Link
-                href="/login"
-                className="block rounded-lg px-3 py-2 text-sm text-cifra-text transition-colors duration-150 hover:bg-cifra-surface"
-              >
-                Entrar
-              </Link>
-              <a
-                href="#demo"
-                className="block rounded-lg px-3 py-2 text-sm text-cifra-text transition-colors duration-150 hover:bg-cifra-surface"
-              >
-                Ver demo
-              </a>
-              <Link
-                href="/cadastro"
-                className="mt-1 block rounded-lg bg-cifra-teal px-3 py-2 text-center text-sm font-semibold text-cifra-bg transition-all duration-200 hover:bg-cifra-teal-hover active:scale-[0.98]"
-              >
-                Começar agora
-              </Link>
+          {user ? (
+            <div className="flex items-center justify-self-end gap-2">
+              <Auth0UserMenu user={user} />
+              <details className="group relative sm:hidden">
+                <summary className="list-none [&::-webkit-details-marker]:hidden">
+                  <span className="flex size-10 cursor-pointer items-center justify-center rounded-lg border border-cifra-border text-cifra-text transition-colors duration-200 hover:border-cifra-teal/35 hover:bg-cifra-surface">
+                    <Menu className="size-5 group-open:hidden" />
+                    <X className="hidden size-5 group-open:block" />
+                  </span>
+                </summary>
+                <div className="absolute right-0 top-12 z-50 w-56 rounded-xl border border-cifra-border bg-cifra-surface-2 p-3 shadow-xl">
+                  {navLinks.map((l) => (
+                    <a
+                      key={l.href}
+                      href={l.href}
+                      className="block rounded-lg px-3 py-2 text-sm text-cifra-muted transition-colors duration-150 hover:bg-cifra-surface hover:text-cifra-text"
+                    >
+                      {l.label}
+                    </a>
+                  ))}
+                </div>
+              </details>
             </div>
-          </details>
+          ) : (
+            <>
+              <div className="hidden items-center justify-self-end gap-2 sm:flex sm:gap-3">
+                <Link
+                  href="/login"
+                  className="rounded-lg border border-cifra-border px-4 py-2 text-sm font-medium text-cifra-text transition-all duration-200 ease-out hover:border-cifra-teal/40 hover:text-cifra-teal active:scale-[0.98] motion-reduce:active:scale-100"
+                >
+                  Entrar
+                </Link>
+                <a
+                  href="#demo"
+                  className="rounded-lg border border-cifra-border px-4 py-2 text-sm font-medium text-cifra-text transition-all duration-200 ease-out hover:border-cifra-teal/40 hover:text-cifra-teal active:scale-[0.98] motion-reduce:active:scale-100"
+                >
+                  Ver demo
+                </a>
+                <Link
+                  href="/cadastro"
+                  className="rounded-lg bg-cifra-teal px-4 py-2 text-sm font-semibold text-cifra-bg shadow-sm shadow-cifra-teal/20 transition-all duration-200 ease-out hover:bg-cifra-teal-hover hover:shadow-md hover:shadow-cifra-teal/25 active:scale-[0.98] motion-reduce:hover:shadow-sm motion-reduce:active:scale-100"
+                >
+                  Começar agora
+                </Link>
+              </div>
+
+              <details className="group relative justify-self-end sm:hidden">
+                <summary className="list-none [&::-webkit-details-marker]:hidden">
+                  <span className="flex size-10 cursor-pointer items-center justify-center rounded-lg border border-cifra-border text-cifra-text transition-colors duration-200 hover:border-cifra-teal/35 hover:bg-cifra-surface">
+                    <Menu className="size-5 group-open:hidden" />
+                    <X className="hidden size-5 group-open:block" />
+                  </span>
+                </summary>
+                <div className="absolute right-0 top-12 z-50 w-56 rounded-xl border border-cifra-border bg-cifra-surface-2 p-3 shadow-xl">
+                  {navLinks.map((l) => (
+                    <a
+                      key={l.href}
+                      href={l.href}
+                      className="block rounded-lg px-3 py-2 text-sm text-cifra-muted transition-colors duration-150 hover:bg-cifra-surface hover:text-cifra-text"
+                    >
+                      {l.label}
+                    </a>
+                  ))}
+                  <hr className="my-2 border-cifra-border" />
+                  <Link
+                    href="/login"
+                    className="block rounded-lg px-3 py-2 text-sm text-cifra-text transition-colors duration-150 hover:bg-cifra-surface"
+                  >
+                    Entrar
+                  </Link>
+                  <a
+                    href="#demo"
+                    className="block rounded-lg px-3 py-2 text-sm text-cifra-text transition-colors duration-150 hover:bg-cifra-surface"
+                  >
+                    Ver demo
+                  </a>
+                  <Link
+                    href="/cadastro"
+                    className="mt-1 block rounded-lg bg-cifra-teal px-3 py-2 text-center text-sm font-semibold text-cifra-bg transition-all duration-200 hover:bg-cifra-teal-hover active:scale-[0.98]"
+                  >
+                    Começar agora
+                  </Link>
+                </div>
+              </details>
+            </>
+          )}
         </div>
       </header>
 

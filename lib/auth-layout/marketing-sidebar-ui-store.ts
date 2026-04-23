@@ -27,7 +27,6 @@ export const useMarketingSidebarUiStore = create<MarketingSidebarUiState>()(
         };
       }),
       partialize: (state) => ({ collapsed: state.collapsed }),
-      skipHydration: true,
     },
   ),
 );

@@ -25,8 +25,15 @@ export type LibraryTopNavProps = {
  * Barra superior da área logada (logo + links + CTAs secundários).
  */
 export function LibraryTopNav({ items, user, billingPlan, className }: LibraryTopNavProps) {
-  const showStarter = billingPlan === "starter";
-  const showPro = billingPlan === "pro";
+  const resolvedPlan = billingPlan ?? "free";
+  const planLabel = resolvedPlan === "pro" ? "PRO" : resolvedPlan === "starter" ? "STARTER" : "FREE";
+  const planClassName =
+    resolvedPlan === "pro"
+      ? "border-cifra-gold/55 bg-cifra-gold/12 text-cifra-gold"
+      : resolvedPlan === "starter"
+        ? "border-cifra-teal/45 bg-cifra-teal/12 text-cifra-teal"
+        : "border-[#F0B42944] text-cifra-gold";
+  const planStyle = resolvedPlan === "free" ? { backgroundColor: "#F0B42918" } : undefined;
 
   return (
     <header
@@ -35,55 +42,52 @@ export function LibraryTopNav({ items, user, billingPlan, className }: LibraryTo
         className
       )}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-4 md:gap-8">
-        <Link href="/" className="flex shrink-0 items-center gap-2">
-          <span className="relative block size-[30px] overflow-hidden rounded-md">
+      <div className="flex min-w-0 flex-1 items-center">
+        <Link href="/" className="flex shrink-0 items-center gap-2.5">
+          <span className="relative block h-[30px] w-[78px] overflow-hidden">
             <Image
               src="/logo.svg"
               alt="cifra.ai"
               width={828}
-              height={220}
+              height={320}
               className="h-full w-full object-contain object-left"
               unoptimized
             />
           </span>
+          <span className="inline-flex h-5 self-center items-center rounded-md border border-cifra-teal/45 bg-cifra-teal/12 px-2 font-mono text-[9px] font-bold leading-none tracking-widest text-cifra-teal">
+            BETA
+          </span>
         </Link>
-        <nav
-          className="flex min-w-0 items-center gap-4 overflow-x-auto text-[13px] max-md:[-ms-overflow-style:none] max-md:[scrollbar-width:none] md:gap-5 max-md:[&::-webkit-scrollbar]:hidden"
-        >
-          {items.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "shrink-0 transition-colors",
-                item.current
-                  ? "font-semibold text-cifra-teal"
-                  : "font-normal text-cifra-muted hover:text-cifra-text"
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
       </div>
-      <div className="flex shrink-0 items-center gap-2.5 md:gap-3">
-        {showStarter ? (
-          <span
-            className="inline-flex shrink-0 items-center rounded-md border border-cifra-teal/45 bg-cifra-teal/12 px-2 py-1 font-mono text-[9px] font-bold tracking-[0.12em] text-cifra-teal"
-            title="Plano Starter ativo"
+      <nav
+        className="flex min-w-0 items-center justify-center gap-4 overflow-x-auto px-3 text-[13px] max-md:[-ms-overflow-style:none] max-md:[scrollbar-width:none] md:gap-5 max-md:[&::-webkit-scrollbar]:hidden"
+      >
+        {items.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={cn(
+              "shrink-0 transition-colors",
+              item.current
+                ? "font-semibold text-cifra-teal"
+                : "font-normal text-cifra-muted hover:text-cifra-text"
+            )}
           >
-            STARTER
-          </span>
-        ) : null}
-        {showPro ? (
-          <span
-            className="inline-flex shrink-0 items-center rounded-md border border-cifra-gold/55 bg-cifra-gold/12 px-2 py-1 font-mono text-[9px] font-bold tracking-[0.12em] text-cifra-gold"
-            title="Plano Pro ativo"
-          >
-            PRO
-          </span>
-        ) : null}
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-2.5 md:gap-3">
+        <span
+          className={cn(
+            "inline-flex shrink-0 items-center rounded-md border px-2 py-1 font-mono text-[9px] font-bold tracking-[0.12em]",
+            planClassName,
+          )}
+          style={planStyle}
+          title={`Plano ${planLabel} ativo`}
+        >
+          {planLabel}
+        </span>
         {user ? <Auth0UserMenu user={user} /> : (
           <>
             <Link

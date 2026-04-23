@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { useEffect } from "react";
 
 import { defaultAuthSidebarFeatures } from "@/lib/auth-layout/default-copy";
 import { useMarketingSidebarUiStore } from "@/lib/auth-layout/marketing-sidebar-ui-store";
@@ -43,10 +42,6 @@ export function AuthMarketingSidebar({
 }: AuthMarketingSidebarProps) {
   const collapsed = useMarketingSidebarUiStore((s) => s.collapsed);
   const toggle = useMarketingSidebarUiStore((s) => s.toggleCollapsed);
-
-  useEffect(() => {
-    void useMarketingSidebarUiStore.persist.rehydrate();
-  }, []);
 
   return (
     <aside

@@ -79,7 +79,12 @@ export async function identifyTrackFromMp3(file: File): Promise<SchubertTrackIde
 export async function postTrackIngestWithMeta(
   file: File,
   song: SchubertRecognizedSong,
-  options?: { variationOfTrackId?: string | null; variationLabel?: string | null },
+  options?: {
+    variationOfTrackId?: string | null;
+    variationLabel?: string | null;
+    /** Traste do capo (0–24), enviado no JSON `meta` da ingestão. */
+    capo_at?: number;
+  },
 ): Promise<SchubertTrackIngestResponse> {
   if (!isMp3(file)) {
     throw new SchubertIdentifyError(
@@ -108,6 +113,11 @@ export async function postTrackIngestWithMeta(
             ...(options.variationLabel?.trim()
               ? { variationLabel: options.variationLabel.trim().slice(0, 120) }
               : {}),
+          }
+        : {}),
+      ...(options?.capo_at !== undefined
+        ? {
+            capo_at: Math.min(24, Math.max(0, Math.round(Number(options.capo_at)))),
           }
         : {}),
     }),

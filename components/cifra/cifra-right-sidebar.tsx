@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 import type { ReactNode, RefObject } from "react";
 import { useLayoutEffect } from "react";
+import { useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 
@@ -35,11 +36,9 @@ export type CifraRightSidebarProps = {
   autoScrollLeadValRef: RefObject<HTMLSpanElement | null>;
   autoScrollDurRef: RefObject<HTMLInputElement | null>;
   autoScrollDurValRef: RefObject<HTMLSpanElement | null>;
+  libraryTrackKey?: string;
 };
 
-/**
- * Painel direito 300px — frame Pencil `2Zui4` / `sideR`: faixa, patrocinado, leitura (rolagem + sliders), ações, Pro.
- */
 export function CifraRightSidebar({
   className,
   trackTitle,
@@ -56,11 +55,26 @@ export function CifraRightSidebar({
   autoScrollLeadValRef,
   autoScrollDurRef,
   autoScrollDurValRef,
+  libraryTrackKey,
   onMount,
 }: CifraRightSidebarProps) {
+  const router = useRouter();
   useLayoutEffect(() => {
     onMount?.();
   }, [onMount]);
+
+  async function saveAndOpenLibrary() {
+    const key = libraryTrackKey?.trim();
+    if (key) {
+      await fetch("/api/cifra/library-save", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trackKey: key }),
+      }).catch(() => undefined);
+    }
+    router.push("/biblioteca");
+  }
 
   return (
     <aside
@@ -153,7 +167,7 @@ export function CifraRightSidebar({
           <legend className="text-[10px] font-medium uppercase tracking-wide text-[#7a7a98]">
             Modo de rolagem
           </legend>
-          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1 hover:bg-white/[0.04]">
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1 hover:bg-white/4">
             <input
               ref={scrollModeAutomaticRef}
               type="radio"
@@ -169,7 +183,7 @@ export function CifraRightSidebar({
               </span>
             </span>
           </label>
-          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1 hover:bg-white/[0.04]">
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1 hover:bg-white/4">
             <input
               ref={scrollModeSmartRef}
               type="radio"
@@ -271,16 +285,17 @@ export function CifraRightSidebar({
       <div>
         <h2 className="text-xs font-semibold text-cifra-text">Ações</h2>
         <div className="mt-3 flex flex-col gap-2.5">
-          <Link
-            href="/biblioteca"
+          <button
+            type="button"
+            onClick={() => void saveAndOpenLibrary()}
             className="flex items-center justify-center gap-2 rounded-[10px] bg-cifra-teal px-4 py-3 text-xs font-semibold text-cifra-bg transition-opacity hover:opacity-95"
           >
             <Library className="size-4 shrink-0" strokeWidth={2} aria-hidden />
-            Abrir na biblioteca
-          </Link>
+            Salvar na sua biblioteca
+          </button>
           <Link
             href="/biblioteca/importar/arquivo"
-            className="flex items-center justify-center gap-2 rounded-[10px] border border-cifra-border px-4 py-3 text-xs font-semibold text-cifra-text transition-colors hover:border-cifra-teal/35 hover:bg-white/[0.03]"
+            className="flex items-center justify-center gap-2 rounded-[10px] border border-cifra-border px-4 py-3 text-xs font-semibold text-cifra-text transition-colors hover:border-cifra-teal/35 hover:bg-white/3"
           >
             <Sparkles className="size-4 shrink-0 text-cifra-teal" strokeWidth={2} aria-hidden />
             Nova detecção
