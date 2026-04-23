@@ -233,19 +233,80 @@ function ensureSpotifyWebPlaybackSdk(): Promise<NonNullable<Window["Spotify"]>> 
 type SpotifyAdapterOptions = {
   hostEl: HTMLElement;
   trackId: string;
+  /** Duração conhecida da faixa (payload), em segundos — fallback quando embed manda duration=0. */
+  durationHintSec?: number;
 };
 
+type SpotifyEmbedPlaybackEvent = CustomEvent<{
+  trackId?: string;
+  isPaused?: boolean;
+  positionMs?: number;
+  durationMs?: number;
+}>;
+
 export function createSpotifyAdapter(opts: SpotifyAdapterOptions): PlaybackAdapter {
-  const { hostEl, trackId } = opts;
+  const { trackId, durationHintSec } = opts;
   let player: SpotifyWebPlayer | null = null;
   let deviceId = "";
   let isPaused = true;
   let positionMs = 0;
   let durationMs = 0;
+  let hasPrimedPlayback = false;
+  let onEmbedPlaybackRef: ((raw: Event) => void) | null = null;
+  /** Relógio local derivado dos eventos do embed (sem polling na API Spotify). */
+  let playbackAnchorWallMs = 0;
+  let playbackAnchorPositionMs = 0;
+
+  function applyDurationHintIfNeeded() {
+    if (durationMs > 0) return;
+    if (!Number.isFinite(durationHintSec) || !durationHintSec || durationHintSec <= 0) return;
+    durationMs = Math.round(durationHintSec * 1000);
+  }
+
+  function syncPlaybackClockFromEmbed(position: number, paused: boolean) {
+    if (!Number.isFinite(position) || position < 0) return;
+    playbackAnchorWallMs = typeof performance !== "undefined" ? performance.now() : Date.now();
+    playbackAnchorPositionMs = position;
+    if (paused) {
+      positionMs = position;
+    }
+  }
+
+  function currentPositionMsFromClock(): number {
+    if (isPaused) return positionMs;
+    const wall = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const delta = Math.max(0, wall - playbackAnchorWallMs);
+    return playbackAnchorPositionMs + delta;
+  }
 
   return {
     provider: "spotify",
     async ready() {
+      const onEmbedPlayback = (raw: Event) => {
+        const evt = raw as SpotifyEmbedPlaybackEvent;
+        if (evt.detail?.trackId !== trackId) return;
+        if (typeof evt.detail?.isPaused === "boolean") {
+          isPaused = evt.detail.isPaused;
+        }
+        if (Number.isFinite(evt.detail?.durationMs) && Number(evt.detail?.durationMs) > 0) {
+          durationMs = Number(evt.detail?.durationMs);
+        }
+        applyDurationHintIfNeeded();
+
+        const nextPos = Number.isFinite(evt.detail?.positionMs) ? Number(evt.detail?.positionMs) : undefined;
+        if (typeof nextPos === "number") {
+          syncPlaybackClockFromEmbed(nextPos, isPaused);
+          if (isPaused) positionMs = nextPos;
+          else positionMs = nextPos;
+        } else if (isPaused === false) {
+          // Sem posição explícita: inicia relógio local no play para não ficar preso em 0:00.
+          syncPlaybackClockFromEmbed(positionMs > 0 ? positionMs : 0, false);
+        }
+        if (isPaused === false) hasPrimedPlayback = true;
+      };
+      onEmbedPlaybackRef = onEmbedPlayback;
+      window.addEventListener("cifra:spotify-embed-playback", onEmbedPlayback as EventListener);
+
       const Spotify = await ensureSpotifyWebPlaybackSdk();
       player = new Spotify.Player({
         name: "cifra.ai Web Player",
@@ -282,44 +343,83 @@ export function createSpotifyAdapter(opts: SpotifyAdapterOptions): PlaybackAdapt
           if (!ok) reject(new Error("spotify_connect_failed"));
         });
       });
-      hostEl.innerHTML = '<div class="h-[62px] rounded-md border border-white/8 bg-[#0a0a12] px-3 py-2 text-[11px] text-cifra-muted">Spotify conectado</div>';
-      const transfer = await spotifyApiCall("/api/spotify/transfer-playback", {
-        method: "POST",
-        body: JSON.stringify({ deviceId, play: false }),
-      });
-      if (!transfer.ok) throw new Error("spotify_transfer_failed");
-      const play = await spotifyApiCall("/api/spotify/play", {
-        method: "POST",
-        body: JSON.stringify({ deviceId, spotifyTrackId: trackId, positionMs: 0 }),
-      });
-      if (!play.ok) throw new Error("spotify_start_track_failed");
-      await player.pause();
+      const current = await player.getCurrentState().catch(() => null);
+      if (current) {
+        isPaused = current.paused;
+        positionMs = current.position;
+        durationMs = current.duration;
+        hasPrimedPlayback = true;
+      }
+
+      // Garante que o embed carregue a faixa correta para eventos/play local.
+      window.dispatchEvent(new CustomEvent("cifra:spotify-embed-command", { detail: { action: "load", trackId } }));
     },
     async play() {
+      window.dispatchEvent(new CustomEvent("cifra:spotify-embed-command", { detail: { action: "play", trackId } }));
+      const payload = {
+        ...(deviceId ? { deviceId } : {}),
+        spotifyTrackId: trackId,
+      };
       if (player) {
-        await player.resume();
-        return;
+        try {
+          await player.resume();
+          isPaused = false;
+          hasPrimedPlayback = true;
+          return;
+        } catch {
+          // fallback para API abaixo
+        }
       }
-      await spotifyApiCall("/api/spotify/play", {
+      const res = await spotifyApiCall("/api/spotify/play", {
         method: "POST",
-        body: JSON.stringify({ spotifyTrackId: trackId }),
+        body: JSON.stringify(payload),
       });
+      if (!res.ok) throw new Error("spotify_play_failed");
+      hasPrimedPlayback = true;
+      isPaused = false;
     },
     async pause() {
-      if (player) await player.pause();
-      else await spotifyApiCall("/api/spotify/pause", { method: "POST", body: JSON.stringify({}) });
+      window.dispatchEvent(new CustomEvent("cifra:spotify-embed-command", { detail: { action: "pause", trackId } }));
+      if (player) {
+        try {
+          await player.pause();
+        } catch {
+          // fallback below
+        }
+      }
+      const res = await spotifyApiCall("/api/spotify/pause", {
+        method: "POST",
+        body: JSON.stringify(deviceId ? { deviceId } : {}),
+      });
+      if (!res.ok) throw new Error("spotify_pause_failed");
+      isPaused = true;
+      positionMs = currentPositionMsFromClock();
     },
     async seek(seconds: number) {
       if (!Number.isFinite(seconds)) return;
       const ms = Math.max(0, Math.round(seconds * 1000));
-      if (player) await player.seek(ms);
-      await spotifyApiCall("/api/spotify/seek", {
+      window.dispatchEvent(
+        new CustomEvent("cifra:spotify-embed-command", {
+          detail: { action: "seek", trackId, positionMs: ms },
+        }),
+      );
+      if (player) {
+        try {
+          await player.seek(ms);
+        } catch {
+          // fallback via API below
+        }
+      }
+      const res = await spotifyApiCall("/api/spotify/seek", {
         method: "POST",
         body: JSON.stringify({ positionMs: ms, ...(deviceId ? { deviceId } : {}) }),
       });
+      if (!res.ok) throw new Error("spotify_seek_failed");
+      positionMs = ms;
     },
     getCurrentTime() {
-      return positionMs > 0 ? positionMs / 1000 : 0;
+      const ms = currentPositionMsFromClock();
+      return ms / 1000;
     },
     getDuration() {
       return durationMs > 0 ? durationMs / 1000 : 0;
@@ -329,12 +429,17 @@ export function createSpotifyAdapter(opts: SpotifyAdapterOptions): PlaybackAdapt
     },
     destroy() {
       player?.disconnect();
-      hostEl.innerHTML = "";
+      window.dispatchEvent(new CustomEvent("cifra:spotify-embed-command", { detail: { action: "pause", trackId } }));
+      if (onEmbedPlaybackRef) {
+        window.removeEventListener("cifra:spotify-embed-playback", onEmbedPlaybackRef as EventListener);
+      }
+      onEmbedPlaybackRef = null;
       player = null;
       deviceId = "";
       isPaused = true;
       positionMs = 0;
       durationMs = 0;
+      hasPrimedPlayback = false;
     },
   };
 }
