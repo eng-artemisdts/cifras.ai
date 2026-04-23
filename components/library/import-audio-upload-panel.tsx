@@ -10,15 +10,11 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import type { DragEvent } from "react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import type { SchubertRecognizedSong } from "@/lib/schubert-identify-types";
-import {
-  createBeethovenVariationFromSchubertTrack,
-  fetchMyBeethovenVariationByBaseTrackIdFromBrowser,
-} from "@/lib/beethoven-variations";
+import { fetchMyBeethovenVariationByBaseTrackIdFromBrowser } from "@/lib/beethoven-variations";
 
 import { ChordFoundAccessDialog } from "@/components/library/chord-found-access-dialog";
 import type { ExistingChordDialogLayout } from "@/components/library/library-import-dialog-layout";
@@ -27,11 +23,14 @@ import {
   identifyTrackFromMp3,
   mapRecognizedSongToChordPreview,
   mapSchubertMatchToChordPreview,
-  postTrackIngestWithMeta,
   SchubertIdentifyError,
   type ChordFoundPreview,
 } from "@/lib/schubert-identify-service";
-import { cifraEditHref, resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-routes";
+import {
+  emptyRecognizedSong,
+  recognizedSongForVariation,
+  type ImportMetadataContext,
+} from "@/lib/library/import-metadata-context";
 import type { SchubertTrackJson } from "@/lib/schubert-api";
 import { cn } from "@/lib/utils";
 
@@ -74,19 +73,23 @@ export type QueuedFile = {
 
 export type ImportAudioUploadPanelProps = {
   className?: string;
+  /** Ao concluir a detecção (ou sem match), envia ao passo de revisão de metadados antes da ingestão/variação. */
+  onProceedToMetadata: (ctx: ImportMetadataContext, restoreQueue: QueuedFile[]) => void;
+  /** Ao voltar do passo de metadados, repõe o mesmo arquivo na fila. */
+  initialQueue?: QueuedFile[];
   /** Variante visual do modal de confirmação da música (alinhada ao frame de variante no Pencil). */
   existingChordDialogLayout?: ExistingChordDialogLayout;
 };
 
 export function ImportAudioUploadPanel({
   className,
+  onProceedToMetadata,
+  initialQueue,
   existingChordDialogLayout = "default",
 }: ImportAudioUploadPanelProps) {
-  const router = useRouter();
   const inputId = useId();
-  const manualMetaId = useId();
   const addInputRef = useRef<HTMLInputElement>(null);
-  const [queue, setQueue] = useState<QueuedFile[]>([]);
+  const [queue, setQueue] = useState<QueuedFile[]>(() => initialQueue ?? []);
   const [dragOver, setDragOver] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [recognitionConfirmOpen, setRecognitionConfirmOpen] = useState(false);
@@ -94,17 +97,11 @@ export function ImportAudioUploadPanel({
   const [pendingIngest, setPendingIngest] = useState<{ file: File; song: SchubertRecognizedSong } | null>(
     null,
   );
-  const [confirmIaLoading, setConfirmIaLoading] = useState(false);
   const [matchedChordPreview, setMatchedChordPreview] = useState<ChordFoundPreview | null>(null);
   const [matchedChordOpen, setMatchedChordOpen] = useState(false);
   const [canCreateVariation, setCanCreateVariation] = useState(false);
   const [variationBaseTrackId, setVariationBaseTrackId] = useState<string | null>(null);
   const [variationBaseTrack, setVariationBaseTrack] = useState<SchubertTrackJson | null>(null);
-  const [createVariationLoading, setCreateVariationLoading] = useState(false);
-  const [manualMetaOpen, setManualMetaOpen] = useState(false);
-  const [manualTitle, setManualTitle] = useState("");
-  const [manualArtist, setManualArtist] = useState("");
-  const [manualMetaError, setManualMetaError] = useState<string | null>(null);
   const [identifyMessage, setIdentifyMessage] = useState<string | null>(null);
   /** Metadados AudD quando a faixa é reconhecida — capa na fila antes ou depois do modal. */
   const [recognizedSong, setRecognizedSong] = useState<SchubertRecognizedSong | null>(null);
@@ -130,11 +127,6 @@ export function ImportAudioUploadPanel({
     setCanCreateVariation(false);
     setVariationBaseTrackId(null);
     setVariationBaseTrack(null);
-    setCreateVariationLoading(false);
-    setManualMetaOpen(false);
-    setManualTitle("");
-    setManualArtist("");
-    setManualMetaError(null);
     setQueue([
       {
         id: `${file.name}-${file.size}-${Math.random().toString(36).slice(2, 9)}`,
@@ -154,11 +146,6 @@ export function ImportAudioUploadPanel({
     setCanCreateVariation(false);
     setVariationBaseTrackId(null);
     setVariationBaseTrack(null);
-    setCreateVariationLoading(false);
-    setManualMetaOpen(false);
-    setManualTitle("");
-    setManualArtist("");
-    setManualMetaError(null);
     setQueue((prev) => prev.filter((q) => q.id !== id));
   }, []);
 
@@ -173,11 +160,6 @@ export function ImportAudioUploadPanel({
     setCanCreateVariation(false);
     setVariationBaseTrackId(null);
     setVariationBaseTrack(null);
-    setCreateVariationLoading(false);
-    setManualMetaOpen(false);
-    setManualTitle("");
-    setManualArtist("");
-    setManualMetaError(null);
     setQueue([]);
   }, []);
 
@@ -197,37 +179,13 @@ export function ImportAudioUploadPanel({
 
   const handleMontarComIaSemHref = useCallback(async () => {
     if (!pendingIngest) return;
-    setConfirmIaLoading(true);
     setIdentifyMessage(null);
-    try {
-      const { track } = await postTrackIngestWithMeta(pendingIngest.file, pendingIngest.song);
-      const tid =
-        track && typeof track === "object" && "trackId" in track && typeof track.trackId === "string"
-          ? track.trackId.trim()
-          : "";
-      handleRecognitionDialogOpenChange(false);
-      clearQueue();
-      const pair = resolveCifraSlugPairFromTrack(track as unknown as SchubertTrackJson);
-      if (pair) {
-        router.push(cifraEditHref(pair.artistSlug, pair.songSlug));
-        return;
-      }
-      if (tid) {
-        router.push(`/cifras/edit?trackId=${encodeURIComponent(tid)}`);
-        return;
-      }
-      const q = encodeURIComponent(`${pendingIngest.song.title} ${pendingIngest.song.artist}`.trim());
-      router.push(`/biblioteca?q=${q}`);
-    } catch (ingestErr) {
-      if (ingestErr instanceof SchubertIdentifyError) {
-        setIdentifyMessage(`Não foi possível concluir a ingestão: ${ingestErr.message}`);
-      } else {
-        setIdentifyMessage("Não foi possível concluir a ingestão (erro inesperado).");
-      }
-    } finally {
-      setConfirmIaLoading(false);
-    }
-  }, [pendingIngest, router, handleRecognitionDialogOpenChange, clearQueue]);
+    onProceedToMetadata(
+      { file: pendingIngest.file, mode: "ingest", song: pendingIngest.song },
+      queue,
+    );
+    handleRecognitionDialogOpenChange(false);
+  }, [pendingIngest, queue, onProceedToMetadata, handleRecognitionDialogOpenChange]);
 
   const handleMatchedChordDialogOpenChange = useCallback((open: boolean) => {
     setMatchedChordOpen(open);
@@ -237,58 +195,34 @@ export function ImportAudioUploadPanel({
       setCanCreateVariation(false);
       setVariationBaseTrackId(null);
       setVariationBaseTrack(null);
-      setCreateVariationLoading(false);
     }
   }, []);
 
   const handleCreateVariation = useCallback(async () => {
     const baseTrackId = variationBaseTrackId?.trim();
     const baseTrack = variationBaseTrack;
-    if (!baseTrackId || !baseTrack) return;
-    setCreateVariationLoading(true);
+    const file = queue[0]?.file;
+    if (!baseTrackId || !baseTrack || !file) return;
     setIdentifyMessage(null);
-    try {
-      const pair = resolveCifraSlugPairFromTrack(baseTrack);
-      if (!pair) {
-        throw new Error("Não foi possível resolver os slugs da faixa base.");
-      }
-      const track = await createBeethovenVariationFromSchubertTrack({
-        baseTrackId,
-        baseArtistSlug: pair.artistSlug,
-        baseSongSlug: pair.songSlug,
-        sourceTrack: baseTrack,
-      });
-      const tid =
-        track && typeof track === "object" && "trackId" in track && typeof track.trackId === "string"
-          ? track.trackId.trim()
-          : "";
-      clearQueue();
-      setMatchedChordOpen(false);
-      if (tid) {
-        router.push(`${cifraEditHref(pair.artistSlug, pair.songSlug)}?v=${encodeURIComponent(tid)}`);
-      }
-    } catch (e) {
-      setIdentifyMessage(`Não foi possível criar a variação: ${e instanceof Error ? e.message : "erro inesperado"}.`);
-    } finally {
-      setCreateVariationLoading(false);
-    }
-  }, [variationBaseTrackId, variationBaseTrack, clearQueue, router]);
-
-  const handleManualContinue = useCallback(() => {
-    const t = manualTitle.trim();
-    const a = manualArtist.trim();
-    if (!t || !a) {
-      setManualMetaError("Preencha o título e o artista.");
-      return;
-    }
-    setManualMetaError(null);
-    const q = encodeURIComponent(`${t} ${a}`);
-    setManualMetaOpen(false);
-    setManualTitle("");
-    setManualArtist("");
-    clearQueue();
-    router.push(`/biblioteca?q=${q}`);
-  }, [manualTitle, manualArtist, router, clearQueue]);
+    onProceedToMetadata(
+      {
+        file,
+        mode: "variation",
+        song: recognizedSongForVariation(baseTrack, recognizedSong),
+        variationBaseTrack: baseTrack,
+        variationBaseTrackId: baseTrackId,
+      },
+      queue,
+    );
+    handleMatchedChordDialogOpenChange(false);
+  }, [
+    variationBaseTrackId,
+    variationBaseTrack,
+    queue,
+    recognizedSong,
+    onProceedToMetadata,
+    handleMatchedChordDialogOpenChange,
+  ]);
 
   const runDetection = useCallback(async () => {
     const item = queue[0];
@@ -303,11 +237,6 @@ export function ImportAudioUploadPanel({
     setCanCreateVariation(false);
     setVariationBaseTrackId(null);
     setVariationBaseTrack(null);
-    setCreateVariationLoading(false);
-    setManualMetaOpen(false);
-    setManualTitle("");
-    setManualArtist("");
-    setManualMetaError(null);
     setDetecting(true);
     try {
       const res = await identifyTrackFromMp3(item.file);
@@ -347,10 +276,8 @@ export function ImportAudioUploadPanel({
         setRecognitionConfirmOpen(true);
         return;
       }
-      setIdentifyMessage(
-        "Não identificámos a música neste áudio. Preencha manualmente o título e o artista abaixo para procurar na biblioteca.",
-      );
-      setManualMetaOpen(true);
+      onProceedToMetadata({ file: item.file, mode: "ingest", song: emptyRecognizedSong() }, queue);
+      return;
     } catch (e) {
       if (e instanceof SchubertIdentifyError) {
         setIdentifyMessage(e.message);
@@ -360,7 +287,7 @@ export function ImportAudioUploadPanel({
     } finally {
       setDetecting(false);
     }
-  }, [queue]);
+  }, [queue, onProceedToMetadata]);
 
   const onDrop = useCallback(
     (e: DragEvent<HTMLDivElement>) => {
@@ -384,7 +311,7 @@ export function ImportAudioUploadPanel({
           editHref={matchedChordPreview.editHref}
           onAccessClick={clearQueue}
           canCreateVariation={canCreateVariation}
-          creatingVariation={createVariationLoading}
+          creatingVariation={false}
           onCreateVariation={canCreateVariation ? handleCreateVariation : undefined}
           layout={existingChordDialogLayout}
         />
@@ -398,7 +325,7 @@ export function ImportAudioUploadPanel({
           coverImageUrl={recognitionPreview.coverImageUrl}
           montarComIaHref={null}
           onMontarComIaSemHref={pendingIngest ? handleMontarComIaSemHref : undefined}
-          confirmLoading={confirmIaLoading}
+          confirmLoading={false}
           onNotThisMusic={handleNotThisMusic}
           onMontarComIaWithHrefClick={clearQueue}
           layout={existingChordDialogLayout}
@@ -581,77 +508,6 @@ export function ImportAudioUploadPanel({
             Grave com poucos instrumentos sobrepostos; o modelo lê melhor o núcleo harmônico central do mix.
           </p>
         </div>
-
-        {manualMetaOpen && queue.length > 0 ? (
-          <div className="rounded-2xl border border-cifra-border bg-cifra-surface-2 px-4 py-4 md:px-5">
-            <p className="text-[11px] font-semibold text-cifra-text">Dados da música (manual)</p>
-            <p className="mt-1 text-[10px] leading-snug text-cifra-muted">
-              Use os mesmos nomes que espera encontrar no catálogo para obter melhores resultados na pesquisa.
-            </p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <label htmlFor={`${manualMetaId}-title`} className="block text-[10px] font-medium text-cifra-muted">
-                  Título
-                </label>
-                <input
-                  id={`${manualMetaId}-title`}
-                  type="text"
-                  value={manualTitle}
-                  onChange={(e) => {
-                    setManualTitle(e.target.value);
-                    setManualMetaError(null);
-                  }}
-                  autoComplete="off"
-                  className="w-full rounded-lg border border-cifra-border bg-[#0c0c16] px-3 py-2 text-[12px] text-cifra-text outline-none ring-cifra-teal/30 placeholder:text-cifra-muted/50 focus:border-cifra-teal/40 focus:ring-1"
-                  placeholder="Ex.: Bohemian Rhapsody"
-                />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor={`${manualMetaId}-artist`} className="block text-[10px] font-medium text-cifra-muted">
-                  Artista
-                </label>
-                <input
-                  id={`${manualMetaId}-artist`}
-                  type="text"
-                  value={manualArtist}
-                  onChange={(e) => {
-                    setManualArtist(e.target.value);
-                    setManualMetaError(null);
-                  }}
-                  autoComplete="off"
-                  className="w-full rounded-lg border border-cifra-border bg-[#0c0c16] px-3 py-2 text-[12px] text-cifra-text outline-none ring-cifra-teal/30 placeholder:text-cifra-muted/50 focus:border-cifra-teal/40 focus:ring-1"
-                  placeholder="Ex.: Queen"
-                />
-              </div>
-            </div>
-            {manualMetaError ? (
-              <p className="mt-2 text-[11px] text-red-400/90" role="alert">
-                {manualMetaError}
-              </p>
-            ) : null}
-            <div className="mt-3 flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setManualMetaOpen(false);
-                  setManualTitle("");
-                  setManualArtist("");
-                  setManualMetaError(null);
-                }}
-                className="rounded-lg border border-cifra-border px-3.5 py-2 text-[11px] font-semibold text-cifra-text transition-colors hover:border-cifra-teal/35"
-              >
-                Ocultar
-              </button>
-              <button
-                type="button"
-                onClick={handleManualContinue}
-                className="rounded-lg bg-cifra-teal px-4 py-2 text-[11px] font-semibold text-cifra-bg transition-opacity hover:opacity-95"
-              >
-                Continuar com estes dados
-              </button>
-            </div>
-          </div>
-        ) : null}
 
         <p className="text-center text-[11px] text-cifra-muted md:text-left">
           <Link href="/biblioteca/importar" className="font-medium text-cifra-teal hover:text-cifra-teal-hover">

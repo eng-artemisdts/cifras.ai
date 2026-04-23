@@ -141,7 +141,7 @@ export async function CifraTrackView(props: CifraTrackViewProps) {
     } else {
       const localVariation = await fetchBeethovenVariationByTrackIdFromServer(variationTrackId).catch(() => null);
       if (!localVariation) notFound();
-      selectedVariation = localVariation as typeof selectedVariation;
+      selectedVariation = localVariation as NonNullable<typeof selectedVariation>;
     }
   }
 

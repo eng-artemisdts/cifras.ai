@@ -1,14 +1,11 @@
-import { AuthMarketingSidebar } from "@/components/layout/auth-marketing-sidebar";
-import type { AuthSidebarFeature } from "@/lib/auth-layout/types";
 import type { BillingPlan } from "@/lib/billing/plan-types";
 import type { LibraryNavItem } from "@/lib/library/types";
-import { cn } from "@/lib/utils";
 
 import type { ExistingChordDialogLayout } from "@/components/library/library-import-dialog-layout";
 
-import { ImportAudioUploadPanel } from "./import-audio-upload-panel";
-import { LibraryPageFooter } from "./library-page-footer";
-import { LibraryTopNav, type LibraryTopNavUser } from "./library-top-nav";
+import type { LibraryTopNavUser } from "./library-top-nav";
+
+import { ImportAudioLibraryFlow } from "./import-audio-library-flow";
 
 export type LibraryImportAudioUploadViewProps = {
   navItems: LibraryNavItem[];
@@ -19,19 +16,9 @@ export type LibraryImportAudioUploadViewProps = {
   existingChordDialogLayout?: ExistingChordDialogLayout;
 };
 
-/** Passos alinhados ao frame `ZcVmf` (Pencil — Tela Detecção IA). */
-const importAudioUploadSidebarFeatures: AuthSidebarFeature[] = [
-  { title: "01  Enviar", description: "MP3 · WAV · M4A", accent: "teal" },
-  { title: "02  IA analisa", description: "Acordes sugeridos", accent: "muted" },
-  { title: "03  Exportar", description: "PDF · texto · projeto", accent: "muted" },
-];
-
-const importAudioUploadIntro =
-  "Harmonia estimada a partir do áudio — você revisa, ajusta e exporta a cifra.";
-
 /**
  * Etapa de upload de arquivos de áudio (após «Pular · enviar arquivo do computador»).
- * Layout espelha o frame ZcVmf no Pencil.
+ * Detectação (passo 1) → revisão de metadados (passo 2, frame `8gzeJ`) → edição da cifra (fluxo atual).
  */
 export function LibraryImportAudioUploadView({
   navItems,
@@ -41,31 +28,12 @@ export function LibraryImportAudioUploadView({
   existingChordDialogLayout,
 }: LibraryImportAudioUploadViewProps) {
   return (
-    <div
-      className={cn(
-        "flex min-h-dvh flex-col bg-cifra-bg text-cifra-text lg:flex-row lg:items-stretch",
-        className
-      )}
-    >
-      <AuthMarketingSidebar
-        contextLabel="cifra · lab"
-        contextUppercase={false}
-        titleLine1="Detecção"
-        titleLine2="de cifra"
-        titleLine3="no áudio"
-        introText={importAudioUploadIntro}
-        features={importAudioUploadSidebarFeatures}
-        className="hidden min-h-0 shrink-0 lg:flex lg:min-h-dvh"
-      />
-
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-h-dvh lg:border-l lg:border-white/7">
-        <LibraryTopNav items={navItems} user={user} billingPlan={billingPlan ?? undefined} />
-        <ImportAudioUploadPanel
-          className="min-h-0 min-w-0 w-full flex-1 overflow-auto px-5 py-1 md:px-10 md:pb-3 md:pt-1"
-          existingChordDialogLayout={existingChordDialogLayout}
-        />
-        <LibraryPageFooter className="mt-0 shrink-0 border-t border-white/7" />
-      </div>
-    </div>
+    <ImportAudioLibraryFlow
+      navItems={navItems}
+      user={user}
+      billingPlan={billingPlan}
+      className={className}
+      existingChordDialogLayout={existingChordDialogLayout}
+    />
   );
 }
