@@ -200,13 +200,12 @@ export function LandingPage({ user = null }: LandingPageProps) {
               ].map((s, i) => (
                 <div
                   key={s.label}
-                  className={`rounded-2xl border border-cifra-border bg-cifra-surface-2 px-8 py-10 text-center motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-600 motion-safe:fill-mode-both motion-safe:ease-out transition-all duration-300 hover:border-cifra-teal/20 hover:bg-cifra-surface motion-reduce:transition-none ${
-                    i === 0
+                  className={`rounded-2xl border border-cifra-border bg-cifra-surface-2 px-8 py-10 text-center motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-600 motion-safe:fill-mode-both motion-safe:ease-out transition-all duration-300 hover:border-cifra-teal/20 hover:bg-cifra-surface motion-reduce:transition-none ${i === 0
                       ? "motion-safe:delay-100"
                       : i === 1
                         ? "motion-safe:delay-200"
                         : "motion-safe:delay-300"
-                  }`}
+                    }`}
                 >
                   <p className="font-serif text-4xl text-white sm:text-5xl">
                     {s.value}
