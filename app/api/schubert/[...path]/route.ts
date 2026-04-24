@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 
 import { isAccessTokenLikelyJwt } from "@/lib/access-token-shape";
 import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-plan";
@@ -118,11 +119,50 @@ async function proxyToSchubert(req: Request, ctx: RouteCtx, forward: SchubertFor
     headers["content-type"] = contentType;
   }
 
-  const upstream = await fetch(target, {
-    method: req.method,
-    headers,
-    body,
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(target, {
+      method: req.method,
+      headers,
+      body,
+    });
+  } catch (error) {
+    Sentry.captureException(error, {
+      tags: {
+        area: "schubert-proxy",
+        upstream: "schubert-api",
+      },
+      extra: {
+        method: req.method,
+        target,
+      },
+    });
+    throw error;
+  }
+
+  if (upstream.status >= 500) {
+    let upstreamBodyPreview: string | null = null;
+    try {
+      upstreamBodyPreview = (await upstream.clone().text()).slice(0, 2000);
+    } catch {
+      upstreamBodyPreview = null;
+    }
+
+    Sentry.captureMessage("Schubert upstream returned 5xx", {
+      level: "error",
+      tags: {
+        area: "schubert-proxy",
+        upstream: "schubert-api",
+      },
+      extra: {
+        method: req.method,
+        target,
+        upstreamStatus: upstream.status,
+        upstreamStatusText: upstream.statusText,
+        upstreamBodyPreview,
+      },
+    });
+  }
 
   const responseHeaders = new Headers();
   const passCt = upstream.headers.get("content-type");
