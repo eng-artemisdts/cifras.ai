@@ -2,6 +2,8 @@
 
 import { useState, type ReactNode } from "react";
 
+import { GA_EVENTS } from "@/lib/analytics/events";
+import { trackAnalyticsEvent } from "@/lib/analytics/track";
 import { APP_LOGIN_PATH, sanitizeAuthReturnTo } from "@/lib/auth0-routes";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +22,7 @@ export function SubscribePlanButton({ plan, className, children }: SubscribePlan
   const [pending, setPending] = useState(false);
 
   async function onClick() {
+    trackAnalyticsEvent(GA_EVENTS.BILLING_SUBSCRIBE_CLICK, { plan });
     setPending(true);
     try {
       const res = await fetch("/api/billing/checkout", {

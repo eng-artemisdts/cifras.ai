@@ -7,6 +7,8 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { BillingPlan } from "@/lib/billing/plan-types";
+import { GA_EVENTS } from "@/lib/analytics/events";
+import { trackAnalyticsEvent } from "@/lib/analytics/track";
 import type { MusicAiDemoPayload } from "@/lib/cifra/musicai-types";
 import { buildPreviewChordAnchors } from "@/lib/cifra/preview-chord-anchors";
 import {
@@ -179,6 +181,7 @@ export function CifraPocMount({
     };
   }, [payload]);
 
+  const cifraViewTrackedForKey = useRef<string | null>(null);
   const scrollRootRef = useRef<HTMLDivElement>(null);
   const cifraRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -223,6 +226,22 @@ export function CifraPocMount({
     providerChoice && providerChoice.trackKey === trackKey && availableProviders.includes(providerChoice.provider)
       ? providerChoice.provider
       : defaultProvider;
+
+  const selectPlaybackProvider = useCallback(
+    (provider: PlaybackProvider) => {
+      trackAnalyticsEvent(GA_EVENTS.PLAYBACK_PROVIDER_SELECT, { provider });
+      setProviderChoice({ trackKey, provider });
+    },
+    [trackKey],
+  );
+
+  useEffect(() => {
+    if (cifraViewTrackedForKey.current === trackKey) return;
+    cifraViewTrackedForKey.current = trackKey;
+    trackAnalyticsEvent(GA_EVENTS.CIFRA_VIEW, {
+      sheet_mode: pathname?.includes("/edit") ? "edit" : "view",
+    });
+  }, [pathname, trackKey]);
   const spotifyReadyForPlayback =
     Boolean(spotifyTrackId) && !spotifyStatus.loading && spotifyStatus.connected && spotifyStatus.premium;
   /** Com Spotify Premium ativo, não mostramos o modo interno na UI (evita barra duplicada). */
@@ -521,7 +540,7 @@ export function CifraPocMount({
                     key={provider}
                     type="button"
                     disabled={!enabled}
-                    onClick={() => setProviderChoice({ trackKey, provider })}
+                    onClick={() => selectPlaybackProvider(provider)}
                     className={cn(
                       "rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] transition",
                       active ? "bg-cifra-teal text-cifra-bg" : "text-cifra-muted hover:text-cifra-text",
@@ -562,7 +581,7 @@ export function CifraPocMount({
                   key={provider}
                   type="button"
                   disabled={!enabled}
-                  onClick={() => setProviderChoice({ trackKey, provider })}
+                  onClick={() => selectPlaybackProvider(provider)}
                   className={cn(
                     "rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] transition",
                     active ? "bg-cifra-teal text-cifra-bg" : "text-cifra-muted hover:text-cifra-text",
@@ -627,6 +646,7 @@ export function CifraPocMount({
             <Link
               href={`/api/spotify/connect?returnTo=${encodeURIComponent(returnToForSpotifyConnect)}`}
               className="shrink-0 rounded-full bg-cifra-teal px-3.5 py-1.5 text-[11px] font-semibold text-cifra-bg shadow-[0_0_0_1px_rgba(15,210,193,0.25)] transition-opacity hover:opacity-95"
+              onClick={() => trackAnalyticsEvent(GA_EVENTS.SPOTIFY_CONNECT_CLICK)}
             >
               {spotifyStatus.loading ? "Verificando..." : "Conectar Spotify"}
             </Link>

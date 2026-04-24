@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { inferSearchSurfaceFromResultsPath } from "@/lib/analytics/events";
 import {
   fetchLibrarySearch,
   type LibrarySearchResponse,
@@ -29,6 +30,7 @@ export function LibrarySearchResultsBody({
   const search = searchParams.get("search")?.trim() ?? "";
   const pageRaw = searchParams.get("page");
   const page = Math.max(1, Number.parseInt(pageRaw ?? "1", 10) || 1);
+  const fullListSurface = `${inferSearchSurfaceFromResultsPath(routeBasePath)}_search_full`;
 
   const [data, setData] = useState<LibrarySearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -125,7 +127,11 @@ export function LibrarySearchResultsBody({
         <ul className="flex flex-col gap-3">
           {data?.items.map((track, index) => (
             <li key={track.id}>
-              <LibrarySearchTrackRow track={track} toneIndex={index} />
+              <LibrarySearchTrackRow
+                track={track}
+                toneIndex={index}
+                analyticsListSurface={fullListSurface}
+              />
             </li>
           ))}
         </ul>

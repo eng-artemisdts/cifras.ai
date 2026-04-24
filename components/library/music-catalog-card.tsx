@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { GA_EVENTS } from "@/lib/analytics/events";
+import { trackAnalyticsEvent } from "@/lib/analytics/track";
 import type { MusicCatalogCard as MusicCatalogCardModel } from "@/lib/library/types";
 import { musicCoverClass } from "@/lib/library/style-maps";
 import { cn } from "@/lib/utils";
@@ -114,6 +116,9 @@ export function MusicCatalogCard({ item, onDeleted, className }: MusicCatalogCar
                   <Link
                     href={item.accessHref}
                     className="inline-flex items-center gap-2 rounded-md px-2.5 py-2 text-xs text-cifra-text transition-colors hover:bg-white/6"
+                    onClick={() =>
+                      trackAnalyticsEvent(GA_EVENTS.LIBRARY_CARD_ACTION, { action: "access_version" })
+                    }
                   >
                     <Eye className="size-3.5 text-cifra-muted" />
                     Acessar versão
@@ -123,6 +128,9 @@ export function MusicCatalogCard({ item, onDeleted, className }: MusicCatalogCar
                   <Link
                     href={item.editHref}
                     className="inline-flex items-center gap-2 rounded-md px-2.5 py-2 text-xs text-cifra-text transition-colors hover:bg-white/6"
+                    onClick={() =>
+                      trackAnalyticsEvent(GA_EVENTS.LIBRARY_CARD_ACTION, { action: "edit_version" })
+                    }
                   >
                     <Pencil className="size-3.5 text-cifra-muted" />
                     Editar versão
@@ -132,6 +140,9 @@ export function MusicCatalogCard({ item, onDeleted, className }: MusicCatalogCar
                   <Link
                     href={createVariationHref}
                     className="inline-flex items-center gap-2 rounded-md px-2.5 py-2 text-xs text-cifra-text transition-colors hover:bg-white/6"
+                    onClick={() =>
+                      trackAnalyticsEvent(GA_EVENTS.LIBRARY_CARD_ACTION, { action: "create_variation" })
+                    }
                   >
                     <Pencil className="size-3.5 text-cifra-muted" />
                     Criar variação

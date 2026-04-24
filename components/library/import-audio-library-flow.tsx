@@ -1,6 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+import { GA_EVENTS } from "@/lib/analytics/events";
+import { trackAnalyticsEvent } from "@/lib/analytics/track";
 
 import { AuthMarketingSidebar } from "@/components/layout/auth-marketing-sidebar";
 import type { ExistingChordDialogLayout } from "@/components/library/library-import-dialog-layout";
@@ -99,6 +102,11 @@ export function ImportAudioLibraryFlow({
   }, [metadataContext]);
 
   const isMetadata = Boolean(metadataContext);
+
+  const importStep = isMetadata ? "metadata" : "upload";
+  useEffect(() => {
+    trackAnalyticsEvent(GA_EVENTS.IMPORT_FLOW_VIEW, { step: importStep });
+  }, [importStep]);
 
   return (
     <div

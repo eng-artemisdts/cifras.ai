@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { GA_EVENTS } from "@/lib/analytics/events";
+import { trackAnalyticsEvent } from "@/lib/analytics/track";
 import { cn } from "@/lib/utils";
 
 type ManageBillingButtonProps = {
@@ -12,6 +14,7 @@ export function ManageBillingButton({ className }: ManageBillingButtonProps) {
   const [pending, setPending] = useState(false);
 
   async function onClick() {
+    trackAnalyticsEvent(GA_EVENTS.BILLING_MANAGE_CLICK);
     setPending(true);
     try {
       const res = await fetch("/api/billing/portal", {

@@ -8,6 +8,12 @@ import Link from "next/link";
 import { LottieLoadingMark } from "@/components/cifra/cifra-route-loading";
 import { Popover, PopoverContent } from "@/components/ui/popover";
 import {
+  GA_EVENTS,
+  inferSearchSurfaceFromResultsPath,
+  searchQueryLengthBucket,
+} from "@/lib/analytics/events";
+import { trackAnalyticsEvent } from "@/lib/analytics/track";
+import {
   fetchLibrarySearch,
   type LibrarySearchTrackRow,
 } from "@/lib/library/beethoven-library-search";
@@ -19,15 +25,21 @@ import { LibrarySearchTrackRow as LibrarySearchTrackRowUi } from "./library-sear
 export type LibraryExploreSearchProps = {
   placeholder?: string;
   resultsBasePath?: string;
+  /** Se omitido, infere-se a partir de `resultsBasePath` (explorar vs biblioteca). */
+  analyticsSurface?: string;
   className?: string;
 };
 
 export function LibraryExploreSearch({
   placeholder = "Buscar faixas, artistas, álbuns…",
   resultsBasePath = "/explorar/busca",
+  analyticsSurface: analyticsSurfaceProp,
   className,
 }: LibraryExploreSearchProps) {
   const router = useRouter();
+  const analyticsSurface =
+    analyticsSurfaceProp ?? inferSearchSurfaceFromResultsPath(resultsBasePath);
+  const quickListSurface = `${analyticsSurface}_search_quick`;
   const anchorRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -89,6 +101,10 @@ export function LibraryExploreSearch({
 
   function goToFullResults() {
     if (trimmed.length < 2) return;
+    trackAnalyticsEvent(GA_EVENTS.LIBRARY_SEARCH_SUBMIT, {
+      surface: analyticsSurface,
+      query_length_bucket: searchQueryLengthBucket(trimmed.length),
+    });
     setUserDismissed(true);
     router.push(resultsHref);
   }
@@ -163,7 +179,16 @@ export function LibraryExploreSearch({
             ) : items.length === 0 ? (
               <p className="py-6 text-center text-xs text-cifra-muted">
                 Nenhuma faixa encontrada para «{debounced.trim()}». Tente outros termos, use Buscar ou{" "}
-                <Link href="/biblioteca/importar" className="font-semibold text-cifra-teal hover:text-cifra-teal-hover">
+                <Link
+                  href="/biblioteca/importar"
+                  className="font-semibold text-cifra-teal hover:text-cifra-teal-hover"
+                  onClick={() =>
+                    trackAnalyticsEvent(GA_EVENTS.LIBRARY_IMPORT_CTA, {
+                      context: "search_empty_hint",
+                      surface: analyticsSurface,
+                    })
+                  }
+                >
                   importe a música
                 </Link>
                 .
@@ -172,7 +197,12 @@ export function LibraryExploreSearch({
               <ul className="flex flex-col gap-2" role="list">
                 {items.map((track, index) => (
                   <li key={track.id}>
-                    <LibrarySearchTrackRowUi track={track} toneIndex={index} compact />
+                    <LibrarySearchTrackRowUi
+                      track={track}
+                      toneIndex={index}
+                      compact
+                      analyticsListSurface={quickListSurface}
+                    />
                   </li>
                 ))}
               </ul>

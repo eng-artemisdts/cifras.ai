@@ -4,6 +4,8 @@ import Link from "next/link";
 import { Music2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { GA_EVENTS } from "@/lib/analytics/events";
+import { trackAnalyticsEvent } from "@/lib/analytics/track";
 import type { LibrarySearchTrackRow } from "@/lib/library/beethoven-library-search";
 import { libraryTrackCifraHref } from "@/lib/library/search-track-nav";
 import { cn } from "@/lib/utils";
@@ -13,6 +15,8 @@ export type LibrarySearchTrackRowProps = {
   toneIndex: number;
   className?: string;
   compact?: boolean;
+  /** Contexto da lista (quick vs full, explorar vs biblioteca). */
+  analyticsListSurface?: string;
 };
 
 /** Alinhado a `DialogCoverArt` em `chord-found-access-dialog.tsx`: imagem ou ícone Music2 em fundo escuro. */
@@ -21,6 +25,7 @@ export function LibrarySearchTrackRow({
   toneIndex: _toneIndex,
   className,
   compact,
+  analyticsListSurface,
 }: LibrarySearchTrackRowProps) {
   const href = libraryTrackCifraHref(track.trackKey);
   const rawUrl = track.imageUrl?.trim();
@@ -81,7 +86,15 @@ export function LibrarySearchTrackRow({
 
   if (href) {
     return (
-      <Link href={href} className={rowClass}>
+      <Link
+        href={href}
+        className={rowClass}
+        onClick={() =>
+          trackAnalyticsEvent(GA_EVENTS.LIBRARY_TRACK_OPEN, {
+            list_surface: analyticsListSurface ?? "unknown",
+          })
+        }
+      >
         {thumb}
         {text}
       </Link>

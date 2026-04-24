@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Music4 } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 
+import { GA_EVENTS } from "@/lib/analytics/events";
+import { trackAnalyticsEvent } from "@/lib/analytics/track";
 import { catalogTabs } from "@/lib/library/mock-data";
 import type { BillingPlan } from "@/lib/billing/plan-types";
 import type {
@@ -48,6 +50,11 @@ export function LibraryMainView({
   const [musicState, setMusicState] = useState<MusicCatalogCardModel[]>(musicItems);
   const [artistState] = useState<ArtistSuggestion[]>(artistItems);
 
+  const handleCatalogTabChange = useCallback((id: CatalogTabId) => {
+    setActiveTab(id);
+    trackAnalyticsEvent(GA_EVENTS.LIBRARY_CATALOG_TAB, { tab_id: id });
+  }, []);
+
   const view = useMemo(() => {
     if (activeTab === "artistas") {
       return {
@@ -82,7 +89,7 @@ export function LibraryMainView({
       <LibraryTopNav items={navItems} user={user} billingPlan={billingPlan ?? undefined} />
       <main className="flex flex-1 flex-col items-center pt-4">
         <LibraryMainSearchHero />
-        <CatalogTabBar tabs={catalogTabs} onTabChange={setActiveTab} />
+        <CatalogTabBar tabs={catalogTabs} onTabChange={handleCatalogTabChange} />
         <ResultsToolbar countLabel={`${view.total} itens`} />
         <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-4 px-6 py-4 md:px-8 md:py-6">
           {activeTab === "musicas" && !showMusicEmptyState ? (
@@ -114,6 +121,11 @@ export function LibraryMainView({
               <Link
                 href="/biblioteca/importar"
                 className="mt-1 inline-flex items-center rounded-lg bg-cifra-teal px-4 py-2.5 text-xs font-semibold text-cifra-bg transition-opacity hover:opacity-95"
+                onClick={() =>
+                  trackAnalyticsEvent(GA_EVENTS.LIBRARY_IMPORT_CTA, {
+                    context: "library_empty_state",
+                  })
+                }
               >
                 Importar primeira música
               </Link>
