@@ -38,20 +38,14 @@ const CHORD_SNAP_MAX_LEAD_BEFORE_SECTION_SEC = 4;
 /** Alinhar `sections.json` (Intro.end vs Verso.start) com pequenos desvios de tempo. */
 const SECTION_BOUNDARY_DEDUPE_EPS_SEC = 0.15;
 /**
- * Só deduplicar o 1.º acorde da linha vocal após instrumental se a 1.ª sílaba não começa logo a seguir
- * ao fim do bloco só-acordes (senão esconde o G# sustentado na entrada do verso).
- */
-const SECTION_BOUNDARY_PENDING_DEDUPE_MIN_LYRIC_GAP_SEC = 0.35;
-
-/**
- * Último rótulo de acorde visível nas células da grelha instrumental desde `fromIdx` (para dedupe na fronteira de secção).
+ * Último acorde visível da grelha instrumental desde `fromIdx`.
  *
  * @param {StripChordCell[]} stripCells
  * @param {number} fromIdx
  * @param {(t: number) => string} getChordLabelAtAudioTime
- * @returns {string|null}
+ * @returns {{ label: string, chordIdx: number|null } | null}
  */
-function lastChordLabelInStripCellsSince(stripCells, fromIdx, getChordLabelAtAudioTime) {
+function lastVisibleChordInStripCellsSince(stripCells, fromIdx, getChordLabelAtAudioTime) {
   for (let i = stripCells.length - 1; i >= fromIdx; i--) {
     const c = stripCells[i];
     if (!c) continue;
@@ -60,7 +54,13 @@ function lastChordLabelInStripCellsSince(stripCells, fromIdx, getChordLabelAtAud
     if (!Number.isFinite(a0) || !Number.isFinite(a1) || a1 <= a0 + 1e-6) continue;
     const t = a0 + Math.min(0.02, (a1 - a0) * 0.25);
     const lab = getChordLabelAtAudioTime(t);
-    if (lab != null && String(lab).trim() !== '' && lab !== '\u00A0') return lab;
+    if (lab == null || String(lab).trim() === '' || lab === '\u00A0') continue;
+    const rawIdx = c.wrap?.dataset?.chordIdx;
+    const parsedIdx = rawIdx != null ? Number(rawIdx) : NaN;
+    return {
+      label: String(lab),
+      chordIdx: Number.isFinite(parsedIdx) ? parsedIdx : null
+    };
   }
   return null;
 }
@@ -465,9 +465,14 @@ export function mountCifraView(params) {
      * Após bloco instrumental, se a letra seguinte é noutra secção: não repetir na 1.ª linha vocal o último
      * acorde que já apareceu no fim da secção anterior (ex.: G na fronteira Intro → Verse).
      *
-     * @type {{ label: string, boundarySecStart: number } | null}
+     * @type {{ label: string, boundarySecStart: number, chordIdx: number|null } | null}
      */
     let pendingSectionBoundaryChordDedupe = null;
+    /**
+     * Dedupe do 1.º acorde vocal imediatamente após um bloco instrumental (mesma secção ou não).
+     * @type {{ label: string, chordIdx: number|null } | null}
+     */
+    let pendingInstrumentalToLyricCarry = null;
     /**
      * Última célula vocal com símbolo de acorde visível na linha anterior (para não repetir o mesmo
      * `chordIdx` na 1.ª palavra da linha seguinte — um só objeto JSON atravessa a quebra de linha).
@@ -480,6 +485,7 @@ export function mountCifraView(params) {
       if (ev.kind === 'instrumental') {
         carryLyricChordLabel = null;
         prevLyricRowLastVisibleChord = null;
+        pendingInstrumentalToLyricCarry = null;
         const instrumentalStripStartIdx = stripCells.length;
         const iv0 = ev.iv;
         const env0 =
@@ -544,6 +550,17 @@ export function mountCifraView(params) {
             );
           }
           container.appendChild(shell.wrap);
+          const lastVisibleMerged = lastVisibleChordInStripCellsSince(
+            stripCells,
+            instrumentalStripStartIdx,
+            getChordLabelAtAudioTime
+          );
+          if (lastVisibleMerged && String(lastVisibleMerged.label).trim() !== '') {
+            pendingInstrumentalToLyricCarry = {
+              label: lastVisibleMerged.label,
+              chordIdx: lastVisibleMerged.chordIdx
+            };
+          }
           vocalShellKey = secLike0.start;
           vocalShellInner = shell.inner;
           evIdx = nextIdx - 1;
@@ -608,25 +625,22 @@ export function mountCifraView(params) {
           if (fs != null && Number.isFinite(fs)) {
             lyricEnv = musicAiSectionEnvelopeForTime(fs, sectionsSorted);
           }
-          const lastIv = instGroup[instGroup.length - 1];
-          const ivEnd = lastIv != null ? Number(lastIv.end) : NaN;
-          const handoffGap =
-            fs != null && Number.isFinite(fs) && Number.isFinite(ivEnd) ? fs - ivEnd : Infinity;
-          if (
-            lyricEnv &&
-            !envelopesMatch(env0, lyricEnv) &&
-            handoffGap >= SECTION_BOUNDARY_PENDING_DEDUPE_MIN_LYRIC_GAP_SEC - 1e-3
-          ) {
-            const lastLab = lastChordLabelInStripCellsSince(
+          if (lyricEnv) {
+            const lastVisible = lastVisibleChordInStripCellsSince(
               stripCells,
               instrumentalStripStartIdx,
               getChordLabelAtAudioTime
             );
-            if (lastLab != null && String(lastLab).trim() !== '') {
+            if (lastVisible && String(lastVisible.label).trim() !== '') {
+              pendingInstrumentalToLyricCarry = {
+                label: lastVisible.label,
+                chordIdx: lastVisible.chordIdx
+              };
               pendingSectionBoundaryChordDedupe = {
-                label: lastLab,
+                label: lastVisible.label,
                 /** Coincide com `sec.start` da 1.ª linha vocal (ex.: Verso); `env0.end` falha com hiato Intro/Verso. */
-                boundarySecStart: Number(lyricEnv.start)
+                boundarySecStart: Number(lyricEnv.start),
+                chordIdx: lastVisible.chordIdx
               };
             }
           }
@@ -651,7 +665,7 @@ export function mountCifraView(params) {
         prevLyricRowLastVisibleChord = null;
       }
 
-      const crossRowCarryFromPrev = prevLyricRowLastVisibleChord;
+      let crossRowCarryFromPrev = prevLyricRowLastVisibleChord;
 
       const row = document.createElement('div');
       row.className = 'cifra-line flex flex-wrap items-end gap-x-3 gap-y-4';
@@ -668,6 +682,29 @@ export function mountCifraView(params) {
         fw.start >= sec.start - SECTION_BOUNDARY_DEDUPE_EPS_SEC
       ) {
         exactPrevRenderedLabel = pendingSectionBoundaryChordDedupe.label;
+        if (
+          pendingSectionBoundaryChordDedupe.chordIdx != null &&
+          Number.isFinite(pendingSectionBoundaryChordDedupe.chordIdx)
+        ) {
+          crossRowCarryFromPrev = {
+            wrap: /** @type {HTMLElement} */ (null),
+            chordIdx: Number(pendingSectionBoundaryChordDedupe.chordIdx)
+          };
+        }
+      }
+      if (pendingInstrumentalToLyricCarry) {
+        if (showAllChordPositions && exactPrevRenderedLabel == null) {
+          exactPrevRenderedLabel = pendingInstrumentalToLyricCarry.label;
+        }
+        if (
+          pendingInstrumentalToLyricCarry.chordIdx != null &&
+          Number.isFinite(pendingInstrumentalToLyricCarry.chordIdx)
+        ) {
+          crossRowCarryFromPrev = {
+            wrap: /** @type {HTMLElement} */ (null),
+            chordIdx: Number(pendingInstrumentalToLyricCarry.chordIdx)
+          };
+        }
       }
       lineWords.forEach((tw, idx) => {
         /** Início da sílaba: alinha com o «acorde no tempo» na entrada da palavra; o meio-tempo atrasa a troca (D→A) para dentro da sílaba seguinte. */
@@ -1010,6 +1047,7 @@ export function mountCifraView(params) {
       ) {
         pendingSectionBoundaryChordDedupe = null;
       }
+      pendingInstrumentalToLyricCarry = null;
 
       if (sectionsSorted.length && sec && sec.start != null && Number.isFinite(sec.start)) {
         if (sec.start !== vocalShellKey) {

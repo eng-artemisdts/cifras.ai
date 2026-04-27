@@ -137,31 +137,40 @@ export function createYoutubeAdapter(opts: YouTubeAdapterOptions): PlaybackAdapt
       });
     },
     async play() {
-      player?.playVideo();
+      const p = player;
+      if (!p || typeof p.playVideo !== "function") return;
+      p.playVideo();
     },
     async pause() {
-      player?.pauseVideo();
+      const p = player;
+      if (!p || typeof p.pauseVideo !== "function") return;
+      p.pauseVideo();
     },
     async seek(seconds: number) {
-      if (!player || !Number.isFinite(seconds)) return;
-      player.seekTo(Math.max(0, seconds), true);
+      const p = player;
+      if (!p || typeof p.seekTo !== "function" || !Number.isFinite(seconds)) return;
+      p.seekTo(Math.max(0, seconds), true);
     },
     getCurrentTime() {
-      if (!player) return 0;
-      const t = player.getCurrentTime();
+      const p = player;
+      if (!p || typeof p.getCurrentTime !== "function") return 0;
+      const t = p.getCurrentTime();
       return Number.isFinite(t) ? t : 0;
     },
     getDuration() {
-      if (!player) return 0;
-      const d = player.getDuration();
+      const p = player;
+      if (!p || typeof p.getDuration !== "function") return 0;
+      const d = p.getDuration();
       return Number.isFinite(d) && d > 0 ? d : 0;
     },
     isPlaying() {
-      if (!player || !window.YT?.PlayerState) return false;
-      return player.getPlayerState() === window.YT.PlayerState.PLAYING;
+      const p = player;
+      if (!p || typeof p.getPlayerState !== "function" || !window.YT?.PlayerState) return false;
+      return p.getPlayerState() === window.YT.PlayerState.PLAYING;
     },
     destroy() {
-      player?.destroy();
+      const p = player;
+      if (p && typeof p.destroy === "function") p.destroy();
       player = null;
       hostEl.innerHTML = "";
     },

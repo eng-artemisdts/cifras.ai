@@ -1235,7 +1235,9 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
 
                             <div className="rounded-[10px] border border-white/5 bg-cifra-surface-2/80 px-[14px] py-[14px]">
                               <div className="flex flex-col gap-3">
-                                {planEventsOverlappingSection(cifraRenderPlan, group.start, group.end).map((ev, evIdx) => {
+                                {(() => {
+                                  let pendingInstrumentalToLyricCarryChordIdx: number | null = null;
+                                  return planEventsOverlappingSection(cifraRenderPlan, group.start, group.end).map((ev, evIdx) => {
                                   if (ev.kind === "instrumental") {
                                     const gLo = Math.min(group.start, group.end);
                                     const gHi = Math.max(group.start, group.end);
@@ -1249,6 +1251,10 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                       ze,
                                       formatChordLabel,
                                     ).filter((cell) => chordStartsInSection(cell.chordIdx));
+                                    pendingInstrumentalToLyricCarryChordIdx =
+                                      stripCells.length > 0
+                                        ? stripCells[stripCells.length - 1]?.chordIdx ?? null
+                                        : null;
                                     if (!stripCells.length) return null;
                                     return (
                                       <div
@@ -1334,6 +1340,9 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                     phraseSlots = slots.filter((s) => s.segmentIndex === segIdx);
                                   }
                                   if (!phraseSlots.length) return null;
+                                  const carryChordIdxForLine = pendingInstrumentalToLyricCarryChordIdx;
+                                  pendingInstrumentalToLyricCarryChordIdx = null;
+                                  let carryConsumedInLine = false;
                                   return (
                                     <Fragment key={`${group.key}-plan-l-${segIdx}-${evIdx}`}>
                                       {clusterSlotsByLyricSegment(phraseSlots).map((phraseSlots, phraseIdx) => (
@@ -1345,9 +1354,20 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                             const chordIdxs = chordIndicesAttachedToSlot(slots, chords, slot, chordAnchors)
                                               .filter(chordStartsInSection);
                                             const hasChord = chordIdxs.length > 0;
-                                            const sortedMenuChordIdxs = [...chordIdxs].sort(
+                                            const sortedChordIdxs = [...chordIdxs].sort(
                                               (a, b) => chords[a]!.start - chords[b]!.start,
                                             );
+                                            const shouldHideCarryHere =
+                                              !carryConsumedInLine &&
+                                              carryChordIdxForLine != null &&
+                                              sortedChordIdxs.includes(carryChordIdxForLine);
+                                            const visibleChordIdxs = shouldHideCarryHere
+                                              ? sortedChordIdxs.filter((ci) => ci !== carryChordIdxForLine)
+                                              : sortedChordIdxs;
+                                            if (shouldHideCarryHere) {
+                                              carryConsumedInLine = true;
+                                            }
+                                            const sortedMenuChordIdxs = [...sortedChordIdxs];
                                             const primaryChordForMenu =
                                               sortedMenuChordIdxs.length === 0
                                                 ? null
@@ -1440,14 +1460,13 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                                   }}
                                                 >
                                                   <div className="flex min-h-[22px] w-full flex-1 flex-row flex-wrap content-end items-end justify-center gap-x-1.5 gap-y-0.5">
-                                                    {chordIdxs.length === 0 ? (
+                                                    {visibleChordIdxs.length === 0 ? (
                                                       <span
                                                         className="pointer-events-none flex min-h-[18px] min-w-[1ch] shrink-0 select-none items-center justify-center"
                                                         aria-hidden
                                                       />
                                                     ) : (
-                                                      [...chordIdxs]
-                                                        .sort((a, b) => chords[a]!.start - chords[b]!.start)
+                                                      [...visibleChordIdxs]
                                                         .map((ci) => {
                                                           const chord = chords[ci]!;
                                                           const label = chordDisplayLabel(chord);
@@ -1586,7 +1605,8 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                       ))}
                                     </Fragment>
                                   );
-                                })}
+                                });
+                                })()}
                               </div>
 
                               {group.slots.length === 0 ? (

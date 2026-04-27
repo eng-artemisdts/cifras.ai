@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import ReactPlayer from "react-player";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -156,6 +155,7 @@ export function CifraPocMount({
   }));
   const [rightSidebarMountGen, setRightSidebarMountGen] = useState(0);
   const [providerNotice, setProviderNotice] = useState<string>("");
+  const [isClientMounted, setIsClientMounted] = useState(false);
   const [spotifyStatus, setSpotifyStatus] = useState<{
     loading: boolean;
     connected: boolean;
@@ -212,7 +212,6 @@ export function CifraPocMount({
   const scrollModeAutomaticRef = useRef<HTMLInputElement>(null);
   const scrollModeSmartRef = useRef<HTMLInputElement>(null);
   const youtubeHostRef = useRef<HTMLDivElement>(null);
-  const spotifyHostRef = useRef<HTMLDivElement>(null);
   const spotifyEmbedMountRef = useRef<HTMLDivElement>(null);
   const spotifyExternalPlayingRef = useRef(false);
   const spotifyExternalCurrentSecRef = useRef(0);
@@ -243,6 +242,7 @@ export function CifraPocMount({
     providerChoice && providerChoice.trackKey === trackKey && availableProviders.includes(providerChoice.provider)
       ? providerChoice.provider
       : defaultProvider;
+  const hydratedProvider: PlaybackProvider = isClientMounted ? selectedProvider : "internal";
 
   const selectPlaybackProvider = useCallback(
     (provider: PlaybackProvider) => {
@@ -274,6 +274,10 @@ export function CifraPocMount({
   }, [pathname, searchParams]);
 
   useEffect(() => {
+    setIsClientMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (!spotifyTrackId) return;
     let cancelled = false;
     setSpotifyStatus((prev) => ({ ...prev, loading: true }));
@@ -300,7 +304,7 @@ export function CifraPocMount({
   }, [spotifyTrackId, trackKey]);
 
   useEffect(() => {
-    if (selectedProvider !== "spotify" || !spotifyTrackId || !spotifyReadyForPlayback) return;
+    if (!isClientMounted || !spotifyTrackId || !spotifyReadyForPlayback) return;
     const mountEl = spotifyEmbedMountRef.current;
     if (!mountEl) return;
 
@@ -321,6 +325,15 @@ export function CifraPocMount({
       const nested =
         evt && typeof evt.data === "object" && evt.data !== null ? (evt.data as Record<string, unknown>) : undefined;
       const pausedRaw = evt.isPaused ?? nested?.isPaused;
+      if (typeof pausedRaw === "boolean") {
+        spotifyExternalPlayingRef.current = !pausedRaw;
+      }
+      if (typeof extracted.positionMs === "number") {
+        spotifyExternalCurrentSecRef.current = Math.max(0, extracted.positionMs / 1000);
+      }
+      if (typeof extracted.durationMs === "number" && extracted.durationMs > 0) {
+        spotifyExternalDurationSecRef.current = extracted.durationMs / 1000;
+      }
       const detail: SpotifyEmbedPlaybackDetail = {
         trackId: spotifyTrackId,
         ...(typeof pausedRaw === "boolean" ? { isPaused: pausedRaw } : {}),
@@ -369,12 +382,13 @@ export function CifraPocMount({
         const prev = window.onSpotifyIframeApiReady;
         window.onSpotifyIframeApiReady = (api) => {
           prev?.(api);
-          if (disposed) return;
-          mountEl.innerHTML = "";
+          if (disposed || !mountEl.isConnected) return;
+          mountEl.replaceChildren();
           api.createController(
             mountEl,
             { uri: `spotify:track:${spotifyTrackId}`, width: "100%", height: 152 },
             (c) => {
+              if (disposed || !mountEl.isConnected) return;
               controller = c;
               controller.addListener("playback_update", onPlaybackUpdate);
               resolve();
@@ -390,10 +404,10 @@ export function CifraPocMount({
     return () => {
       disposed = true;
       window.removeEventListener("cifra:spotify-embed-command", onEmbedCommand as EventListener);
-      mountEl.innerHTML = "";
+      if (mountEl.isConnected) mountEl.replaceChildren();
       controller = null;
     };
-  }, [selectedProvider, spotifyTrackId, spotifyReadyForPlayback]);
+  }, [isClientMounted, spotifyTrackId, spotifyReadyForPlayback]);
 
   useEffect(() => {
     const scrollRoot = scrollRootRef.current;
@@ -694,47 +708,30 @@ export function CifraPocMount({
       ) : null}
       <div
         className={cn(
-          selectedProvider === "spotify"
+          hydratedProvider === "spotify"
             ? "border-0 bg-transparent p-0"
             : "rounded-lg border border-white/6 bg-[#0d0d18] p-2",
         )}
       >
-        {selectedProvider === "spotify" && spotifyReadyForPlayback ? (
-          <div className="overflow-hidden rounded-lg border border-white/10 bg-black/20">
-            <ReactPlayer
-              src={`https://open.spotify.com/track/${spotifyTrackId}`}
-              width="100%"
-              height={152}
-              controls
-              playing={false}
-              onPlay={() => {
-                spotifyExternalPlayingRef.current = true;
-              }}
-              onPause={() => {
-                spotifyExternalPlayingRef.current = false;
-              }}
-              onEnded={() => {
-                spotifyExternalPlayingRef.current = false;
-              }}
-              onDurationChange={(event) => {
-                const durationSec = event.currentTarget.duration;
-                if (Number.isFinite(durationSec) && durationSec > 0) {
-                  spotifyExternalDurationSecRef.current = durationSec;
-                }
-              }}
-              onTimeUpdate={(event) => {
-                const currentTimeSec = event.currentTarget.currentTime;
-                if (Number.isFinite(currentTimeSec) && currentTimeSec >= 0) {
-                  spotifyExternalCurrentSecRef.current = currentTimeSec;
-                }
-              }}
-            />
+        {isClientMounted ? (
+          <div
+            className={cn(
+              "overflow-hidden rounded-lg border border-white/10 bg-black/20",
+              hydratedProvider === "spotify" && spotifyReadyForPlayback ? "block" : "hidden",
+            )}
+          >
+            <div ref={spotifyEmbedMountRef} className="h-[152px] w-full" />
           </div>
         ) : null}
-        <div
-          ref={youtubeHostRef}
-          className={cn("aspect-video w-full", selectedProvider === "youtube" ? "block" : "hidden")}
-        />
+        {isClientMounted ? (
+          <div
+            ref={youtubeHostRef}
+            className={cn(
+              "h-[200px] w-full overflow-hidden rounded-lg border border-white/10 bg-black/20",
+              hydratedProvider === "youtube" ? "block" : "hidden",
+            )}
+          />
+        ) : null}
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-white/6 bg-[#12121f] lg:flex-row lg:items-stretch">
