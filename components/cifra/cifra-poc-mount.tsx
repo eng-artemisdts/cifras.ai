@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import ReactPlayer from "react-player";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -13,9 +14,9 @@ import type { MusicAiDemoPayload } from "@/lib/cifra/musicai-types";
 import { buildPreviewChordAnchors } from "@/lib/cifra/preview-chord-anchors";
 import {
   createInternalAudioAdapter,
-  createSpotifyAdapter,
   createYoutubeAdapter,
   extractYoutubeVideoId,
+  type PlaybackAdapter,
   type PlaybackProvider,
 } from "@/lib/engine/playback-adapters";
 import { startCifraRuntimeV2 } from "@/lib/engine/start-cifra-runtime-v2";
@@ -164,8 +165,20 @@ export function CifraPocMount({
     connected: false,
     premium: false,
   });
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const bumpRightSidebarMount = useCallback(() => {
     setRightSidebarMountGen((n) => n + 1);
+  }, []);
+  const toggleMobileSidebar = useCallback((nextOpen: boolean) => {
+    const playBtnEl = playBtnRef.current;
+    const wasPlaying = playBtnEl?.textContent?.toLowerCase().includes("pausa") ?? false;
+    setIsMobileSidebarOpen(nextOpen);
+    if (!wasPlaying) return;
+    window.setTimeout(() => {
+      const currentPlayBtn = playBtnRef.current;
+      const isStillPlaying = currentPlayBtn?.textContent?.toLowerCase().includes("pausa") ?? false;
+      if (!isStillPlaying) currentPlayBtn?.click();
+    }, 0);
   }, []);
 
   const payloadForRuntime = useMemo(() => {
@@ -195,11 +208,15 @@ export function CifraPocMount({
   const autoScrollLeadValRef = useRef<HTMLSpanElement>(null);
   const autoScrollDurRef = useRef<HTMLInputElement>(null);
   const autoScrollDurValRef = useRef<HTMLSpanElement>(null);
+  const showFloatingChordRef = useRef<HTMLInputElement>(null);
   const scrollModeAutomaticRef = useRef<HTMLInputElement>(null);
   const scrollModeSmartRef = useRef<HTMLInputElement>(null);
   const youtubeHostRef = useRef<HTMLDivElement>(null);
   const spotifyHostRef = useRef<HTMLDivElement>(null);
   const spotifyEmbedMountRef = useRef<HTMLDivElement>(null);
+  const spotifyExternalPlayingRef = useRef(false);
+  const spotifyExternalCurrentSecRef = useRef(0);
+  const spotifyExternalDurationSecRef = useRef(0);
 
   const spotifyTrackId = useMemo(() => payload.meta?.spotifyTrackId?.trim() ?? "", [payload.meta?.spotifyTrackId]);
   const youtubeVideoId = useMemo(() => {
@@ -421,16 +438,36 @@ export function CifraPocMount({
           throw new Error("spotify_account_not_ready");
         }
         const adapter =
-          selectedProvider === "spotify" && spotifyHostRef.current && spotifyTrackId
-            ? createSpotifyAdapter({
-              hostEl: spotifyHostRef.current,
-              trackId: spotifyTrackId,
-              durationHintSec:
-                typeof payload.meta?.duration_seconds === "number" &&
-                  Number.isFinite(payload.meta.duration_seconds)
-                  ? payload.meta.duration_seconds
-                  : undefined,
-            })
+          selectedProvider === "spotify" && spotifyTrackId
+            ? ({
+                provider: "spotify",
+                async ready() {
+                  return;
+                },
+                async play() {
+                  return;
+                },
+                async pause() {
+                  return;
+                },
+                async seek() {
+                  return;
+                },
+                getCurrentTime() {
+                  return spotifyExternalCurrentSecRef.current;
+                },
+                getDuration() {
+                  return spotifyExternalDurationSecRef.current;
+                },
+                isPlaying() {
+                  return spotifyExternalPlayingRef.current;
+                },
+                destroy() {
+                  spotifyExternalPlayingRef.current = false;
+                  spotifyExternalCurrentSecRef.current = 0;
+                  spotifyExternalDurationSecRef.current = 0;
+                },
+              } satisfies PlaybackAdapter)
             : selectedProvider === "youtube" && youtubeHostRef.current && youtubeVideoId
               ? createYoutubeAdapter({ hostEl: youtubeHostRef.current, videoId: youtubeVideoId })
               : createInternalAudioAdapter({ audioEl: readyAudioEl, audioUrl: payload.meta?.audioUrl });
@@ -453,6 +490,7 @@ export function CifraPocMount({
             autoScrollLeadValEl: autoScrollLeadValRef.current,
             autoScrollDurEl: autoScrollDurRef.current,
             autoScrollDurValEl: autoScrollDurValRef.current,
+            showFloatingChordEl: showFloatingChordRef.current,
             scrollModeAutomaticEl: scrollModeAutomaticRef.current,
             scrollModeSmartEl: scrollModeSmartRef.current,
           },
@@ -481,6 +519,7 @@ export function CifraPocMount({
             autoScrollLeadValEl: autoScrollLeadValRef.current,
             autoScrollDurEl: autoScrollDurRef.current,
             autoScrollDurValEl: autoScrollDurValRef.current,
+            showFloatingChordEl: showFloatingChordRef.current,
             scrollModeAutomaticEl: scrollModeAutomaticRef.current,
             scrollModeSmartEl: scrollModeSmartRef.current,
           },
@@ -660,15 +699,38 @@ export function CifraPocMount({
             : "rounded-lg border border-white/6 bg-[#0d0d18] p-2",
         )}
       >
-        <div
-          ref={spotifyHostRef}
-          className={cn(
-            "w-full",
-            selectedProvider === "spotify" && spotifyReadyForPlayback ? "block min-h-[152px]" : "hidden",
-          )}
-        >
-          {spotifyReadyForPlayback ? <div ref={spotifyEmbedMountRef} className="min-h-[152px] w-full" /> : null}
-        </div>
+        {selectedProvider === "spotify" && spotifyReadyForPlayback ? (
+          <div className="overflow-hidden rounded-lg border border-white/10 bg-black/20">
+            <ReactPlayer
+              src={`https://open.spotify.com/track/${spotifyTrackId}`}
+              width="100%"
+              height={152}
+              controls
+              playing={false}
+              onPlay={() => {
+                spotifyExternalPlayingRef.current = true;
+              }}
+              onPause={() => {
+                spotifyExternalPlayingRef.current = false;
+              }}
+              onEnded={() => {
+                spotifyExternalPlayingRef.current = false;
+              }}
+              onDurationChange={(event) => {
+                const durationSec = event.currentTarget.duration;
+                if (Number.isFinite(durationSec) && durationSec > 0) {
+                  spotifyExternalDurationSecRef.current = durationSec;
+                }
+              }}
+              onTimeUpdate={(event) => {
+                const currentTimeSec = event.currentTarget.currentTime;
+                if (Number.isFinite(currentTimeSec) && currentTimeSec >= 0) {
+                  spotifyExternalCurrentSecRef.current = currentTimeSec;
+                }
+              }}
+            />
+          </div>
+        ) : null}
         <div
           ref={youtubeHostRef}
           className={cn("aspect-video w-full", selectedProvider === "youtube" ? "block" : "hidden")}
@@ -683,44 +745,77 @@ export function CifraPocMount({
           <div id="cifra" ref={cifraRef} className="min-h-[min(12rem,30dvh)] w-full min-w-0" />
         </div>
 
-        <CifraRightSidebarClient
-          libraryTrackKey={libraryTrackKey}
-          trackTitle={titleFromPayload}
-          variationSlot={variationSidebarAccessory}
-          originalTune={effectiveOriginalTune}
-          onOriginalTuneChange={(value) =>
-            setTrackDraft((prev) => ({
-              trackKey,
-              capoAt:
-                prev.trackKey === trackKey
-                  ? prev.capoAt
-                  : Number.isFinite(payload.capo_at)
-                    ? Math.min(24, Math.max(0, Math.round(Number(payload.capo_at))))
-                    : 0,
-              originalTune: value,
-            }))
-          }
-          capoAt={effectiveCapoAt}
-          onCapoAtChange={(n) =>
-            setTrackDraft((prev) => ({
-              trackKey,
-              originalTune: prev.trackKey === trackKey ? prev.originalTune : payload.original_tune ?? "",
-              capoAt: Math.min(24, Math.max(0, Math.round(n))),
-            }))
-          }
-          isPrivate={payload.is_private === true}
-          isProUser={isProUser}
-          scrollModeAutomaticRef={scrollModeAutomaticRef}
-          scrollModeSmartRef={scrollModeSmartRef}
-          autoScrollBtnRef={autoScrollBtnRef}
-          autoScrollLeadRef={autoScrollLeadRef}
-          autoScrollLeadValRef={autoScrollLeadValRef}
-          autoScrollDurRef={autoScrollDurRef}
-          autoScrollDurValRef={autoScrollDurValRef}
-          onMount={bumpRightSidebarMount}
-          className={rightSidebarLayoutClassName}
-        />
+        {isMobileSidebarOpen ? (
+          <button
+            type="button"
+            onClick={() => toggleMobileSidebar(false)}
+            className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[1px] lg:hidden"
+            aria-label="Fechar painel da faixa"
+          />
+        ) : null}
+
+        <div
+          id="cifra-track-side-panel"
+          className={cn(
+            "fixed inset-y-0 right-0 z-50 w-[min(86vw,340px)] transition-transform duration-300 ease-out lg:static lg:inset-auto lg:z-auto lg:w-auto lg:translate-x-0",
+            isMobileSidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0",
+          )}
+        >
+          <CifraRightSidebarClient
+            libraryTrackKey={libraryTrackKey}
+            trackTitle={titleFromPayload}
+            variationSlot={variationSidebarAccessory}
+            originalTune={effectiveOriginalTune}
+            onOriginalTuneChange={(value) =>
+              setTrackDraft((prev) => ({
+                trackKey,
+                capoAt:
+                  prev.trackKey === trackKey
+                    ? prev.capoAt
+                    : Number.isFinite(payload.capo_at)
+                      ? Math.min(24, Math.max(0, Math.round(Number(payload.capo_at))))
+                      : 0,
+                originalTune: value,
+              }))
+            }
+            capoAt={effectiveCapoAt}
+            onCapoAtChange={(n) =>
+              setTrackDraft((prev) => ({
+                trackKey,
+                originalTune: prev.trackKey === trackKey ? prev.originalTune : payload.original_tune ?? "",
+                capoAt: Math.min(24, Math.max(0, Math.round(n))),
+              }))
+            }
+            isPrivate={payload.is_private === true}
+            isProUser={isProUser}
+            scrollModeAutomaticRef={scrollModeAutomaticRef}
+            scrollModeSmartRef={scrollModeSmartRef}
+            autoScrollBtnRef={autoScrollBtnRef}
+            autoScrollLeadRef={autoScrollLeadRef}
+            autoScrollLeadValRef={autoScrollLeadValRef}
+            autoScrollDurRef={autoScrollDurRef}
+            autoScrollDurValRef={autoScrollDurValRef}
+            showFloatingChordRef={showFloatingChordRef}
+            onMount={bumpRightSidebarMount}
+            className={cn(
+              rightSidebarLayoutClassName,
+              "max-lg:h-full max-lg:w-full max-lg:overflow-y-auto max-lg:border-l max-lg:border-t-0 max-lg:shadow-[-10px_0_30px_rgba(0,0,0,0.45)]",
+            )}
+          />
+        </div>
       </div>
+      <button
+        type="button"
+        onClick={() => toggleMobileSidebar(!isMobileSidebarOpen)}
+        className={cn(
+          "fixed bottom-4 right-4 z-50 rounded-full border border-cifra-teal/35 bg-[#0e1020] px-4 py-2 text-xs font-semibold text-cifra-teal shadow-[0_8px_28px_rgba(0,0,0,0.45)] transition hover:bg-cifra-teal/12 lg:hidden",
+          isMobileSidebarOpen && "bg-cifra-teal text-cifra-bg",
+        )}
+        aria-expanded={isMobileSidebarOpen}
+        aria-controls="cifra-track-side-panel"
+      >
+        {isMobileSidebarOpen ? "Fechar painel" : "Painel da faixa"}
+      </button>
     </div>
   );
 }

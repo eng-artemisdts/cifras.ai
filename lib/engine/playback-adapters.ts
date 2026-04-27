@@ -369,6 +369,7 @@ export function createSpotifyAdapter(opts: SpotifyAdapterOptions): PlaybackAdapt
         } catch {
           // fallback para API abaixo
         }
+
       }
       const res = await spotifyApiCall("/api/spotify/play", {
         method: "POST",

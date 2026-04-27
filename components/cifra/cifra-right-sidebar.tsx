@@ -37,6 +37,7 @@ export type CifraRightSidebarProps = {
   autoScrollLeadValRef: RefObject<HTMLSpanElement | null>;
   autoScrollDurRef: RefObject<HTMLInputElement | null>;
   autoScrollDurValRef: RefObject<HTMLSpanElement | null>;
+  showFloatingChordRef: RefObject<HTMLInputElement | null>;
   libraryTrackKey?: string;
 };
 
@@ -57,6 +58,7 @@ export function CifraRightSidebar({
   autoScrollLeadValRef,
   autoScrollDurRef,
   autoScrollDurValRef,
+  showFloatingChordRef,
   libraryTrackKey,
   onMount,
 }: CifraRightSidebarProps) {
@@ -272,6 +274,23 @@ export function CifraRightSidebar({
             A duração do movimento aplica-se à <strong className="font-medium text-cifra-text">rolagem inteligente</strong>.
             Na automática, o deslocamento é directamente ligado ao tempo.
           </p>
+        </div>
+
+        <div className="mt-4 border-t border-cifra-border pt-4">
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1 hover:bg-white/4">
+            <input
+              ref={showFloatingChordRef}
+              type="checkbox"
+              defaultChecked
+              className="mt-0.5 size-3.5 shrink-0 accent-cifra-teal"
+            />
+            <span className="min-w-0">
+              <span className="block text-[11px] font-semibold text-cifra-text">Exibir acorde no tempo</span>
+              <span className="mt-0.5 block text-[10px] leading-snug text-cifra-muted">
+                Mostra um balão flutuante reposicionável com o acorde atual da reprodução.
+              </span>
+            </span>
+          </label>
         </div>
 
         <button

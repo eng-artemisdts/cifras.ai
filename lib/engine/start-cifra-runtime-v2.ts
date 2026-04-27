@@ -20,6 +20,9 @@ import type { PlaybackAdapter } from "./playback-adapters";
 const LS_AUTO_SCROLL_LEAD = "cifra-ai:autoScrollLeadSec";
 const LS_AUTO_SCROLL_DURATION_MS = "cifra-ai:autoScrollDurationMs";
 const LS_SCROLL_MODE = "cifra-ai:scrollMode";
+const LS_AUTO_SCROLL_ENABLED = "cifra-ai:autoScrollEnabled";
+const LS_SHOW_FLOATING_CHORD = "cifra-ai:showFloatingChord";
+const LS_FLOATING_CHORD_POS = "cifra-ai:floatingChordPos";
 const DEFAULT_AUTO_SCROLL_LEAD_SEC = 0.4;
 const DEFAULT_AUTO_SCROLL_DURATION_MS = 450;
 const SMART_SCROLL_VIEWPORT_ANCHOR = 0.38;
@@ -83,6 +86,7 @@ type CifraRuntimeEls = {
   autoScrollLeadValEl: HTMLElement | null;
   autoScrollDurEl: HTMLInputElement | null;
   autoScrollDurValEl: HTMLElement | null;
+  showFloatingChordEl?: HTMLInputElement | null;
   scrollModeAutomaticEl?: HTMLInputElement | null;
   scrollModeSmartEl?: HTMLInputElement | null;
 };
@@ -107,6 +111,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     autoScrollLeadValEl,
     autoScrollDurEl,
     autoScrollDurValEl,
+    showFloatingChordEl,
     scrollModeAutomaticEl,
     scrollModeSmartEl,
   } = opts.els;
@@ -161,9 +166,12 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
   let scrollAnimGen = 0;
   let timeScrollRafId = 0;
   let timeScrollTargetY = -1;
-  let autoScrollVirtualClock = false;
   let userScrollPauseUntilMs = 0;
   let programmaticScrollUntilMs = 0;
+  let showFloatingChord = true;
+  let floatingChordRoot: HTMLDivElement | null = null;
+  let floatingChordLabel: HTMLSpanElement | null = null;
+  let floatingChordDestroy: (() => void) | null = null;
 
   function getDurationWithFallback() {
     const fromProvider = playback.getDuration();
@@ -180,7 +188,6 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
   }
   function cancelVirtualPlayback() {
     virtualPlaying = false;
-    autoScrollVirtualClock = false;
     lastVirtualPerfMs = 0;
     if (virtualRafId) {
       cancelAnimationFrame(virtualRafId);
@@ -206,18 +213,6 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     }
     virtualRafId = requestAnimationFrame(virtualStep);
   }
-  function ensureSilentScrollClock() {
-    if (!autoScrollEnabled) return;
-    if (playback.isPlaying() || virtualPlaying) return;
-    const fromProvider = playback.getCurrentTime();
-    if (Number.isFinite(fromProvider)) virtualT = Math.max(0, fromProvider);
-    autoScrollVirtualClock = true;
-    virtualPlaying = true;
-    lastVirtualPerfMs = 0;
-    virtualRafId = requestAnimationFrame(virtualStep);
-    updateTransportUi();
-  }
-
   function markProgrammaticScroll() {
     programmaticScrollUntilMs = performance.now() + 120;
   }
@@ -308,9 +303,27 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     if (autoScrollLeadEl) lsSet(LS_AUTO_SCROLL_LEAD, autoScrollLeadEl.value);
     if (autoScrollDurEl) lsSet(LS_AUTO_SCROLL_DURATION_MS, autoScrollDurEl.value);
   }
+  function initAutoScrollEnabledPref() {
+    autoScrollEnabled = lsGet(LS_AUTO_SCROLL_ENABLED) === "1";
+  }
+  function persistAutoScrollEnabledPref() {
+    lsSet(LS_AUTO_SCROLL_ENABLED, autoScrollEnabled ? "1" : "0");
+  }
   function persistScrollMode() {
     if (scrollModeSmartEl?.checked) lsSet(LS_SCROLL_MODE, "smart");
     else lsSet(LS_SCROLL_MODE, "automatic");
+  }
+  function syncFloatingChordVisibility() {
+    if (!floatingChordRoot) return;
+    floatingChordRoot.style.display = showFloatingChord ? "flex" : "none";
+  }
+  function persistFloatingChordPref() {
+    lsSet(LS_SHOW_FLOATING_CHORD, showFloatingChord ? "1" : "0");
+  }
+  function initFloatingChordToggle() {
+    const raw = lsGet(LS_SHOW_FLOATING_CHORD);
+    showFloatingChord = raw == null ? true : raw !== "0";
+    if (showFloatingChordEl) showFloatingChordEl.checked = showFloatingChord;
   }
   function canUseSmartScrollMode() {
     return Boolean(scrollModeSmartEl && !scrollModeSmartEl.disabled);
@@ -416,13 +429,148 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     });
     return cifra;
   }
+  function ensureFloatingChordBadge() {
+    if (floatingChordRoot) return;
+    const root = document.createElement("div");
+    root.className =
+      "fixed left-4 top-20 z-30 inline-flex min-w-[120px] touch-none select-none flex-col items-center justify-center rounded-xl border border-cifra-teal/45 bg-[#0b1520]/95 px-3 py-2 pr-8 text-center shadow-[0_10px_30px_rgba(0,0,0,0.45)] backdrop-blur";
+    root.style.cursor = "grab";
+    root.style.userSelect = "none";
+    root.style.position = "fixed";
+    root.setAttribute("role", "status");
+    root.setAttribute("aria-live", "polite");
+    root.setAttribute("aria-label", "Acorde no tempo");
+
+    const title = document.createElement("span");
+    title.className = "mb-0.5 w-full text-center font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-cifra-muted";
+    title.textContent = "Acorde no tempo";
+    root.appendChild(title);
+
+    const label = document.createElement("span");
+    label.className = "w-full text-center font-mono text-base font-semibold tabular-nums text-cifra-teal";
+    label.textContent = "—";
+    root.appendChild(label);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className =
+      "absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded-md text-[11px] font-semibold leading-none text-cifra-muted transition hover:bg-white/10 hover:text-cifra-text";
+    closeBtn.setAttribute("aria-label", "Fechar acorde no tempo");
+    closeBtn.innerHTML =
+      '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7a1 1 0 0 0-1.41 1.42L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.88a1 1 0 0 0 0-1.41Z"/></svg>';
+    root.appendChild(closeBtn);
+    document.body.appendChild(root);
+
+    let dragging = false;
+    const persistFloatingChordPos = () => {
+      const rect = root.getBoundingClientRect();
+      lsSet(LS_FLOATING_CHORD_POS, JSON.stringify({ left: Math.round(rect.left), top: Math.round(rect.top) }));
+    };
+    const restoreFloatingChordPos = () => {
+      const raw = lsGet(LS_FLOATING_CHORD_POS);
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw) as { left?: unknown; top?: unknown };
+        const left = typeof parsed.left === "number" ? parsed.left : 16;
+        const top = typeof parsed.top === "number" ? parsed.top : 80;
+        const next = clampToViewport(left, top);
+        root.style.left = `${Math.round(next.left)}px`;
+        root.style.top = `${Math.round(next.top)}px`;
+      } catch {
+        // ignore invalid persisted position
+      }
+    };
+    let offsetX = 0;
+    let offsetY = 0;
+    let pointerId: number | null = null;
+    const getReservedRight = () => {
+      if (window.matchMedia("(min-width: 1024px)").matches) return 320;
+      return 340;
+    };
+    const clampToViewport = (left: number, top: number) => {
+      const reservedRight = getReservedRight();
+      const maxLeft = Math.max(8, window.innerWidth - reservedRight - root.offsetWidth - 8);
+      const maxTop = Math.max(8, window.innerHeight - root.offsetHeight - 8);
+      return {
+        left: clamp(left, 8, maxLeft),
+        top: clamp(top, 8, maxTop),
+      };
+    };
+    const onPointerDown = (ev: PointerEvent) => {
+      if (ev.target instanceof Element && ev.target.closest("button")) return;
+      dragging = true;
+      pointerId = ev.pointerId;
+      const rect = root.getBoundingClientRect();
+      offsetX = ev.clientX - rect.left;
+      offsetY = ev.clientY - rect.top;
+      root.style.cursor = "grabbing";
+      root.setPointerCapture(ev.pointerId);
+    };
+    const onPointerMove = (ev: PointerEvent) => {
+      if (!dragging || pointerId !== ev.pointerId) return;
+      const next = clampToViewport(ev.clientX - offsetX, ev.clientY - offsetY);
+      root.style.left = `${Math.round(next.left)}px`;
+      root.style.top = `${Math.round(next.top)}px`;
+    };
+    const onPointerUp = (ev: PointerEvent) => {
+      if (pointerId !== ev.pointerId) return;
+      dragging = false;
+      pointerId = null;
+      root.style.cursor = "grab";
+      root.releasePointerCapture(ev.pointerId);
+      persistFloatingChordPos();
+    };
+    const onResize = () => {
+      const rect = root.getBoundingClientRect();
+      const next = clampToViewport(rect.left, rect.top);
+      root.style.left = `${Math.round(next.left)}px`;
+      root.style.top = `${Math.round(next.top)}px`;
+      persistFloatingChordPos();
+    };
+    const onClose = () => {
+      showFloatingChord = false;
+      if (showFloatingChordEl) showFloatingChordEl.checked = false;
+      persistFloatingChordPref();
+      syncFloatingChordVisibility();
+    };
+    const onClosePointerDown = (ev: PointerEvent) => {
+      ev.stopPropagation();
+    };
+    root.addEventListener("pointerdown", onPointerDown);
+    root.addEventListener("pointermove", onPointerMove);
+    root.addEventListener("pointerup", onPointerUp);
+    root.addEventListener("pointercancel", onPointerUp);
+    closeBtn.addEventListener("pointerdown", onClosePointerDown);
+    closeBtn.addEventListener("click", onClose);
+    window.addEventListener("resize", onResize);
+
+    floatingChordRoot = root;
+    floatingChordLabel = label;
+    restoreFloatingChordPos();
+    syncFloatingChordVisibility();
+    floatingChordDestroy = () => {
+      root.removeEventListener("pointerdown", onPointerDown);
+      root.removeEventListener("pointermove", onPointerMove);
+      root.removeEventListener("pointerup", onPointerUp);
+      root.removeEventListener("pointercancel", onPointerUp);
+      closeBtn.removeEventListener("pointerdown", onClosePointerDown);
+      closeBtn.removeEventListener("click", onClose);
+      window.removeEventListener("resize", onResize);
+      root.remove();
+      floatingChordRoot = null;
+      floatingChordLabel = null;
+      floatingChordDestroy = null;
+    };
+  }
   function tick() {
     const t = nowAudioTime();
     const dur = getDurationWithFallback();
     seek.value = dur ? String(Math.min(SEEK_SLIDER_STEPS, Math.round((t / dur) * SEEK_SLIDER_STEPS))) : "0";
     timeLabel.textContent = `${formatClock(t)} / ${formatClock(dur)}`;
     const chNow = chordTimeline.atAudioTime(t);
-    currentChordEl.textContent = formatChordLabel(chNow);
+    const chordLabel = formatChordLabel(chNow);
+    currentChordEl.textContent = chordLabel;
+    if (floatingChordLabel) floatingChordLabel.textContent = chordLabel || "—";
     currentChordEl.title = isNoChordEvent(chNow) ? "Sem acorde — fim da progressão harmónica." : "";
     currentChordEl.classList.toggle("text-cifra-muted", isNoChordEvent(chNow));
     currentChordEl.classList.toggle("text-cifra-teal", !isNoChordEvent(chNow));
@@ -439,6 +587,8 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
 
   initAutoScrollControls();
   initScrollModeRadios();
+  initFloatingChordToggle();
+  initAutoScrollEnabledPref();
   rebuildLayoutFromMode();
   playBtn.disabled = !renderPlan.length;
   seek.disabled = !renderPlan.length;
@@ -488,13 +638,12 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
   };
   const onAutoBtn = () => {
     autoScrollEnabled = !autoScrollEnabled;
+    persistAutoScrollEnabledPref();
     if (!autoScrollEnabled) {
       cancelSmoothScrolling();
       cancelTimeBasedScrollAnimation();
-      if (virtualPlaying && !playback.isPlaying()) cancelVirtualPlayback();
     } else {
       userScrollPauseUntilMs = 0;
-      ensureSilentScrollClock();
     }
     lastAutoScrollTarget = null;
     lastTimeBasedScrollTop = -1;
@@ -509,6 +658,11 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     lastTimeBasedScrollTop = -1;
     tick();
   };
+  const onFloatingChordToggle = () => {
+    showFloatingChord = Boolean(showFloatingChordEl?.checked);
+    persistFloatingChordPref();
+    syncFloatingChordVisibility();
+  };
   const onUserScrollIntent = () => {
     if (performance.now() < programmaticScrollUntilMs) return;
     pauseAutoScrollByUser();
@@ -519,6 +673,8 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
   };
 
   const tickInterval = window.setInterval(() => tick(), 120);
+  ensureFloatingChordBadge();
+  syncAutoScrollButtonUi();
   playBtn.addEventListener("click", onPlayClick);
   seek.addEventListener("input", onSeekInput);
   autoScrollBtn?.addEventListener("click", onAutoBtn);
@@ -528,6 +684,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
   autoScrollDurEl?.addEventListener("change", persistAutoScrollControls);
   scrollModeAutomaticEl?.addEventListener("change", onScrollModeChange);
   scrollModeSmartEl?.addEventListener("change", onScrollModeChange);
+  showFloatingChordEl?.addEventListener("change", onFloatingChordToggle);
   document.addEventListener("wheel", onUserScrollIntent, { passive: true });
   document.addEventListener("touchmove", onUserScrollIntent, { passive: true });
   document.addEventListener("keydown", onUserKeyScroll, { passive: true });
@@ -545,6 +702,8 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     autoScrollDurEl?.removeEventListener("change", persistAutoScrollControls);
     scrollModeAutomaticEl?.removeEventListener("change", onScrollModeChange);
     scrollModeSmartEl?.removeEventListener("change", onScrollModeChange);
+    showFloatingChordEl?.removeEventListener("change", onFloatingChordToggle);
+    floatingChordDestroy?.();
     document.removeEventListener("wheel", onUserScrollIntent);
     document.removeEventListener("touchmove", onUserScrollIntent);
     document.removeEventListener("keydown", onUserKeyScroll);
