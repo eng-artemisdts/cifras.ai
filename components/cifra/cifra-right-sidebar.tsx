@@ -23,7 +23,9 @@ export type CifraRightSidebarProps = {
   variationSlot?: ReactNode;
   /** Afinação original (texto livre), editável. */
   originalTune: string;
-  onOriginalTuneChange: (value: string) => void;
+  displayedTune: string;
+  transposeSemitones: number;
+  onTransposeChange: (value: number) => void;
   /** Traste do capo (0–24). */
   capoAt: number;
   onCapoAtChange: (value: number) => void;
@@ -46,7 +48,9 @@ export function CifraRightSidebar({
   trackTitle,
   variationSlot,
   originalTune,
-  onOriginalTuneChange,
+  displayedTune,
+  transposeSemitones,
+  onTransposeChange,
   capoAt,
   onCapoAtChange,
   isPrivate,
@@ -116,20 +120,46 @@ export function CifraRightSidebar({
       ) : null}
 
       <div className="space-y-3 rounded-lg border border-white/6 bg-[#0c0c14] px-3 py-3">
-        <label className="flex flex-col gap-1" htmlFor="cifra-original-tune">
+        <div className="flex flex-col gap-1">
           <span className="text-[10px] font-medium uppercase tracking-wide text-[#7a7a98]">
-            Tom original
+            Tom da cifra
           </span>
-          <input
-            id="cifra-original-tune"
-            type="text"
-            value={originalTune}
-            onChange={(e) => onOriginalTuneChange(e.target.value)}
-            placeholder="ex.: E standard, DADGAD…"
-            autoComplete="off"
-            className="w-full rounded-md border border-cifra-border bg-cifra-bg px-2.5 py-2 text-[12px] text-cifra-text outline-none transition-colors placeholder:text-cifra-muted/70 focus-visible:border-cifra-teal/45 focus-visible:ring-1 focus-visible:ring-cifra-teal/30"
-          />
-        </label>
+          <div className="rounded-md border border-cifra-border bg-cifra-bg px-2.5 py-2">
+            <p className="text-[12px] font-semibold text-cifra-text">{displayedTune || "—"}</p>
+            <p className="mt-1 text-[10px] text-cifra-muted">Original: {originalTune || "—"}</p>
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => onTransposeChange(Math.max(-11, transposeSemitones - 1))}
+              className="inline-flex size-7 items-center justify-center rounded-md border border-cifra-border text-sm font-semibold text-cifra-text transition-colors hover:border-cifra-teal/40 hover:text-cifra-teal"
+              aria-label="Diminuir um semitom"
+            >
+              -
+            </button>
+            <span className="min-w-[64px] text-center font-mono text-[10px] text-cifra-muted">
+              {transposeSemitones === 0
+                ? "Original"
+                : `${transposeSemitones > 0 ? "+" : ""}${transposeSemitones} st`}
+            </span>
+            <button
+              type="button"
+              onClick={() => onTransposeChange(Math.min(11, transposeSemitones + 1))}
+              className="inline-flex size-7 items-center justify-center rounded-md border border-cifra-border text-sm font-semibold text-cifra-text transition-colors hover:border-cifra-teal/40 hover:text-cifra-teal"
+              aria-label="Aumentar um semitom"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              disabled={transposeSemitones === 0}
+              onClick={() => onTransposeChange(0)}
+              className="ml-auto rounded-md border border-cifra-border px-2 py-1 text-[10px] text-cifra-muted transition-colors hover:border-cifra-teal/40 hover:text-cifra-text disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              Resetar
+            </button>
+          </div>
+        </div>
         <label className="flex flex-col gap-1" htmlFor="cifra-capo-at">
           <span className="text-[10px] font-medium uppercase tracking-wide text-[#7a7a98]">
             Capo (traste)

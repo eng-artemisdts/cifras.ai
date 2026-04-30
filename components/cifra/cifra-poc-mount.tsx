@@ -20,6 +20,7 @@ import {
 } from "@/lib/engine/playback-adapters";
 import { startCifraRuntimeV2 } from "@/lib/engine/start-cifra-runtime-v2";
 import { cn } from "@/lib/utils";
+import { transposeTuneLabel } from "@/lib/cifra/chord-transpose";
 
 type SpotifyEmbedPlaybackDetail = {
   trackId: string;
@@ -166,6 +167,7 @@ export function CifraPocMount({
     premium: false,
   });
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [transposeSemitones, setTransposeSemitones] = useState(0);
   const bumpRightSidebarMount = useCallback(() => {
     setRightSidebarMountGen((n) => n + 1);
   }, []);
@@ -180,6 +182,24 @@ export function CifraPocMount({
       if (!isStillPlaying) currentPlayBtn?.click();
     }, 0);
   }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`cifra-ai:transpose-semitones:${trackKey}`);
+      const n = raw == null ? 0 : Number(raw);
+      setTransposeSemitones(Number.isFinite(n) ? Math.max(-11, Math.min(11, Math.trunc(n))) : 0);
+    } catch {
+      setTransposeSemitones(0);
+    }
+  }, [trackKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`cifra-ai:transpose-semitones:${trackKey}`, String(transposeSemitones));
+    } catch {
+      // ignore
+    }
+  }, [trackKey, transposeSemitones]);
 
   const payloadForRuntime = useMemo(() => {
     const previewAnchors = buildPreviewChordAnchors(
@@ -511,6 +531,8 @@ export function CifraPocMount({
         setProviderNotice("");
         destroy = startCifraRuntimeV2({
           payloadInput: payloadForRuntime as unknown as Record<string, unknown>,
+          chordDiagramScopeKey: trackKey,
+          transposeSemitones,
           els: {
             scrollRoot: readyScrollRoot,
             cifraContainer: readyCifraContainer,
@@ -540,6 +562,8 @@ export function CifraPocMount({
         const fallbackAdapter = createInternalAudioAdapter({ audioEl: readyAudioEl, audioUrl: payload.meta?.audioUrl });
         destroy = startCifraRuntimeV2({
           payloadInput: payloadForRuntime as unknown as Record<string, unknown>,
+          chordDiagramScopeKey: trackKey,
+          transposeSemitones,
           els: {
             scrollRoot: readyScrollRoot,
             cifraContainer: readyCifraContainer,
@@ -578,6 +602,7 @@ export function CifraPocMount({
     spotifyStatus.premium,
     youtubeVideoId,
     payload.meta?.audioUrl,
+    transposeSemitones,
   ]);
 
   const effectiveOriginalTune =
@@ -593,6 +618,7 @@ export function CifraPocMount({
     typeof payload.meta?.name === "string" && payload.meta.name.trim()
       ? payload.meta.name.trim()
       : trackTitle;
+  const effectiveDisplayTune = transposeTuneLabel(effectiveOriginalTune, transposeSemitones) || effectiveOriginalTune;
 
   return (
     <div className={cn("flex min-h-0 w-full min-w-0 flex-1 flex-col gap-2.5 sm:gap-3", className)}>
@@ -784,18 +810,9 @@ export function CifraPocMount({
             trackTitle={titleFromPayload}
             variationSlot={variationSidebarAccessory}
             originalTune={effectiveOriginalTune}
-            onOriginalTuneChange={(value) =>
-              setTrackDraft((prev) => ({
-                trackKey,
-                capoAt:
-                  prev.trackKey === trackKey
-                    ? prev.capoAt
-                    : Number.isFinite(payload.capo_at)
-                      ? Math.min(24, Math.max(0, Math.round(Number(payload.capo_at))))
-                      : 0,
-                originalTune: value,
-              }))
-            }
+            displayedTune={effectiveDisplayTune}
+            transposeSemitones={transposeSemitones}
+            onTransposeChange={setTransposeSemitones}
             capoAt={effectiveCapoAt}
             onCapoAtChange={(n) =>
               setTrackDraft((prev) => ({

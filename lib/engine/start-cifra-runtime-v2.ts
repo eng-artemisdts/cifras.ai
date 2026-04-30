@@ -16,6 +16,7 @@ import {
 import { SEEK_SLIDER_STEPS } from "./config";
 import { formatClock } from "./time-format";
 import type { PlaybackAdapter } from "./playback-adapters";
+import { transposeChordLabel } from "@/lib/cifra/chord-transpose";
 
 const LS_AUTO_SCROLL_LEAD = "cifra-ai:autoScrollLeadSec";
 const LS_AUTO_SCROLL_DURATION_MS = "cifra-ai:autoScrollDurationMs";
@@ -93,10 +94,14 @@ type CifraRuntimeEls = {
 
 export type StartCifraRuntimeOptions = {
   payloadInput: Record<string, unknown>;
+  chordDiagramScopeKey?: string;
+  transposeSemitones?: number;
   els: CifraRuntimeEls;
 };
 
 export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void {
+  const chordDiagramScopeKey = typeof opts.chordDiagramScopeKey === "string" ? opts.chordDiagramScopeKey : "";
+  const transposeSemitones = Number.isFinite(opts.transposeSemitones) ? Number(opts.transposeSemitones) : 0;
   const {
     cifraContainer,
     scrollRoot,
@@ -121,6 +126,10 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
   const chordTimeline = createChordTimeline(payload.chords, { offsetSec: payload.chordTimeOffsetSec });
   const { timedLines: rawTimedLines } = buildLyricModel(payload.lyrics);
   const meta = payload.meta;
+
+  function chordForDisplayFromEvent(c) {
+    return transposeChordLabel(formatChordLabel(c), transposeSemitones);
+  }
 
   let cachedScrollContainer = null;
   function pickScrollContainer() {
@@ -366,7 +375,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
       sectionsSorted,
       chordTimeOffsetSec: payload.chordTimeOffsetSec ?? 0,
       durationHintSec: getDurationWithFallback(),
-      formatChord: (c) => formatChordLabel(c),
+      formatChord: (c) => chordForDisplayFromEvent(c),
     });
     renderPlan = buildCifraRenderPlan(chordOnlyBlocks, vocalTimedLines);
   }
@@ -418,14 +427,15 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
       renderPlan,
       sectionsSorted,
       chordGridStartAudioTime: chordTimeline.gridStartAudioTime,
-      getChordLabelAtAudioTime: (mid) => formatChordLabel(chordTimeline.atAudioTime(mid)),
-      formatChordEvent: (c) => formatChordLabel(c),
+      getChordLabelAtAudioTime: (mid) => chordForDisplayFromEvent(chordTimeline.atAudioTime(mid)),
+      formatChordEvent: (c) => chordForDisplayFromEvent(c),
       chords: payload.chords || [],
       chordTimeOffsetSec: payload.chordTimeOffsetSec ?? 0,
       showSectionBars: true,
       showAllChordPositions: true,
       slotIdsInLyricOrder: payload.slotIdsInLyricOrder,
       chordAnchorsBySlotId: payload.chordAnchorsBySlotId,
+      chordDiagramScopeKey,
     });
     return cifra;
   }
@@ -568,7 +578,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     seek.value = dur ? String(Math.min(SEEK_SLIDER_STEPS, Math.round((t / dur) * SEEK_SLIDER_STEPS))) : "0";
     timeLabel.textContent = `${formatClock(t)} / ${formatClock(dur)}`;
     const chNow = chordTimeline.atAudioTime(t);
-    const chordLabel = formatChordLabel(chNow);
+    const chordLabel = chordForDisplayFromEvent(chNow);
     currentChordEl.textContent = chordLabel;
     if (floatingChordLabel) floatingChordLabel.textContent = chordLabel || "—";
     currentChordEl.title = isNoChordEvent(chNow) ? "Sem acorde — fim da progressão harmónica." : "";
