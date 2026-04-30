@@ -41,7 +41,7 @@ export function MusicCatalogCard({ item, onDeleted, className }: MusicCatalogCar
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [confirmMode, setConfirmMode] = useState<"delete-version" | "remove-library">("delete-version");
-  const canManageVersion = item.isOwnerVersion === true && Boolean(item.trackKey?.trim());
+  const canManageVersion = item.canDeleteVersion === true && Boolean(item.trackKey?.trim());
   const canManageLibraryItem = item.isOwnerVersion !== true && Boolean(item.accessHref || item.isSaved);
   const createVariationHref =
     item.isOwnerVersion !== true && item.trackKey?.trim()

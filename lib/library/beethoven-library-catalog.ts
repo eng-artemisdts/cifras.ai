@@ -11,6 +11,8 @@ type CatalogTrack = {
   isSaved?: boolean;
   hasMyVersion?: boolean;
   isOwnerVersion?: boolean;
+  userId?: string | null;
+  owner?: string | null;
   accessHref?: string | null;
   editHref?: string | null;
 };
@@ -37,9 +39,16 @@ function normalizeCatalogKeyPart(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
 
-function preferredTrack(a: CatalogTrack, b: CatalogTrack): CatalogTrack {
+function isTrackOwnedByUser(track: CatalogTrack, userId?: string): boolean {
+  const normalizedUserId = normalizeCatalogKeyPart(userId);
+  if (!normalizedUserId) return track.isOwnerVersion === true;
+  const ownerId = normalizeCatalogKeyPart(track.userId ?? track.owner);
+  return track.isOwnerVersion === true || ownerId === normalizedUserId;
+}
+
+function preferredTrack(a: CatalogTrack, b: CatalogTrack, userId?: string): CatalogTrack {
   const score = (track: CatalogTrack): number => {
-    if (track.isOwnerVersion === true) return 3;
+    if (isTrackOwnedByUser(track, userId)) return 3;
     if (track.isSaved === true) return 2;
     return 1;
   };
@@ -73,7 +82,7 @@ export async function fetchLibraryCatalog(params: {
             const key = `${normalizeCatalogKeyPart(track.name)}::${normalizeCatalogKeyPart(track.artistName)}`;
             if (!key || key === "::") continue;
             const prev = dedup.get(key);
-            dedup.set(key, prev ? preferredTrack(prev, track) : track);
+            dedup.set(key, prev ? preferredTrack(prev, track, params.userId) : track);
           }
           return [...dedup.values()];
         })()
@@ -83,6 +92,7 @@ export async function fetchLibraryCatalog(params: {
     const isPrivate = track.isPrivate === true;
     const isSaved = track.isSaved === true;
     const isOwnerVersion = track.isOwnerVersion === true;
+    const canDeleteVersion = isTrackOwnedByUser(track, params.userId);
     const tagLabel = isOwnerVersion
       ? "Minha versão"
       : isPrivate
@@ -99,6 +109,7 @@ export async function fetchLibraryCatalog(params: {
       coverTone: coverTones[index % coverTones.length],
       coverImageUrl: typeof track.imageUrl === "string" && track.imageUrl.trim() ? track.imageUrl.trim() : null,
       isOwnerVersion,
+      canDeleteVersion,
       isSaved,
       accessHref: typeof track.accessHref === "string" ? track.accessHref : null,
       editHref: typeof track.editHref === "string" ? track.editHref : null,

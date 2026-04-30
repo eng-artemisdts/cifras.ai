@@ -46,6 +46,7 @@ export type MusicCatalogCard = {
   coverTone: "navy" | "navyTeal" | "surface";
   coverImageUrl?: string | null;
   isOwnerVersion?: boolean;
+  canDeleteVersion?: boolean;
   isSaved?: boolean;
   accessHref?: string | null;
   editHref?: string | null;

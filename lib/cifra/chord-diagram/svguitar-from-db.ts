@@ -138,12 +138,80 @@ function lookupGuitarChordEntry(labelRaw: string): LookupChordResult | null {
 }
 
 function scorePosition(p: DbPosition): number {
-  const muted = p.frets.filter((f) => f < 0).length;
-  const capoPenalty = p.capo ? 40 : 0;
+  const m = summarizePositionMetrics(p);
   const bf = Number.isFinite(p.baseFret) ? p.baseFret : 1;
-  const pressed = p.frets.filter((f) => f > 0);
-  const height = pressed.length ? Math.max(...pressed) : 0;
-  return bf * 3 + height * 0.15 + muted * 2 + capoPenalty;
+
+  // Grupo base de dificuldade (menor = mais fácil).
+  let groupScore = 40;
+  if (
+    bf <= 2 &&
+    !m.hasBarre &&
+    m.pressedCount <= 4 &&
+    m.fretSpan <= 3 &&
+    m.openCount >= 1
+  ) {
+    groupScore = 0; // voicing mais "aberto", amigável para iniciantes.
+  } else if (
+    !m.hasFullBarre &&
+    m.pressedCount <= 4 &&
+    m.fretSpan <= 4 &&
+    bf <= 5
+  ) {
+    groupScore = 10; // shape simples sem pestana cheia.
+  } else if (p.capo && bf <= 2 && m.hasFullBarre) {
+    groupScore = 14; // prioriza capo de linha inteira em casas baixas.
+  } else if (!m.hasFullBarre) {
+    groupScore = 20; // intermediário sem pestana cheia.
+  } else if (m.hasFullBarre) {
+    groupScore = 30; // pestana cheia costuma ser mais difícil.
+  }
+
+  // Ajuste fino dentro do grupo.
+  return (
+    groupScore +
+    bf * 1.4 +
+    m.fretSpan * 2.2 +
+    m.pressedCount * 1.1 +
+    m.mutedCount * 1.8 -
+    m.openCount * 0.9
+  );
+}
+
+function summarizePositionMetrics(pos: DbPosition): {
+  pressedCount: number;
+  openCount: number;
+  mutedCount: number;
+  fretSpan: number;
+  hasBarre: boolean;
+  hasFullBarre: boolean;
+} {
+  const frets = Array.isArray(pos.frets) ? pos.frets : [];
+  const pressed = frets.filter((f) => f > 0);
+  const minPressed = pressed.length ? Math.min(...pressed) : 0;
+  const maxPressed = pressed.length ? Math.max(...pressed) : 0;
+  return {
+    pressedCount: pressed.length,
+    openCount: frets.filter((f) => f === 0).length,
+    mutedCount: frets.filter((f) => f < 0).length,
+    fretSpan: pressed.length ? Math.max(1, maxPressed - minPressed + 1) : 1,
+    hasBarre: normalizeChordDbBarres(pos.barres).length > 0,
+    hasFullBarre: hasFullCapoLine(pos),
+  };
+}
+
+/**
+ * Considera "capo em linha inteira" quando alguma pestana declarada cobre as 6 cordas.
+ */
+function hasFullCapoLine(pos: DbPosition): boolean {
+  const barreFrets = normalizeChordDbBarres(pos.barres);
+  if (!barreFrets.length) return false;
+  return barreFrets.some((fret) => {
+    let covered = 0;
+    for (let idx = 0; idx < 6; idx++) {
+      if (pos.frets[idx] === fret) covered += 1;
+    }
+    return covered === 6;
+  });
 }
 
 /** Normaliza `barres` da base (array ou número único). */
