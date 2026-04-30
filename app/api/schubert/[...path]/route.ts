@@ -32,6 +32,11 @@ function schubertAudience(): string | null {
 
 type RouteCtx = { params?: Promise<{ path?: string[] }> };
 
+const SCHUBERT_PROXY_TIMEOUT_MS = Number.parseInt(
+  process.env.SCHUBERT_PROXY_TIMEOUT_MS ?? "900000",
+  10,
+);
+
 /** Repete contexto de sessão para a Schubert API (o JWT de API muitas vezes não inclui claims `https://cifra.ai/*`). */
 type SchubertForwardIdentity = {
   auth0Sub: string;
@@ -125,6 +130,11 @@ async function proxyToSchubert(req: Request, ctx: RouteCtx, forward: SchubertFor
       method: req.method,
       headers,
       body,
+      signal: AbortSignal.timeout(
+        Number.isFinite(SCHUBERT_PROXY_TIMEOUT_MS)
+          ? SCHUBERT_PROXY_TIMEOUT_MS
+          : 900_000,
+      ),
     });
   } catch (error) {
     Sentry.captureException(error, {

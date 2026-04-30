@@ -11,10 +11,11 @@ import { isPaidPlan, type BillingPlan } from "@/lib/billing/plan-types";
 import { cifraEditHref, resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-routes";
 import { mergeSongMeta, type ImportMetadataContext } from "@/lib/library/import-metadata-context";
 import {
+  getIngestJobStatus,
   postTrackIngestWithMeta,
   SchubertIdentifyError,
 } from "@/lib/schubert-identify-service";
-import type { SchubertTrackJson } from "@/lib/schubert-api";
+import { fetchSchubertFromBrowser, type SchubertTrackJson } from "@/lib/schubert-api";
 import { cn } from "@/lib/utils";
 
 /** Alinhado ao badge do frame `rk0Ri` (Pencil). */
@@ -245,15 +246,43 @@ export function ImportMetadataStep({
         throw new Error("Arquivo de áudio em falta para ingestão.");
       }
 
-      const { track } = await postTrackIngestWithMeta(ingestFile, mergedSong, {
+      const ingestResponse = await postTrackIngestWithMeta(ingestFile, mergedSong, {
         capo_at: capoClamped,
       });
+      let resolvedTrack = ingestResponse.track as SchubertTrackJson | undefined;
+      if (!resolvedTrack || !resolvedTrack.trackId) {
+        const jobId = typeof ingestResponse.jobId === "string" ? ingestResponse.jobId.trim() : "";
+        if (!jobId) throw new Error("Ingest não retornou track nem jobId.");
+        const startedAt = Date.now();
+        let last: Awaited<ReturnType<typeof getIngestJobStatus>> | null = null;
+        for (let attempt = 0; attempt < 180; attempt++) {
+          last = await getIngestJobStatus(jobId);
+          if (last.status === "completed") break;
+          if (last.status === "failed" || last.status === "cancelled") {
+            throw new Error(last.error || "Ingest assíncrono falhou.");
+          }
+          const waitMs = attempt < 10 ? 1500 : 3000;
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+          if (Date.now() - startedAt > 10 * 60 * 1000) {
+            throw new Error("Ingest assíncrono excedeu tempo limite de 10 minutos.");
+          }
+        }
+        const key = last?.resultTrackId?.trim();
+        if (!key) throw new Error("Ingest concluído sem resultTrackId.");
+        const trackRes = await fetchSchubertFromBrowser(`tracks/by-key/${encodeURIComponent(key)}`, {
+          method: "GET",
+        });
+        if (!trackRes.ok) {
+          throw new Error("Faixa criada, mas falha ao carregar dados finais.");
+        }
+        resolvedTrack = (await trackRes.json()) as SchubertTrackJson;
+      }
       const tid =
-        track && typeof track === "object" && "trackId" in track && typeof track.trackId === "string"
-          ? track.trackId.trim()
+        resolvedTrack && typeof resolvedTrack === "object" && "trackId" in resolvedTrack && typeof resolvedTrack.trackId === "string"
+          ? resolvedTrack.trackId.trim()
           : "";
       onDoneNavigation();
-      const pair = resolveCifraSlugPairFromTrack(track as unknown as SchubertTrackJson);
+      const pair = resolveCifraSlugPairFromTrack(resolvedTrack as SchubertTrackJson);
       if (pair) {
         router.push(cifraEditHref(pair.artistSlug, pair.songSlug));
         return;

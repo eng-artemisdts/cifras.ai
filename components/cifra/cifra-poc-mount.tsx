@@ -231,10 +231,10 @@ export function CifraPocMount({
   }, [spotifyTrackId, youtubeVideoId]);
 
   const defaultProvider = useMemo<PlaybackProvider>(() => {
-    if (availableProviders.includes("spotify") && spotifyStatus.connected && spotifyStatus.premium) return "spotify";
+    if (availableProviders.includes("spotify")) return "spotify";
     if (availableProviders.includes("youtube")) return "youtube";
     return "internal";
-  }, [availableProviders, spotifyStatus.connected, spotifyStatus.premium]);
+  }, [availableProviders]);
   const [providerChoice, setProviderChoice] = useState<{ trackKey: string; provider: PlaybackProvider } | null>(
     null,
   );
@@ -454,34 +454,55 @@ export function CifraPocMount({
         const adapter =
           selectedProvider === "spotify" && spotifyTrackId
             ? ({
-                provider: "spotify",
-                async ready() {
-                  return;
-                },
-                async play() {
-                  return;
-                },
-                async pause() {
-                  return;
-                },
-                async seek() {
-                  return;
-                },
-                getCurrentTime() {
-                  return spotifyExternalCurrentSecRef.current;
-                },
-                getDuration() {
-                  return spotifyExternalDurationSecRef.current;
-                },
-                isPlaying() {
-                  return spotifyExternalPlayingRef.current;
-                },
-                destroy() {
-                  spotifyExternalPlayingRef.current = false;
-                  spotifyExternalCurrentSecRef.current = 0;
-                  spotifyExternalDurationSecRef.current = 0;
-                },
-              } satisfies PlaybackAdapter)
+              provider: "spotify",
+              async ready() {
+                return;
+              },
+              async play() {
+                spotifyExternalPlayingRef.current = true;
+                window.dispatchEvent(
+                  new CustomEvent("cifra:spotify-embed-command", {
+                    detail: { action: "play", trackId: spotifyTrackId },
+                  }),
+                );
+              },
+              async pause() {
+                spotifyExternalPlayingRef.current = false;
+                window.dispatchEvent(
+                  new CustomEvent("cifra:spotify-embed-command", {
+                    detail: { action: "pause", trackId: spotifyTrackId },
+                  }),
+                );
+              },
+              async seek(seconds: number) {
+                if (!Number.isFinite(seconds)) return;
+                const nextSec = Math.max(0, seconds);
+                spotifyExternalCurrentSecRef.current = nextSec;
+                window.dispatchEvent(
+                  new CustomEvent("cifra:spotify-embed-command", {
+                    detail: {
+                      action: "seek",
+                      trackId: spotifyTrackId,
+                      positionMs: Math.round(nextSec * 1000),
+                    },
+                  }),
+                );
+              },
+              getCurrentTime() {
+                return spotifyExternalCurrentSecRef.current;
+              },
+              getDuration() {
+                return spotifyExternalDurationSecRef.current;
+              },
+              isPlaying() {
+                return spotifyExternalPlayingRef.current;
+              },
+              destroy() {
+                spotifyExternalPlayingRef.current = false;
+                spotifyExternalCurrentSecRef.current = 0;
+                spotifyExternalDurationSecRef.current = 0;
+              },
+            } satisfies PlaybackAdapter)
             : selectedProvider === "youtube" && youtubeHostRef.current && youtubeVideoId
               ? createYoutubeAdapter({ hostEl: youtubeHostRef.current, videoId: youtubeVideoId })
               : createInternalAudioAdapter({ audioEl: readyAudioEl, audioUrl: payload.meta?.audioUrl });

@@ -25,5 +25,17 @@ export type SchubertTrackIdentifyResponse = {
 
 /** Resposta de `POST /tracks/ingest` (áudio + `meta` JSON). */
 export type SchubertTrackIngestResponse = {
-  track: Record<string, unknown>;
+  track?: Record<string, unknown>;
+  jobId?: string;
+  status?: "queued" | "running" | "completed" | "failed";
+  progressPercent?: number;
+};
+
+export type SchubertIngestJobResponse = {
+  jobId: string;
+  status: "queued" | "running" | "completed" | "failed" | "cancelled";
+  progressPercent: number;
+  currentStage: string;
+  resultTrackId?: string;
+  error?: string;
 };

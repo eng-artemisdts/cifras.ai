@@ -2,6 +2,7 @@ import { cifraEditHref, cifraHref, resolveCifraSlugPairFromTrack } from "@/lib/c
 import type { SchubertTrackJson } from "@/lib/schubert-api";
 import { fetchSchubertFromBrowser } from "@/lib/schubert-api";
 import type {
+  SchubertIngestJobResponse,
   SchubertRecognizedSong,
   SchubertTrackIdentifyResponse,
   SchubertTrackIngestResponse,
@@ -144,6 +145,26 @@ export async function postTrackIngestWithMeta(
   }
 
   return json as SchubertTrackIngestResponse;
+}
+
+export async function getIngestJobStatus(jobId: string): Promise<SchubertIngestJobResponse> {
+  const res = await fetchSchubertFromBrowser(`tracks/ingest/jobs/${encodeURIComponent(jobId)}`, {
+    method: "GET",
+  });
+  const raw = await res.text();
+  let json: unknown = null;
+  if (raw) {
+    try {
+      json = JSON.parse(raw) as unknown;
+    } catch {
+      json = { raw };
+    }
+  }
+  if (!res.ok) {
+    const msg = formatUpstreamErrorMessage(json, res.statusText);
+    throw new SchubertIdentifyError(msg, res.status, json);
+  }
+  return json as SchubertIngestJobResponse;
 }
 
 export type ChordFoundPreview = {
