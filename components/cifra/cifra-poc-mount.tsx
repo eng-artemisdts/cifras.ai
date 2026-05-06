@@ -21,6 +21,7 @@ import {
 import { startCifraRuntimeV2 } from "@/lib/engine/start-cifra-runtime-v2";
 import { cn } from "@/lib/utils";
 import { transposeTuneLabel } from "@/lib/cifra/chord-transpose";
+import type { ChordDiagramHoverOptions } from "@/lib/cifra/chord-diagram/attach-chord-diagram-hover-dom";
 
 const ReactPlayer = dynamic(() => import("react-player"), { ssr: false });
 
@@ -224,6 +225,23 @@ export function CifraPocMount({
   const runtimeTransposeLiveRef = useRef(runtimeTransposeSemitones);
   runtimeTransposeLiveRef.current = runtimeTransposeSemitones;
   const runtimeTransposeRefreshRef = useRef<(() => void) | null>(null);
+  const chordDiagramPrefsRef = useRef<Record<string, number>>({});
+  const chordDiagramHoverOptionsRef = useRef<ChordDiagramHoverOptions | null>(null);
+  chordDiagramHoverOptionsRef.current = {
+    getVariationIndex: (k: string) => {
+      const v = chordDiagramPrefsRef.current[k];
+      return typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0;
+    },
+    persistVariation: (k: string, idx: number) => {
+      chordDiagramPrefsRef.current[k] = idx;
+      void fetch("/api/cifra/chord-diagram-prefs", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: k, variationIndex: idx }),
+      }).catch(() => undefined);
+    },
+  };
 
   useEffect(() => {
     function onAutoScrollState(ev: Event) {
@@ -346,6 +364,29 @@ export function CifraPocMount({
   useEffect(() => {
     setIsClientMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!isClientMounted) return;
+    let cancelled = false;
+    void fetch("/api/cifra/chord-diagram-prefs", { credentials: "include" })
+      .then((r) => (r.ok ? (r.json() as Promise<{ diagramByLabel?: unknown }>) : null))
+      .then((json) => {
+        if (cancelled || !json || typeof json !== "object") return;
+        const raw = json.diagramByLabel;
+        if (!raw || typeof raw !== "object") return;
+        const next: Record<string, number> = {};
+        for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+          if (typeof val === "number" && Number.isFinite(val) && val >= 0) {
+            next[key] = Math.floor(val);
+          }
+        }
+        chordDiagramPrefsRef.current = { ...chordDiagramPrefsRef.current, ...next };
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [isClientMounted]);
 
   useEffect(() => {
     if (!spotifyTrackId) return;
@@ -471,6 +512,7 @@ export function CifraPocMount({
           transposeSemitonesLive: runtimeTransposeLiveRef,
           runtimeTransposeRefreshRef,
           userScrollIntentHandlerRef,
+          chordDiagramHoverOptionsRef,
           els: {
             scrollRoot: readyScrollRoot,
             cifraContainer: readyCifraContainer,
@@ -507,6 +549,7 @@ export function CifraPocMount({
           transposeSemitonesLive: runtimeTransposeLiveRef,
           runtimeTransposeRefreshRef,
           userScrollIntentHandlerRef,
+          chordDiagramHoverOptionsRef,
           els: {
             scrollRoot: readyScrollRoot,
             cifraContainer: readyCifraContainer,

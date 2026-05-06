@@ -119,6 +119,11 @@ export type StartCifraRuntimeOptions = {
   runtimeTransposeRefreshRef?: { current: (() => void) | null };
   /** Handler populado pelo runtime e acionado via eventos React no componente. */
   userScrollIntentHandlerRef?: { current: ((source?: "user" | "scroll") => void) | null };
+  /**
+   * Preferências de diagrama (variação svguitar) por etiqueta de acorde — lectura em cada hover.
+   * Quando omitido, o comportamento é só hover sem persistência (índice 0).
+   */
+  chordDiagramHoverOptionsRef?: { current: import("@/lib/cifra/chord-diagram/attach-chord-diagram-hover-dom").ChordDiagramHoverOptions | null };
   els: CifraRuntimeEls;
 };
 
@@ -131,6 +136,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     return staticTransposeSemitones;
   }
   const userScrollIntentHandlerRef = opts.userScrollIntentHandlerRef;
+  const chordDiagramHoverOptionsRef = opts.chordDiagramHoverOptionsRef;
   const {
     cifraContainer,
     scrollRoot,
@@ -583,6 +589,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
       slotIdsInLyricOrder: payload.slotIdsInLyricOrder,
       chordAnchorsBySlotId: payload.chordAnchorsBySlotId,
       chordDiagramScopeKey,
+      chordDiagramHoverOptionsRef,
     });
     return cifra;
   }

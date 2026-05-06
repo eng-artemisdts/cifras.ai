@@ -9,6 +9,7 @@ type Auth0AppMetadataPatch = {
 
 type Auth0UserDocument = {
   app_metadata?: Record<string, unknown>;
+  user_metadata?: Record<string, unknown>;
 };
 
 /** Leitura direta do `app_metadata` (atualizado pelo webhook Stripe). */
@@ -105,6 +106,49 @@ async function patchAuth0UserAppMetadataRecord(
   if (!patchRes.ok) {
     const t = await patchRes.text();
     throw new Error(`Auth0 patch user falhou (${patchRes.status}): ${t}`);
+  }
+}
+
+/** Substitui `user_metadata` pelo objeto enviado (já deve estar mesclado no servidor). */
+export async function patchAuth0UserUserMetadataFull(
+  auth0UserId: string,
+  nextUserMetadata: Record<string, unknown>,
+): Promise<void> {
+  if (!isMgmtConfigured()) {
+    throw new Error("auth0_management_not_configured");
+  }
+  const domain = auth0Domain();
+  const token = await getManagementToken();
+  const patchRes = await fetch(
+    `https://${domain}/api/v2/users/${encodeURIComponent(auth0UserId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ user_metadata: nextUserMetadata }),
+    },
+  );
+  if (!patchRes.ok) {
+    const t = await patchRes.text();
+    throw new Error(`Auth0 patch user_metadata falhou (${patchRes.status}): ${t}`);
+  }
+}
+
+/** Preferências de utilizador em `user_metadata` (ex.: diagramas de acorde). */
+export async function fetchAuth0UserUserMetadata(
+  auth0UserId: string,
+): Promise<Record<string, unknown>> {
+  if (!isMgmtConfigured()) return {};
+  try {
+    const u = await getAuth0UserDocument(auth0UserId);
+    const raw = u.user_metadata;
+    return raw && typeof raw === "object" && !Array.isArray(raw)
+      ? { ...(raw as Record<string, unknown>) }
+      : {};
+  } catch {
+    return {};
   }
 }
 

@@ -282,6 +282,7 @@ export function mountCifraView(params) {
     beatsPerBar: beatsPerBarParam = 4,
     slotIdsInLyricOrder = null,
     chordAnchorsBySlotId = null,
+    chordDiagramHoverOptionsRef = null,
   } = params;
 
   const beatsPerBar = Number.isFinite(beatsPerBarParam) && beatsPerBarParam >= 1 ? beatsPerBarParam : 4;
@@ -303,7 +304,11 @@ export function mountCifraView(params) {
       .trim()
       .replace(/\u00a0/g, '');
     if (!lab) return;
-    const dispose = attachChordDiagramHoverDom(chEl, lab);
+    const getOptions =
+      chordDiagramHoverOptionsRef && typeof chordDiagramHoverOptionsRef === 'object'
+        ? () => chordDiagramHoverOptionsRef.current ?? undefined
+        : undefined;
+    const dispose = attachChordDiagramHoverDom(chEl, lab, getOptions);
     diagramHoverDisposers.push(dispose);
   }
 
