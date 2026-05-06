@@ -219,29 +219,40 @@ export function CifraRightSidebar({
               </span>
             </span>
           </label>
-          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1 hover:bg-white/4">
-            <input
-              ref={scrollModeSmartRef}
-              type="radio"
-              name="cifra-scroll-mode"
-              value="smart"
-              disabled={!isProUser}
-              className="mt-0.5 size-3.5 shrink-0 accent-cifra-teal"
-            />
-            <span className="min-w-0">
-              <span className="block text-[11px] font-semibold text-cifra-text">
-                Rolagem inteligente{" "}
-                {!isProUser ? (
+          {isProUser ? (
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1 hover:bg-white/4">
+              <input
+                ref={scrollModeSmartRef}
+                type="radio"
+                name="cifra-scroll-mode"
+                value="smart"
+                className="mt-0.5 size-3.5 shrink-0 accent-cifra-teal"
+              />
+              <span className="min-w-0">
+                <span className="block text-[11px] font-semibold text-cifra-text">Rolagem inteligente</span>
+                <span className="mt-0.5 block text-[10px] leading-snug text-cifra-muted">
+                  Centra a vista na célula do acorde em destaque
+                </span>
+              </span>
+            </label>
+          ) : (
+            <div className="flex items-start gap-2.5 rounded-lg px-1 py-1">
+              <span className="mt-0.5 inline-flex size-3.5 shrink-0 items-center justify-center rounded-full border border-cifra-border/70 bg-cifra-surface-2 text-[8px] text-cifra-muted">
+                •
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[11px] font-semibold text-cifra-text">
+                  Rolagem inteligente{" "}
                   <span className="rounded border border-cifra-gold/40 bg-cifra-gold/10 px-1 py-0.5 font-mono text-[8px] uppercase tracking-wide text-cifra-gold">
                     PRO
                   </span>
-                ) : null}
+                </span>
+                <span className="mt-0.5 block text-[10px] leading-snug text-cifra-muted">
+                  Centra a vista na célula do acorde em destaque
+                </span>
               </span>
-              <span className="mt-0.5 block text-[10px] leading-snug text-cifra-muted">
-                Centra a vista na célula do acorde em destaque
-              </span>
-            </span>
-          </label>
+            </div>
+          )}
         </fieldset>
 
         <div className="mt-3 flex items-center justify-between gap-3 border-t border-cifra-border pt-3">

@@ -85,6 +85,27 @@ export function CifraPocMount({
   billingPlan,
   className,
 }: CifraPocMountProps) {
+  const AUTO_SCROLL_BAR_POS_LS_KEY = "cifra-ai:auto-scroll-bar-pos";
+  function clampAutoScrollBarPos(left: number, top: number) {
+    if (typeof window === "undefined") return { left, top };
+    const margin = 12;
+    const maxLeft = Math.max(margin, window.innerWidth - margin);
+    const maxTop = Math.max(margin, window.innerHeight - margin);
+    return {
+      left: Math.min(maxLeft, Math.max(margin, left)),
+      top: Math.min(maxTop, Math.max(margin, top)),
+    };
+  }
+
+  function durationToSpeed(durationMs: number): number {
+    const clamped = Math.max(200, Math.min(1200, Math.round(durationMs)));
+    return Math.max(0, Math.min(100, Math.round(((1200 - clamped) / 1000) * 100)));
+  }
+  function speedToDuration(speed: number): number {
+    const s = Math.max(0, Math.min(100, Math.round(speed)));
+    return Math.max(200, Math.min(1200, Math.round(1200 - (s / 100) * 1000)));
+  }
+
   const isProUser = billingPlan === "pro";
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -96,6 +117,14 @@ export function CifraPocMount({
   const [rightSidebarMountGen, setRightSidebarMountGen] = useState(0);
   const [providerNotice, setProviderNotice] = useState<string>("");
   const [isClientMounted, setIsClientMounted] = useState(false);
+  const [autoScrollChrome, setAutoScrollChrome] = useState<{ enabled: boolean; smartScroll: boolean }>({
+    enabled: false,
+    smartScroll: false,
+  });
+  const isAutoScrollEnabled = autoScrollChrome.enabled;
+  const showAutoScrollFloatingBar = autoScrollChrome.enabled && !autoScrollChrome.smartScroll;
+  const [autoScrollSpeed, setAutoScrollSpeed] = useState(75);
+  const [autoScrollBarPos, setAutoScrollBarPos] = useState<{ left: number; top: number } | null>(null);
   const [spotifyStatus, setSpotifyStatus] = useState<{
     loading: boolean;
     connected: boolean;
@@ -182,10 +211,81 @@ export function CifraPocMount({
   const autoScrollDurValRef = useRef<HTMLSpanElement>(null);
   const showFloatingChordRef = useRef<HTMLInputElement>(null);
   const showCurrentChordDiagramRef = useRef<HTMLInputElement>(null);
+  const userScrollIntentHandlerRef = useRef<((source?: "user" | "scroll") => void) | null>(null);
+  const autoScrollBarDragRef = useRef<{
+    dragging: boolean;
+    offsetX: number;
+    offsetY: number;
+  }>({ dragging: false, offsetX: 0, offsetY: 0 });
   const scrollModeAutomaticRef = useRef<HTMLInputElement>(null);
   const scrollModeSmartRef = useRef<HTMLInputElement>(null);
   const spotifyEmbedIframeRef = useRef<HTMLIFrameElement>(null);
   const youtubeMediaRef = useRef<HTMLVideoElement | null>(null);
+  const runtimeTransposeLiveRef = useRef(runtimeTransposeSemitones);
+  runtimeTransposeLiveRef.current = runtimeTransposeSemitones;
+  const runtimeTransposeRefreshRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    function onAutoScrollState(ev: Event) {
+      const custom = ev as CustomEvent<{ enabled?: boolean; smartScroll?: boolean }>;
+      setAutoScrollChrome({
+        enabled: custom.detail?.enabled === true,
+        smartScroll: custom.detail?.smartScroll === true,
+      });
+    }
+    window.addEventListener("cifra:auto-scroll-state", onAutoScrollState as EventListener);
+    return () => {
+      window.removeEventListener("cifra:auto-scroll-state", onAutoScrollState as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isAutoScrollEnabled) return;
+    const durationEl = autoScrollDurRef.current;
+    if (!durationEl) return;
+    setAutoScrollSpeed(durationToSpeed(Number(durationEl.value)));
+  }, [isAutoScrollEnabled]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem(AUTO_SCROLL_BAR_POS_LS_KEY);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as { left?: number; top?: number };
+        if (typeof parsed.left === "number" && typeof parsed.top === "number") {
+          setAutoScrollBarPos(clampAutoScrollBarPos(parsed.left, parsed.top));
+          return;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    // Posição inicial: centro horizontal e um pouco mais abaixo.
+    setAutoScrollBarPos({ left: window.innerWidth / 2, top: window.innerHeight * 0.86 });
+  }, []);
+
+  useEffect(() => {
+    if (!autoScrollBarPos || typeof window === "undefined") return;
+    window.localStorage.setItem(AUTO_SCROLL_BAR_POS_LS_KEY, JSON.stringify(autoScrollBarPos));
+  }, [autoScrollBarPos]);
+
+  useEffect(() => {
+    function onPointerMove(ev: PointerEvent) {
+      const drag = autoScrollBarDragRef.current;
+      if (!drag.dragging) return;
+      const next = clampAutoScrollBarPos(ev.clientX - drag.offsetX, ev.clientY - drag.offsetY);
+      setAutoScrollBarPos(next);
+    }
+    function onPointerUp() {
+      autoScrollBarDragRef.current.dragging = false;
+    }
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+  }, []);
 
   const spotifyTrackId = useMemo(() => payload.meta?.spotifyTrackId?.trim() ?? "", [payload.meta?.spotifyTrackId]);
   const youtubeVideoId = useMemo(() => {
@@ -301,6 +401,11 @@ export function CifraPocMount({
     };
   }, [isClientMounted, spotifyTrackId]);
 
+  /** Tom/capo: actualiza só o DOM da cifra; não destrói o iframe do Spotify (`iframeController.destroy`). */
+  useEffect(() => {
+    runtimeTransposeRefreshRef.current?.();
+  }, [runtimeTransposeSemitones]);
+
   useEffect(() => {
     const scrollRoot = scrollRootRef.current;
     const cifraContainer = cifraRef.current;
@@ -363,6 +468,9 @@ export function CifraPocMount({
           payloadInput: payloadForRuntime as unknown as Record<string, unknown>,
           chordDiagramScopeKey: trackKey,
           transposeSemitones: runtimeTransposeSemitones,
+          transposeSemitonesLive: runtimeTransposeLiveRef,
+          runtimeTransposeRefreshRef,
+          userScrollIntentHandlerRef,
           els: {
             scrollRoot: readyScrollRoot,
             cifraContainer: readyCifraContainer,
@@ -396,6 +504,9 @@ export function CifraPocMount({
           payloadInput: payloadForRuntime as unknown as Record<string, unknown>,
           chordDiagramScopeKey: trackKey,
           transposeSemitones: runtimeTransposeSemitones,
+          transposeSemitonesLive: runtimeTransposeLiveRef,
+          runtimeTransposeRefreshRef,
+          userScrollIntentHandlerRef,
           els: {
             scrollRoot: readyScrollRoot,
             cifraContainer: readyCifraContainer,
@@ -437,10 +548,6 @@ export function CifraPocMount({
     youtubeVideoId,
     payload.meta?.audioUrl,
     spotifyDurationHintSec,
-    runtimeTransposeSemitones,
-    trackDraft.capoAt,
-    trackDraft.originalTune,
-    trackDraft.trackKey,
   ]);
 
   const titleFromPayload =
@@ -636,6 +743,16 @@ export function CifraPocMount({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-white/6 bg-[#12121f] lg:flex-row lg:items-stretch">
         <div
           ref={scrollRootRef}
+          onScroll={() => userScrollIntentHandlerRef.current?.("scroll")}
+          onWheel={() => userScrollIntentHandlerRef.current?.("user")}
+          onTouchMove={() => userScrollIntentHandlerRef.current?.("user")}
+          onKeyDown={(e) => {
+            if (
+              ["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " ", "Spacebar"].includes(e.key)
+            ) {
+              userScrollIntentHandlerRef.current?.("user");
+            }
+          }}
           className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-5 lg:px-8 lg:py-6"
         >
           <div id="cifra" ref={cifraRef} className="min-h-[min(12rem,30dvh)] w-full min-w-0" />
@@ -704,6 +821,57 @@ export function CifraPocMount({
       >
         {isMobileSidebarOpen ? "Fechar painel" : "Painel da faixa"}
       </button>
+      {showAutoScrollFloatingBar ? (
+        <div
+          onPointerDown={(ev) => {
+            const target = ev.target as HTMLElement;
+            if (target.closest("input,button")) return;
+            const pos = autoScrollBarPos ?? { left: window.innerWidth / 2, top: window.innerHeight * 0.86 };
+            autoScrollBarDragRef.current = {
+              dragging: true,
+              offsetX: ev.clientX - pos.left,
+              offsetY: ev.clientY - pos.top,
+            };
+          }}
+          style={{
+            left: `${autoScrollBarPos?.left ?? 0}px`,
+            top: `${autoScrollBarPos?.top ?? 0}px`,
+            transform: "translate(-50%, -50%)",
+          }}
+          className="fixed z-50 flex w-[min(92vw,420px)] cursor-grab items-center gap-3 rounded-2xl border border-cifra-teal/35 bg-[#0e1020]/95 px-3.5 py-2.5 shadow-[0_10px_34px_rgba(0,0,0,0.5)] backdrop-blur active:cursor-grabbing"
+        >
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-cifra-teal">
+            Auto Scroll
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={autoScrollSpeed}
+            onChange={(e) => {
+              const nextSpeed = Number(e.target.value);
+              setAutoScrollSpeed(nextSpeed);
+              const durationEl = autoScrollDurRef.current;
+              if (!durationEl) return;
+              durationEl.value = String(speedToDuration(nextSpeed));
+              durationEl.dispatchEvent(new Event("input", { bubbles: true }));
+              durationEl.dispatchEvent(new Event("change", { bubbles: true }));
+            }}
+            className="cifra-range cifra-range--sm h-3 min-w-0 flex-1"
+            aria-label="Velocidade da rolagem automática"
+          />
+          <button
+            type="button"
+            onClick={() => autoScrollBtnRef.current?.click()}
+            className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-cifra-muted transition hover:bg-white/10 hover:text-cifra-text"
+            aria-label="Fechar auto scroll"
+            title="Fechar auto scroll"
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

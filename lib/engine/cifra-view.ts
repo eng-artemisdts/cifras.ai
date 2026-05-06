@@ -1330,13 +1330,9 @@ export function resolveCifraScrollTarget(container, tAudio, leadSec = 0, chords,
 }
 
 /**
- * Alvo da rolagem «inteligente»: centra na célula `.cifra-chord--track` do acorde activo (o mesmo nó do highlight);
- * se não houver célula, recai para {@link resolveCifraScrollTarget} (linha / secção).
+ * Alvo da rolagem «inteligente»: igual a {@link resolveCifraScrollTarget} — linha `.cifra-line` do acorde
+ * em reprodução (com `leadSec`), ou secção se não houver célula; mantido como alias para chamadas antigas.
  */
 export function resolveCifraSmartScrollTarget(container, tAudio, leadSec = 0, chords, chordTimeOffsetSec) {
-  const lead = typeof leadSec === 'number' && Number.isFinite(leadSec) ? Math.max(0, leadSec) : 0;
-  const t = tAudio + lead;
-  const cell = pickActiveChordTrackCell(container, t, chords, chordTimeOffsetSec);
-  if (cell instanceof HTMLElement) return cell;
   return resolveCifraScrollTarget(container, tAudio, leadSec, chords, chordTimeOffsetSec);
 }
