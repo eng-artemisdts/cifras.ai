@@ -65,11 +65,6 @@ export function createInternalAudioAdapter(opts: InternalAudioAdapterOptions): P
 
 declare global {
   interface Window {
-    YT?: {
-      Player: new (element: HTMLElement, config: Record<string, unknown>) => YouTubePlayer;
-      PlayerState: { PLAYING: number };
-    };
-    onYouTubeIframeAPIReady?: () => void;
     Spotify?: {
       Player: new (options: {
         name: string;
@@ -81,98 +76,72 @@ declare global {
   }
 }
 
-type YouTubePlayer = {
-  playVideo: () => void;
-  pauseVideo: () => void;
-  seekTo: (seconds: number, allowSeekAhead?: boolean) => void;
-  getCurrentTime: () => number;
-  getDuration: () => number;
-  getPlayerState: () => number;
-  destroy: () => void;
+/** YouTube via `react-player` (elemento `<video is="youtube-video">` ou equivalente). */
+type YoutubeMediaAdapterOptions = {
+  getMediaElement: () => HTMLVideoElement | null;
 };
 
-function ensureYoutubeApi(): Promise<NonNullable<Window["YT"]>> {
-  if (typeof window === "undefined") return Promise.reject(new Error("window_unavailable"));
-  if (window.YT?.Player) return Promise.resolve(window.YT);
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>('script[src="https://www.youtube.com/iframe_api"]');
-    if (!existing) {
-      const script = document.createElement("script");
-      script.src = "https://www.youtube.com/iframe_api";
-      script.async = true;
-      script.onerror = () => reject(new Error("youtube_script_load_failed"));
-      document.head.appendChild(script);
+export function createYoutubeMediaElementAdapter(opts: YoutubeMediaAdapterOptions): PlaybackAdapter {
+  const { getMediaElement } = opts;
+
+  async function waitForMediaReady(): Promise<HTMLVideoElement> {
+    const deadline = Date.now() + 20_000;
+    while (Date.now() < deadline) {
+      const el = getMediaElement();
+      if (el) {
+        if (Number.isFinite(el.duration) && el.duration > 0) return el;
+        await new Promise<void>((resolve) => {
+          const done = () => resolve();
+          el.addEventListener("loadedmetadata", done, { once: true });
+          el.addEventListener("error", done, { once: true });
+          window.setTimeout(done, 2500);
+        });
+        if (Number.isFinite(el.duration) && el.duration > 0) return el;
+      }
+      await new Promise((r) => window.setTimeout(r, 40));
     }
-    const prev = window.onYouTubeIframeAPIReady;
-    window.onYouTubeIframeAPIReady = () => {
-      prev?.();
-      if (window.YT?.Player) resolve(window.YT);
-      else reject(new Error("youtube_api_unavailable"));
-    };
-  });
-}
-
-type YouTubeAdapterOptions = {
-  hostEl: HTMLElement;
-  videoId: string;
-};
-
-export function createYoutubeAdapter(opts: YouTubeAdapterOptions): PlaybackAdapter {
-  const { hostEl, videoId } = opts;
-  let player: YouTubePlayer | null = null;
+    throw new Error("youtube_player_timeout");
+  }
 
   return {
     provider: "youtube",
     async ready() {
-      const YT = await ensureYoutubeApi();
-      await new Promise<void>((resolve, reject) => {
-        player = new YT.Player(hostEl, {
-          videoId,
-          playerVars: { playsinline: 1, rel: 0 },
-          events: {
-            onReady: () => resolve(),
-            onError: () => reject(new Error("youtube_player_error")),
-          },
-        });
-      });
+      await waitForMediaReady();
     },
     async play() {
-      const p = player;
-      if (!p || typeof p.playVideo !== "function") return;
-      p.playVideo();
+      const el = getMediaElement();
+      if (!el) return;
+      await el.play().catch(() => undefined);
     },
     async pause() {
-      const p = player;
-      if (!p || typeof p.pauseVideo !== "function") return;
-      p.pauseVideo();
+      const el = getMediaElement();
+      el?.pause();
     },
     async seek(seconds: number) {
-      const p = player;
-      if (!p || typeof p.seekTo !== "function" || !Number.isFinite(seconds)) return;
-      p.seekTo(Math.max(0, seconds), true);
+      if (!Number.isFinite(seconds)) return;
+      const el = getMediaElement();
+      if (!el) return;
+      el.currentTime = Math.max(0, seconds);
     },
     getCurrentTime() {
-      const p = player;
-      if (!p || typeof p.getCurrentTime !== "function") return 0;
-      const t = p.getCurrentTime();
+      const el = getMediaElement();
+      if (!el) return 0;
+      const t = el.currentTime;
       return Number.isFinite(t) ? t : 0;
     },
     getDuration() {
-      const p = player;
-      if (!p || typeof p.getDuration !== "function") return 0;
-      const d = p.getDuration();
+      const el = getMediaElement();
+      if (!el) return 0;
+      const d = el.duration;
       return Number.isFinite(d) && d > 0 ? d : 0;
     },
     isPlaying() {
-      const p = player;
-      if (!p || typeof p.getPlayerState !== "function" || !window.YT?.PlayerState) return false;
-      return p.getPlayerState() === window.YT.PlayerState.PLAYING;
+      const el = getMediaElement();
+      return Boolean(el && !el.paused);
     },
     destroy() {
-      const p = player;
-      if (p && typeof p.destroy === "function") p.destroy();
-      player = null;
-      hostEl.innerHTML = "";
+      const el = getMediaElement();
+      el?.pause();
     },
   };
 }
@@ -205,6 +174,20 @@ async function spotifyApiCall(path: string, init?: RequestInit): Promise<Respons
       ...(init?.headers ?? {}),
     },
   });
+}
+
+type SpotifyCurrentPlaybackResponse = {
+  ok?: boolean;
+  playing?: boolean;
+  trackId?: string;
+  positionMs?: number;
+  durationMs?: number;
+};
+
+async function fetchSpotifyCurrentPlayback(): Promise<SpotifyCurrentPlaybackResponse> {
+  const res = await spotifyApiCall("/api/spotify/currently-playing", { method: "GET" });
+  if (!res.ok) throw new Error("spotify_currently_playing_failed");
+  return (await res.json()) as SpotifyCurrentPlaybackResponse;
 }
 
 async function fetchSpotifyAccessToken(): Promise<string> {
@@ -240,29 +223,49 @@ function ensureSpotifyWebPlaybackSdk(): Promise<NonNullable<Window["Spotify"]>> 
 }
 
 type SpotifyAdapterOptions = {
-  hostEl: HTMLElement;
   trackId: string;
-  /** Duração conhecida da faixa (payload), em segundos — fallback quando embed manda duration=0. */
+  /** Duração conhecida da faixa (payload), em segundos — fallback quando o SDK ainda não reportou duração. */
   durationHintSec?: number;
+  /** Quando definido, força o início no segundo indicado ao dar play. */
+  startAtSec?: number;
+  /** Iframe visível do Spotify Embed (quando usado na UI). */
+  getIframeElement?: () => HTMLIFrameElement | null;
 };
 
-type SpotifyEmbedPlaybackEvent = CustomEvent<{
-  trackId?: string;
-  isPaused?: boolean;
-  positionMs?: number;
-  durationMs?: number;
-}>;
-
 export function createSpotifyAdapter(opts: SpotifyAdapterOptions): PlaybackAdapter {
-  const { trackId, durationHintSec } = opts;
+  const { trackId, durationHintSec, startAtSec, getIframeElement } = opts;
+  type SpotifyIframeController = {
+    loadUri: (uri: string, preferVideo?: boolean, startAt?: number) => void;
+    play: () => void;
+    pause: () => void;
+    resume: () => void;
+    seek: (positionMs: number) => void;
+    addListener: (
+      event: "ready" | "playback_update",
+      listener: (ev: { data?: { isPaused?: boolean; position?: number; duration?: number } }) => void,
+    ) => void;
+    destroy: () => void;
+  };
+  type SpotifyIframeApi = {
+    createController: (
+      element: HTMLIFrameElement,
+      options: { uri: string; width?: string | number; height?: string | number },
+      callback: (controller: SpotifyIframeController) => void,
+    ) => void;
+  };
   let player: SpotifyWebPlayer | null = null;
+  let iframeController: SpotifyIframeController | null = null;
   let deviceId = "";
   let isPaused = true;
   let positionMs = 0;
   let durationMs = 0;
   let hasPrimedPlayback = false;
-  let onEmbedPlaybackRef: ((raw: Event) => void) | null = null;
-  /** Relógio local derivado dos eventos do embed (sem polling na API Spotify). */
+  let queuedStartMs =
+    typeof startAtSec === "number" && Number.isFinite(startAtSec) && startAtSec >= 0
+      ? Math.round(startAtSec * 1000)
+      : null;
+  let playbackPollTimer: number | null = null;
+  /** Relógio local entre eventos do Web Playback SDK. */
   let playbackAnchorWallMs = 0;
   let playbackAnchorPositionMs = 0;
 
@@ -288,88 +291,198 @@ export function createSpotifyAdapter(opts: SpotifyAdapterOptions): PlaybackAdapt
     return playbackAnchorPositionMs + delta;
   }
 
+  function applyRemotePlaybackSnapshot(snapshot: SpotifyCurrentPlaybackResponse) {
+    const sameTrack = typeof snapshot.trackId === "string" && snapshot.trackId === trackId;
+    if (!sameTrack) {
+      isPaused = true;
+      return;
+    }
+    const remotePaused = snapshot.playing === true ? false : true;
+    const remotePosition = Number.isFinite(snapshot.positionMs) ? Math.max(0, Number(snapshot.positionMs)) : 0;
+    const remoteDuration = Number.isFinite(snapshot.durationMs) ? Math.max(0, Number(snapshot.durationMs)) : 0;
+    isPaused = remotePaused;
+    positionMs = remotePosition;
+    if (remoteDuration > 0) durationMs = remoteDuration;
+    applyDurationHintIfNeeded();
+    syncPlaybackClockFromEmbed(remotePosition, remotePaused);
+    if (!remotePaused) hasPrimedPlayback = true;
+  }
+
+  function ensureSpotifyIframeApi(): Promise<SpotifyIframeApi> {
+    if (typeof window === "undefined") return Promise.reject(new Error("window_unavailable"));
+    const w = window as Window & {
+      SpotifyIframeApi?: SpotifyIframeApi;
+      onSpotifyIframeApiReady?: (api: SpotifyIframeApi) => void;
+    };
+    if (w.SpotifyIframeApi) return Promise.resolve(w.SpotifyIframeApi);
+    return new Promise((resolve, reject) => {
+      const existing = document.querySelector<HTMLScriptElement>('script[src="https://open.spotify.com/embed/iframe-api/v1"]');
+      if (!existing) {
+        const script = document.createElement("script");
+        script.src = "https://open.spotify.com/embed/iframe-api/v1";
+        script.async = true;
+        script.onerror = () => reject(new Error("spotify_iframe_api_load_failed"));
+        document.head.appendChild(script);
+      }
+      const previous = w.onSpotifyIframeApiReady;
+      w.onSpotifyIframeApiReady = (api) => {
+        previous?.(api);
+        w.SpotifyIframeApi = api;
+        resolve(api);
+      };
+    });
+  }
+
   return {
     provider: "spotify",
     async ready() {
-      const onEmbedPlayback = (raw: Event) => {
-        const evt = raw as SpotifyEmbedPlaybackEvent;
-        if (evt.detail?.trackId !== trackId) return;
-        if (typeof evt.detail?.isPaused === "boolean") {
-          isPaused = evt.detail.isPaused;
-        }
-        if (Number.isFinite(evt.detail?.durationMs) && Number(evt.detail?.durationMs) > 0) {
-          durationMs = Number(evt.detail?.durationMs);
-        }
-        applyDurationHintIfNeeded();
+      playbackPollTimer = window.setInterval(() => {
+        void fetchSpotifyCurrentPlayback()
+          .then(applyRemotePlaybackSnapshot)
+          .catch(() => undefined);
+      }, 1200);
+      void fetchSpotifyCurrentPlayback()
+        .then(applyRemotePlaybackSnapshot)
+        .catch(() => undefined);
 
-        const nextPos = Number.isFinite(evt.detail?.positionMs) ? Number(evt.detail?.positionMs) : undefined;
-        if (typeof nextPos === "number") {
-          syncPlaybackClockFromEmbed(nextPos, isPaused);
-          if (isPaused) positionMs = nextPos;
-          else positionMs = nextPos;
-        } else if (isPaused === false) {
-          // Sem posição explícita: inicia relógio local no play para não ficar preso em 0:00.
-          syncPlaybackClockFromEmbed(positionMs > 0 ? positionMs : 0, false);
-        }
-        if (isPaused === false) hasPrimedPlayback = true;
-      };
-      onEmbedPlaybackRef = onEmbedPlayback;
-      window.addEventListener("cifra:spotify-embed-playback", onEmbedPlayback as EventListener);
-
-      const Spotify = await ensureSpotifyWebPlaybackSdk();
-      player = new Spotify.Player({
-        name: "cifra.ai Web Player",
-        getOAuthToken: async (cb) => {
-          try {
-            cb(await fetchSpotifyAccessToken());
-          } catch {
-            cb("");
-          }
-        },
-      });
-      await new Promise<void>((resolve, reject) => {
-        if (!player) {
-          reject(new Error("spotify_player_init_failed"));
+      const iframeEl = getIframeElement?.();
+      if (iframeEl) {
+        try {
+          const iframeApi = await ensureSpotifyIframeApi();
+          await new Promise<void>((resolve, reject) => {
+            let resolved = false;
+            iframeApi.createController(
+              iframeEl,
+              { uri: `spotify:track:${trackId}`, width: "100%", height: 152 },
+              (controller) => {
+                iframeController = controller;
+                controller.addListener("ready", () => {
+                  if (resolved) return;
+                  resolved = true;
+                  applyDurationHintIfNeeded();
+                  resolve();
+                });
+                controller.addListener("playback_update", (ev) => {
+                  const data = ev.data;
+                  if (!data) return;
+                  const paused = data.isPaused !== false;
+                  const position = Number.isFinite(data.position) ? Math.max(0, Number(data.position)) : positionMs;
+                  const duration = Number.isFinite(data.duration) ? Math.max(0, Number(data.duration)) : durationMs;
+                  isPaused = paused;
+                  positionMs = position;
+                  if (duration > 0) durationMs = duration;
+                  applyDurationHintIfNeeded();
+                  syncPlaybackClockFromEmbed(position, paused);
+                  if (!paused) hasPrimedPlayback = true;
+                });
+              },
+            );
+            window.setTimeout(() => {
+              if (resolved) return;
+              reject(new Error("spotify_iframe_controller_timeout"));
+            }, 5000);
+          });
           return;
+        } catch {
+          iframeController = null;
         }
-        player.addListener("initialization_error", () => reject(new Error("spotify_initialization_error")));
-        player.addListener("authentication_error", () => reject(new Error("spotify_authentication_error")));
-        player.addListener("account_error", () => reject(new Error("spotify_account_error")));
-        player.addListener("playback_error", () => reject(new Error("spotify_playback_error")));
-        player.addListener("ready", (info) => {
-          const data = info as { device_id?: string } | null;
-          deviceId = typeof data?.device_id === "string" ? data.device_id : "";
-          resolve();
-        });
-        player.addListener("player_state_changed", (state) => {
-          const s = state as SpotifyWebPlayerState | null;
-          if (!s) return;
-          isPaused = s.paused;
-          positionMs = s.position;
-          durationMs = s.duration;
-        });
-        void player.connect().then((ok) => {
-          if (!ok) reject(new Error("spotify_connect_failed"));
-        });
-      });
-      const current = await player.getCurrentState().catch(() => null);
-      if (current) {
-        isPaused = current.paused;
-        positionMs = current.position;
-        durationMs = current.duration;
-        hasPrimedPlayback = true;
       }
 
-      // Garante que o embed carregue a faixa correta para eventos/play local.
-      window.dispatchEvent(new CustomEvent("cifra:spotify-embed-command", { detail: { action: "load", trackId } }));
+      try {
+        const Spotify = await ensureSpotifyWebPlaybackSdk();
+        player = new Spotify.Player({
+          name: "cifra.ai Web Player",
+          getOAuthToken: async (cb) => {
+            try {
+              cb(await fetchSpotifyAccessToken());
+            } catch {
+              cb("");
+            }
+          },
+        });
+        await new Promise<void>((resolve) => {
+          if (!player) {
+            resolve();
+            return;
+          }
+          let settled = false;
+          const finish = () => {
+            if (settled) return;
+            settled = true;
+            resolve();
+          };
+          player.addListener("initialization_error", () => {
+            player = null;
+            finish();
+          });
+          player.addListener("authentication_error", () => {
+            player = null;
+            finish();
+          });
+          player.addListener("account_error", () => {
+            player = null;
+            finish();
+          });
+          player.addListener("playback_error", () => {
+            finish();
+          });
+          player.addListener("ready", (info) => {
+            const data = info as { device_id?: string } | null;
+            deviceId = typeof data?.device_id === "string" ? data.device_id : "";
+            finish();
+          });
+          player.addListener("player_state_changed", (state) => {
+            const s = state as SpotifyWebPlayerState | null;
+            if (!s) return;
+            isPaused = s.paused;
+            positionMs = s.position;
+            durationMs = s.duration;
+            applyDurationHintIfNeeded();
+            syncPlaybackClockFromEmbed(s.position, s.paused);
+            if (!s.paused) hasPrimedPlayback = true;
+          });
+          void player.connect().then((ok) => {
+            if (!ok) {
+              player = null;
+              finish();
+            }
+          });
+          window.setTimeout(finish, 2500);
+        });
+        if (player) {
+          const current = await player.getCurrentState().catch(() => null);
+          if (current) {
+            isPaused = current.paused;
+            positionMs = current.position;
+            durationMs = current.duration;
+            applyDurationHintIfNeeded();
+            syncPlaybackClockFromEmbed(current.position, current.paused);
+            hasPrimedPlayback = true;
+          }
+        }
+      } catch {
+        // Sem SDK, mantemos sincronização por polling de currently playing.
+      }
     },
     async play() {
-      window.dispatchEvent(new CustomEvent("cifra:spotify-embed-command", { detail: { action: "play", trackId } }));
+      if (iframeController) {
+        if (queuedStartMs != null) {
+          iframeController.seek(Math.max(0, queuedStartMs));
+          positionMs = queuedStartMs;
+          queuedStartMs = null;
+        }
+        iframeController.play();
+        isPaused = false;
+        hasPrimedPlayback = true;
+        syncPlaybackClockFromEmbed(positionMs, false);
+        return;
+      }
       const payload = {
         ...(deviceId ? { deviceId } : {}),
         spotifyTrackId: trackId,
+        ...(queuedStartMs != null ? { positionMs: queuedStartMs } : {}),
       };
-      if (player) {
+      if (player && queuedStartMs == null) {
         try {
           await player.resume();
           isPaused = false;
@@ -387,9 +500,20 @@ export function createSpotifyAdapter(opts: SpotifyAdapterOptions): PlaybackAdapt
       if (!res.ok) throw new Error("spotify_play_failed");
       hasPrimedPlayback = true;
       isPaused = false;
+      if (queuedStartMs != null) {
+        positionMs = queuedStartMs;
+        playbackAnchorPositionMs = queuedStartMs;
+        playbackAnchorWallMs = typeof performance !== "undefined" ? performance.now() : Date.now();
+        queuedStartMs = null;
+      }
     },
     async pause() {
-      window.dispatchEvent(new CustomEvent("cifra:spotify-embed-command", { detail: { action: "pause", trackId } }));
+      if (iframeController) {
+        iframeController.pause();
+        isPaused = true;
+        positionMs = currentPositionMsFromClock();
+        return;
+      }
       if (player) {
         try {
           await player.pause();
@@ -408,11 +532,12 @@ export function createSpotifyAdapter(opts: SpotifyAdapterOptions): PlaybackAdapt
     async seek(seconds: number) {
       if (!Number.isFinite(seconds)) return;
       const ms = Math.max(0, Math.round(seconds * 1000));
-      window.dispatchEvent(
-        new CustomEvent("cifra:spotify-embed-command", {
-          detail: { action: "seek", trackId, positionMs: ms },
-        }),
-      );
+      if (iframeController) {
+        iframeController.seek(ms);
+        positionMs = ms;
+        syncPlaybackClockFromEmbed(ms, isPaused);
+        return;
+      }
       if (player) {
         try {
           await player.seek(ms);
@@ -438,12 +563,13 @@ export function createSpotifyAdapter(opts: SpotifyAdapterOptions): PlaybackAdapt
       return !isPaused;
     },
     destroy() {
-      player?.disconnect();
-      window.dispatchEvent(new CustomEvent("cifra:spotify-embed-command", { detail: { action: "pause", trackId } }));
-      if (onEmbedPlaybackRef) {
-        window.removeEventListener("cifra:spotify-embed-playback", onEmbedPlaybackRef as EventListener);
+      if (playbackPollTimer != null) {
+        window.clearInterval(playbackPollTimer);
+        playbackPollTimer = null;
       }
-      onEmbedPlaybackRef = null;
+      iframeController?.destroy();
+      iframeController = null;
+      player?.disconnect();
       player = null;
       deviceId = "";
       isPaused = true;

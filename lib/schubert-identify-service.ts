@@ -110,16 +110,16 @@ export async function postTrackIngestWithMeta(
       ...song,
       ...(options?.variationOfTrackId?.trim()
         ? {
-            variationOfTrackId: options.variationOfTrackId.trim(),
-            ...(options.variationLabel?.trim()
-              ? { variationLabel: options.variationLabel.trim().slice(0, 120) }
-              : {}),
-          }
+          variationOfTrackId: options.variationOfTrackId.trim(),
+          ...(options.variationLabel?.trim()
+            ? { variationLabel: options.variationLabel.trim().slice(0, 120) }
+            : {}),
+        }
         : {}),
       ...(options?.capo_at !== undefined
         ? {
-            capo_at: Math.min(24, Math.max(0, Math.round(Number(options.capo_at)))),
-          }
+          capo_at: Math.min(24, Math.max(0, Math.round(Number(options.capo_at)))),
+        }
         : {}),
     }),
   );

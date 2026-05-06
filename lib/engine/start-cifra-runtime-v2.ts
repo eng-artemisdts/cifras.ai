@@ -16,6 +16,11 @@ import {
 import { SEEK_SLIDER_STEPS } from "./config";
 import { formatClock } from "./time-format";
 import type { PlaybackAdapter } from "./playback-adapters";
+import {
+  clearChordElement,
+  drawChordIntoElement,
+  resolveChordDiagram,
+} from "@/lib/cifra/chord-diagram/svguitar-from-db";
 import { transposeChordLabel } from "@/lib/cifra/chord-transpose";
 
 const LS_AUTO_SCROLL_LEAD = "cifra-ai:autoScrollLeadSec";
@@ -23,6 +28,7 @@ const LS_AUTO_SCROLL_DURATION_MS = "cifra-ai:autoScrollDurationMs";
 const LS_SCROLL_MODE = "cifra-ai:scrollMode";
 const LS_AUTO_SCROLL_ENABLED = "cifra-ai:autoScrollEnabled";
 const LS_SHOW_FLOATING_CHORD = "cifra-ai:showFloatingChord";
+const LS_SHOW_CURRENT_CHORD_DIAGRAM = "cifra-ai:showCurrentChordDiagram";
 const LS_FLOATING_CHORD_POS = "cifra-ai:floatingChordPos";
 const DEFAULT_AUTO_SCROLL_LEAD_SEC = 0.4;
 const DEFAULT_AUTO_SCROLL_DURATION_MS = 450;
@@ -82,12 +88,14 @@ type CifraRuntimeEls = {
   timeLabel: HTMLElement;
   currentSectionEl: HTMLElement;
   currentChordEl: HTMLElement;
+  currentChordDiagramEl?: HTMLElement | null;
   autoScrollBtn: HTMLButtonElement | null;
   autoScrollLeadEl: HTMLInputElement | null;
   autoScrollLeadValEl: HTMLElement | null;
   autoScrollDurEl: HTMLInputElement | null;
   autoScrollDurValEl: HTMLElement | null;
   showFloatingChordEl?: HTMLInputElement | null;
+  showCurrentChordDiagramEl?: HTMLInputElement | null;
   scrollModeAutomaticEl?: HTMLInputElement | null;
   scrollModeSmartEl?: HTMLInputElement | null;
 };
@@ -111,12 +119,14 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     timeLabel,
     currentSectionEl,
     currentChordEl,
+    currentChordDiagramEl,
     autoScrollBtn,
     autoScrollLeadEl,
     autoScrollLeadValEl,
     autoScrollDurEl,
     autoScrollDurValEl,
     showFloatingChordEl,
+    showCurrentChordDiagramEl,
     scrollModeAutomaticEl,
     scrollModeSmartEl,
   } = opts.els;
@@ -180,7 +190,40 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
   let showFloatingChord = true;
   let floatingChordRoot: HTMLDivElement | null = null;
   let floatingChordLabel: HTMLSpanElement | null = null;
+  let floatingChordDiagramEl: HTMLDivElement | null = null;
   let floatingChordDestroy: (() => void) | null = null;
+  let lastRenderedChordLabel = "";
+  let showCurrentChordDiagram = true;
+
+  function normalizeChordLabelForDiagram(raw: string): string {
+    return raw.replaceAll("♭", "b").replaceAll("♯", "#").trim();
+  }
+
+  function resolveCurrentChordDiagram(label: string) {
+    const variants = Array.from(
+      new Set([label, normalizeChordLabelForDiagram(label), label.replaceAll(/\s+/g, "")].filter(Boolean)),
+    );
+    for (const candidate of variants) {
+      const resolved = resolveChordDiagram(candidate);
+      if (resolved) return resolved;
+    }
+    return null;
+  }
+  function renderChordDiagramForLabel(label: string) {
+    const targets: HTMLElement[] = [];
+    if (currentChordDiagramEl) targets.push(currentChordDiagramEl);
+    if (floatingChordDiagramEl) targets.push(floatingChordDiagramEl);
+    if (!targets.length) return;
+    if (!showCurrentChordDiagram || !label) {
+      for (const target of targets) clearChordElement(target);
+      return;
+    }
+    const resolved = resolveCurrentChordDiagram(label);
+    for (const target of targets) {
+      if (resolved) drawChordIntoElement(target, resolved);
+      else clearChordElement(target);
+    }
+  }
 
   function getDurationWithFallback() {
     const fromProvider = playback.getDuration();
@@ -334,6 +377,25 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     showFloatingChord = raw == null ? true : raw !== "0";
     if (showFloatingChordEl) showFloatingChordEl.checked = showFloatingChord;
   }
+  function persistCurrentChordDiagramPref() {
+    lsSet(LS_SHOW_CURRENT_CHORD_DIAGRAM, showCurrentChordDiagram ? "1" : "0");
+  }
+  function syncCurrentChordDiagramVisibility() {
+    if (currentChordDiagramEl) {
+      currentChordDiagramEl.style.display = showCurrentChordDiagram ? "flex" : "none";
+      if (!showCurrentChordDiagram) clearChordElement(currentChordDiagramEl);
+    }
+    if (floatingChordDiagramEl) {
+      floatingChordDiagramEl.style.display = showCurrentChordDiagram ? "flex" : "none";
+      if (!showCurrentChordDiagram) clearChordElement(floatingChordDiagramEl);
+    }
+  }
+  function initCurrentChordDiagramToggle() {
+    const raw = lsGet(LS_SHOW_CURRENT_CHORD_DIAGRAM);
+    showCurrentChordDiagram = raw == null ? true : raw !== "0";
+    if (showCurrentChordDiagramEl) showCurrentChordDiagramEl.checked = showCurrentChordDiagram;
+    syncCurrentChordDiagramVisibility();
+  }
   function canUseSmartScrollMode() {
     return Boolean(scrollModeSmartEl && !scrollModeSmartEl.disabled);
   }
@@ -443,7 +505,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     if (floatingChordRoot) return;
     const root = document.createElement("div");
     root.className =
-      "fixed left-4 top-20 z-30 inline-flex min-w-[120px] touch-none select-none flex-col items-center justify-center rounded-xl border border-cifra-teal/45 bg-[#0b1520]/95 px-3 py-2 pr-8 text-center shadow-[0_10px_30px_rgba(0,0,0,0.45)] backdrop-blur";
+      "fixed left-4 top-20 z-30 inline-flex min-w-[148px] touch-none select-none flex-col items-center justify-center rounded-2xl border border-cifra-teal/45 bg-gradient-to-b from-[#0f1b2a]/95 via-[#0b1422]/95 to-[#08101b]/95 px-3.5 py-2.5 pr-8 text-center shadow-[0_12px_34px_rgba(0,0,0,0.5)] backdrop-blur-md";
     root.style.cursor = "grab";
     root.style.userSelect = "none";
     root.style.position = "fixed";
@@ -460,6 +522,11 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     label.className = "w-full text-center font-mono text-base font-semibold tabular-nums text-cifra-teal";
     label.textContent = "—";
     root.appendChild(label);
+
+    const diagram = document.createElement("div");
+    diagram.className =
+      "mt-2 flex h-[90px] w-[90px] items-center justify-center rounded-xl border border-cifra-teal/30 bg-[#0a131f]/90 p-1 shadow-inner shadow-black/35";
+    root.appendChild(diagram);
 
     const closeBtn = document.createElement("button");
     closeBtn.type = "button";
@@ -556,8 +623,10 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
 
     floatingChordRoot = root;
     floatingChordLabel = label;
+    floatingChordDiagramEl = diagram;
     restoreFloatingChordPos();
     syncFloatingChordVisibility();
+    syncCurrentChordDiagramVisibility();
     floatingChordDestroy = () => {
       root.removeEventListener("pointerdown", onPointerDown);
       root.removeEventListener("pointermove", onPointerMove);
@@ -569,6 +638,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
       root.remove();
       floatingChordRoot = null;
       floatingChordLabel = null;
+      floatingChordDiagramEl = null;
       floatingChordDestroy = null;
     };
   }
@@ -580,6 +650,12 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     const chNow = chordTimeline.atAudioTime(t);
     const chordLabel = chordForDisplayFromEvent(chNow);
     currentChordEl.textContent = chordLabel;
+    if (chordLabel !== lastRenderedChordLabel) {
+      renderChordDiagramForLabel(chordLabel || "");
+      lastRenderedChordLabel = chordLabel || "";
+    } else if (!showCurrentChordDiagram) {
+      renderChordDiagramForLabel("");
+    }
     if (floatingChordLabel) floatingChordLabel.textContent = chordLabel || "—";
     currentChordEl.title = isNoChordEvent(chNow) ? "Sem acorde — fim da progressão harmónica." : "";
     currentChordEl.classList.toggle("text-cifra-muted", isNoChordEvent(chNow));
@@ -598,6 +674,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
   initAutoScrollControls();
   initScrollModeRadios();
   initFloatingChordToggle();
+  initCurrentChordDiagramToggle();
   initAutoScrollEnabledPref();
   rebuildLayoutFromMode();
   playBtn.disabled = !renderPlan.length;
@@ -673,6 +750,13 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     persistFloatingChordPref();
     syncFloatingChordVisibility();
   };
+  const onCurrentChordDiagramToggle = () => {
+    showCurrentChordDiagram = Boolean(showCurrentChordDiagramEl?.checked);
+    persistCurrentChordDiagramPref();
+    syncCurrentChordDiagramVisibility();
+    lastRenderedChordLabel = "";
+    tick();
+  };
   const onUserScrollIntent = () => {
     if (performance.now() < programmaticScrollUntilMs) return;
     pauseAutoScrollByUser();
@@ -695,6 +779,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
   scrollModeAutomaticEl?.addEventListener("change", onScrollModeChange);
   scrollModeSmartEl?.addEventListener("change", onScrollModeChange);
   showFloatingChordEl?.addEventListener("change", onFloatingChordToggle);
+  showCurrentChordDiagramEl?.addEventListener("change", onCurrentChordDiagramToggle);
   document.addEventListener("wheel", onUserScrollIntent, { passive: true });
   document.addEventListener("touchmove", onUserScrollIntent, { passive: true });
   document.addEventListener("keydown", onUserKeyScroll, { passive: true });
@@ -713,6 +798,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     scrollModeAutomaticEl?.removeEventListener("change", onScrollModeChange);
     scrollModeSmartEl?.removeEventListener("change", onScrollModeChange);
     showFloatingChordEl?.removeEventListener("change", onFloatingChordToggle);
+    showCurrentChordDiagramEl?.removeEventListener("change", onCurrentChordDiagramToggle);
     floatingChordDestroy?.();
     document.removeEventListener("wheel", onUserScrollIntent);
     document.removeEventListener("touchmove", onUserScrollIntent);

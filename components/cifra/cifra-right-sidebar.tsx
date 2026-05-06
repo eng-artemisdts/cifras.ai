@@ -40,6 +40,7 @@ export type CifraRightSidebarProps = {
   autoScrollDurRef: RefObject<HTMLInputElement | null>;
   autoScrollDurValRef: RefObject<HTMLSpanElement | null>;
   showFloatingChordRef: RefObject<HTMLInputElement | null>;
+  showCurrentChordDiagramRef: RefObject<HTMLInputElement | null>;
   libraryTrackKey?: string;
 };
 
@@ -63,6 +64,7 @@ export function CifraRightSidebar({
   autoScrollDurRef,
   autoScrollDurValRef,
   showFloatingChordRef,
+  showCurrentChordDiagramRef,
   libraryTrackKey,
   onMount,
 }: CifraRightSidebarProps) {
@@ -318,6 +320,22 @@ export function CifraRightSidebar({
               <span className="block text-[11px] font-semibold text-cifra-text">Exibir acorde no tempo</span>
               <span className="mt-0.5 block text-[10px] leading-snug text-cifra-muted">
                 Mostra um balão flutuante reposicionável com o acorde atual da reprodução.
+              </span>
+            </span>
+          </label>
+          <label className="mt-1.5 flex cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1 hover:bg-white/4">
+            <input
+              ref={showCurrentChordDiagramRef}
+              type="checkbox"
+              defaultChecked
+              className="mt-0.5 size-3.5 shrink-0 accent-cifra-teal"
+            />
+            <span className="min-w-0">
+              <span className="block text-[11px] font-semibold text-cifra-text">
+                Exibir desenho no acorde no tempo
+              </span>
+              <span className="mt-0.5 block text-[10px] leading-snug text-cifra-muted">
+                Mostra/oculta o diagrama do acorde atual junto ao transporte.
               </span>
             </span>
           </label>

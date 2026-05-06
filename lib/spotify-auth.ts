@@ -163,6 +163,8 @@ export async function spotifyStatusForUser(auth0UserId: string): Promise<Spotify
   const connected = meta?.spotify_connected === true;
   const product = typeof meta?.spotify_product === "string" ? meta.spotify_product : null;
   const accountId = typeof meta?.spotify_account_id === "string" ? meta.spotify_account_id : null;
+
+  console.log("spotifyStatusForUser", { connected, product, accountId });
   return {
     connected,
     product,

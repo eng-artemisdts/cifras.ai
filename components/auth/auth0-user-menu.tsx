@@ -96,14 +96,14 @@ export function Auth0UserMenu({ user: serverUser, className }: Auth0UserMenuProp
               </div>
               <Menu.Group className="py-1">
                 <Menu.LinkItem
-                  href="/explorar"
+                  href="/conta/perfil"
                   closeOnClick
                   className={linkItemClass}
                   onClick={() =>
-                    trackAnalyticsEvent(GA_EVENTS.ACCOUNT_MENU_NAV, { destination: "explorar" })
+                    trackAnalyticsEvent(GA_EVENTS.ACCOUNT_MENU_NAV, { destination: "perfil" })
                   }
                 >
-                  Explorar
+                  Perfil
                 </Menu.LinkItem>
                 <Menu.LinkItem
                   href="/biblioteca"
@@ -114,6 +114,26 @@ export function Auth0UserMenu({ user: serverUser, className }: Auth0UserMenuProp
                   }
                 >
                   Biblioteca
+                </Menu.LinkItem>
+                <Menu.LinkItem
+                  href="/explorar"
+                  closeOnClick
+                  className={linkItemClass}
+                  onClick={() =>
+                    trackAnalyticsEvent(GA_EVENTS.ACCOUNT_MENU_NAV, { destination: "explorar" })
+                  }
+                >
+                  Explorar
+                </Menu.LinkItem>
+                <Menu.LinkItem
+                  href="/cifras/edit"
+                  closeOnClick
+                  className={linkItemClass}
+                  onClick={() =>
+                    trackAnalyticsEvent(GA_EVENTS.ACCOUNT_MENU_NAV, { destination: "identificar_cifra" })
+                  }
+                >
+                  Identificar Cifra
                 </Menu.LinkItem>
                 <Menu.LinkItem
                   href="/conta/assinatura"

@@ -23,10 +23,10 @@ export default async function BibliotecaImportarArquivoPage({ searchParams }: Pa
   const session = await getAuth0SessionCached();
   const user = session?.user
     ? {
-        name: session.user.name ?? null,
-        email: session.user.email ?? null,
-        picture: session.user.picture ?? null,
-      }
+      name: session.user.name ?? null,
+      email: session.user.email ?? null,
+      picture: session.user.picture ?? null,
+    }
     : null;
 
   const billingPlan = await resolveBillingPlanForSessionUser(session?.user ?? null);

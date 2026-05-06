@@ -15,6 +15,7 @@ export const GA_EVENTS = {
   CIFRA_VIEW: "cifra_view",
   PLAYBACK_PROVIDER_SELECT: "playback_provider_select",
   SPOTIFY_CONNECT_CLICK: "spotify_connect_click",
+  SPOTIFY_DISCONNECT_CLICK: "spotify_disconnect_click",
   LIBRARY_CARD_ACTION: "library_card_action",
 } as const;
 

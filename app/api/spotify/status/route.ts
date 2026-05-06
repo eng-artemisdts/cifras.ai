@@ -16,6 +16,7 @@ export async function GET() {
     return NextResponse.json({ connected: false, premium: false, error: "no_session" }, { status: 401 });
   }
   const status = await spotifyStatusForUser(sub);
+  console.log("spotifyStatusForUser", status);
   return NextResponse.json(status);
 }
 

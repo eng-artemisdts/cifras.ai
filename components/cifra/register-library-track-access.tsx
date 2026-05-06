@@ -14,7 +14,6 @@ export function RegisterLibraryTrackAccess({ trackKey }: { trackKey: string }) {
     const key = trackKey.trim();
     if (!key || sent.current) return;
     sent.current = true;
-    console.log('registerLibraryTrackAccess', key)
     void fetch("/api/cifra/track-access", {
       method: "POST",
       credentials: "include",

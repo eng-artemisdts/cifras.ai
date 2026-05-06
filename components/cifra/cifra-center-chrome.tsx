@@ -31,6 +31,7 @@ export function CifraCenterChrome({
   children,
   className,
 }: CifraCenterChromeProps) {
+  const logoHref = user ? "/explorar" : "/";
   const planLabel = billingPlan === "pro" ? "PRO" : billingPlan === "starter" ? "STARTER" : "FREE";
   const planClassName =
     billingPlan === "pro"
@@ -46,11 +47,11 @@ export function CifraCenterChrome({
         <div className="flex min-w-0 flex-1 flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-4">
           <div className="flex shrink-0 items-center gap-3">
             <Link
-              href="/"
-              className="relative block size-[26px] shrink-0 overflow-hidden rounded-md ring-1 ring-white/8"
-              aria-label="cifra.ai — início"
+              href={logoHref}
+              className="relative block h-[26px] w-[68px] shrink-0 overflow-hidden rounded-md ring-1 ring-white/8"
+              aria-label={user ? "cifra.ai — explorar" : "cifra.ai — início"}
             >
-              <Image src="/logo.svg" alt="" width={26} height={26} className="object-contain" />
+              <Image src="/logo.svg" alt="" width={828} height={320} className="h-full w-full object-contain object-left" />
             </Link>
           </div>
           <div className="min-w-0 flex-1">

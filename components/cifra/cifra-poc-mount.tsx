@@ -13,77 +13,16 @@ import type { MusicAiDemoPayload } from "@/lib/cifra/musicai-types";
 import { buildPreviewChordAnchors } from "@/lib/cifra/preview-chord-anchors";
 import {
   createInternalAudioAdapter,
-  createYoutubeAdapter,
+  createSpotifyAdapter,
+  createYoutubeMediaElementAdapter,
   extractYoutubeVideoId,
-  type PlaybackAdapter,
   type PlaybackProvider,
 } from "@/lib/engine/playback-adapters";
 import { startCifraRuntimeV2 } from "@/lib/engine/start-cifra-runtime-v2";
 import { cn } from "@/lib/utils";
 import { transposeTuneLabel } from "@/lib/cifra/chord-transpose";
 
-type SpotifyEmbedPlaybackDetail = {
-  trackId: string;
-  isPaused?: boolean;
-  positionMs?: number;
-  durationMs?: number;
-};
-
-function pickFiniteNumber(...values: Array<unknown>): number | undefined {
-  for (const v of values) {
-    if (typeof v === "number" && Number.isFinite(v)) return v;
-    if (typeof v === "string" && v.trim() !== "") {
-      const n = Number(v);
-      if (Number.isFinite(n)) return n;
-    }
-  }
-  return undefined;
-}
-
-/** Spotify costuma mandar ms; alguns payloads podem mandar segundos < 1000. */
-function normalizePlaybackMillis(raw: unknown): number | undefined {
-  const n = pickFiniteNumber(raw);
-  if (n == null) return undefined;
-  if (n > 0 && n < 1000) return Math.round(n * 1000);
-  return Math.round(n);
-}
-
-function extractEmbedPlaybackMs(evt: Record<string, unknown>): { positionMs?: number; durationMs?: number } {
-  const nested =
-    evt && typeof evt.data === "object" && evt.data !== null ? (evt.data as Record<string, unknown>) : undefined;
-
-  const durationMs =
-    normalizePlaybackMillis(evt.duration) ??
-    normalizePlaybackMillis(evt.trackDuration) ??
-    normalizePlaybackMillis(nested?.duration);
-
-  const positionMs =
-    normalizePlaybackMillis(evt.position) ??
-    normalizePlaybackMillis(evt.progress) ??
-    normalizePlaybackMillis(evt.playback_position) ??
-    normalizePlaybackMillis(nested?.position);
-
-  return { positionMs, durationMs };
-}
-
-declare global {
-  interface Window {
-    onSpotifyIframeApiReady?: (IFrameAPI: {
-      createController: (
-        element: HTMLElement,
-        options: { uri: string; width?: number | string; height?: number | string },
-        callback: (controller: {
-          addListener: (event: string, cb: (event: Record<string, unknown>) => void) => void;
-          loadUri?: (uri: string) => void;
-          play?: () => void;
-          pause?: () => void;
-          resume?: () => void;
-          seek?: (seconds: number) => void;
-        }) => void,
-      ) => void;
-    }) => void;
-  }
-}
+const ReactPlayer = dynamic(() => import("react-player"), { ssr: false });
 
 const rightSidebarLayoutClassName =
   "mt-0 w-full border-t border-white/6 bg-cifra-surface lg:mt-0 lg:w-[300px] lg:shrink-0 lg:border-l lg:border-t-0";
@@ -162,10 +101,11 @@ export function CifraPocMount({
     connected: boolean;
     premium: boolean;
   }>({
-    loading: false,
+    loading: Boolean(payload.meta?.spotifyTrackId?.trim()),
     connected: false,
     premium: false,
   });
+  const [spotifyOembed, setSpotifyOembed] = useState<{ thumbnail_url?: string; title?: string } | null>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [transposeSemitones, setTransposeSemitones] = useState(0);
   const bumpRightSidebarMount = useCallback(() => {
@@ -201,6 +141,17 @@ export function CifraPocMount({
     }
   }, [trackKey, transposeSemitones]);
 
+  const effectiveOriginalTune =
+    trackDraft.trackKey === trackKey ? trackDraft.originalTune : payload.original_tune ?? "";
+  const originalCapoAt = Number.isFinite(payload.capo_at)
+    ? Math.min(24, Math.max(0, Math.round(Number(payload.capo_at))))
+    : 0;
+  const effectiveCapoAt =
+    trackDraft.trackKey === trackKey ? trackDraft.capoAt : originalCapoAt;
+  const capoDeltaSemitones = effectiveCapoAt - originalCapoAt;
+  /** Regra do capotraste: mudar o capo recalcula shapes mantendo o mesmo tom da música. */
+  const runtimeTransposeSemitones = transposeSemitones - capoDeltaSemitones;
+
   const payloadForRuntime = useMemo(() => {
     const previewAnchors = buildPreviewChordAnchors(
       payload.lyrics,
@@ -223,19 +174,18 @@ export function CifraPocMount({
   const timeLabelRef = useRef<HTMLParagraphElement>(null);
   const sectionRef = useRef<HTMLParagraphElement>(null);
   const chordRef = useRef<HTMLParagraphElement>(null);
+  const chordDiagramRef = useRef<HTMLDivElement>(null);
   const autoScrollBtnRef = useRef<HTMLButtonElement>(null);
   const autoScrollLeadRef = useRef<HTMLInputElement>(null);
   const autoScrollLeadValRef = useRef<HTMLSpanElement>(null);
   const autoScrollDurRef = useRef<HTMLInputElement>(null);
   const autoScrollDurValRef = useRef<HTMLSpanElement>(null);
   const showFloatingChordRef = useRef<HTMLInputElement>(null);
+  const showCurrentChordDiagramRef = useRef<HTMLInputElement>(null);
   const scrollModeAutomaticRef = useRef<HTMLInputElement>(null);
   const scrollModeSmartRef = useRef<HTMLInputElement>(null);
-  const youtubeHostRef = useRef<HTMLDivElement>(null);
-  const spotifyEmbedMountRef = useRef<HTMLDivElement>(null);
-  const spotifyExternalPlayingRef = useRef(false);
-  const spotifyExternalCurrentSecRef = useRef(0);
-  const spotifyExternalDurationSecRef = useRef(0);
+  const spotifyEmbedIframeRef = useRef<HTMLIFrameElement>(null);
+  const youtubeMediaRef = useRef<HTMLVideoElement | null>(null);
 
   const spotifyTrackId = useMemo(() => payload.meta?.spotifyTrackId?.trim() ?? "", [payload.meta?.spotifyTrackId]);
   const youtubeVideoId = useMemo(() => {
@@ -323,111 +273,33 @@ export function CifraPocMount({
     };
   }, [spotifyTrackId, trackKey]);
 
+  const spotifyDurationHintSec = useMemo(() => {
+    const d = payload.meta?.duration_seconds;
+    return typeof d === "number" && Number.isFinite(d) && d > 0 ? d : undefined;
+  }, [payload.meta?.duration_seconds]);
+
   useEffect(() => {
-    if (!isClientMounted || !spotifyTrackId || !spotifyReadyForPlayback) return;
-    const mountEl = spotifyEmbedMountRef.current;
-    if (!mountEl) return;
-
-    let disposed = false;
-    let controller:
-      | {
-        addListener: (event: string, cb: (event: Record<string, unknown>) => void) => void;
-        loadUri?: (uri: string) => void;
-        play?: () => void;
-        pause?: () => void;
-        resume?: () => void;
-        seek?: (seconds: number) => void;
-      }
-      | null = null;
-
-    const onPlaybackUpdate = (evt: Record<string, unknown>) => {
-      const extracted = extractEmbedPlaybackMs(evt);
-      const nested =
-        evt && typeof evt.data === "object" && evt.data !== null ? (evt.data as Record<string, unknown>) : undefined;
-      const pausedRaw = evt.isPaused ?? nested?.isPaused;
-      if (typeof pausedRaw === "boolean") {
-        spotifyExternalPlayingRef.current = !pausedRaw;
-      }
-      if (typeof extracted.positionMs === "number") {
-        spotifyExternalCurrentSecRef.current = Math.max(0, extracted.positionMs / 1000);
-      }
-      if (typeof extracted.durationMs === "number" && extracted.durationMs > 0) {
-        spotifyExternalDurationSecRef.current = extracted.durationMs / 1000;
-      }
-      const detail: SpotifyEmbedPlaybackDetail = {
-        trackId: spotifyTrackId,
-        ...(typeof pausedRaw === "boolean" ? { isPaused: pausedRaw } : {}),
-        ...(typeof extracted.positionMs === "number" ? { positionMs: extracted.positionMs } : {}),
-        ...(typeof extracted.durationMs === "number" ? { durationMs: extracted.durationMs } : {}),
-      };
-      window.dispatchEvent(new CustomEvent<SpotifyEmbedPlaybackDetail>("cifra:spotify-embed-playback", { detail }));
-    };
-
-    const onEmbedCommand = (raw: Event) => {
-      const evt = raw as CustomEvent<{ action?: string; trackId?: string; positionMs?: number }>;
-      const detail = evt.detail ?? {};
-      if (!controller || detail.trackId !== spotifyTrackId) return;
-      if (detail.action === "play") {
-        controller.resume?.();
-        controller.play?.();
-        return;
-      }
-      if (detail.action === "pause") {
-        controller.pause?.();
-        return;
-      }
-      if (detail.action === "seek" && Number.isFinite(detail.positionMs)) {
-        controller.seek?.(Math.max(0, Number(detail.positionMs)) / 1000);
-        return;
-      }
-      if (detail.action === "load") {
-        controller.loadUri?.(`spotify:track:${spotifyTrackId}`);
-      }
-    };
-
-    window.addEventListener("cifra:spotify-embed-command", onEmbedCommand as EventListener);
-
-    const ensureEmbedApi = () =>
-      new Promise<void>((resolve, reject) => {
-        const existing = document.querySelector<HTMLScriptElement>(
-          'script[src="https://open.spotify.com/embed/iframe-api/v1"]',
-        );
-        if (!existing) {
-          const script = document.createElement("script");
-          script.src = "https://open.spotify.com/embed/iframe-api/v1";
-          script.async = true;
-          script.onerror = () => reject(new Error("spotify_iframe_api_load_failed"));
-          document.body.appendChild(script);
-        }
-        const prev = window.onSpotifyIframeApiReady;
-        window.onSpotifyIframeApiReady = (api) => {
-          prev?.(api);
-          if (disposed || !mountEl.isConnected) return;
-          mountEl.replaceChildren();
-          api.createController(
-            mountEl,
-            { uri: `spotify:track:${spotifyTrackId}`, width: "100%", height: 152 },
-            (c) => {
-              if (disposed || !mountEl.isConnected) return;
-              controller = c;
-              controller.addListener("playback_update", onPlaybackUpdate);
-              resolve();
-            },
-          );
-        };
+    if (!isClientMounted || !spotifyTrackId) return;
+    let cancelled = false;
+    setSpotifyOembed(null);
+    const trackUrl = `https://open.spotify.com/track/${encodeURIComponent(spotifyTrackId)}`;
+    const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(trackUrl)}`;
+    void fetch(oembedUrl)
+      .then((res) => (res.ok ? (res.json() as Promise<{ thumbnail_url?: string; title?: string }>) : null))
+      .then((json) => {
+        if (cancelled || !json) return;
+        setSpotifyOembed({
+          thumbnail_url: typeof json.thumbnail_url === "string" ? json.thumbnail_url : undefined,
+          title: typeof json.title === "string" ? json.title : undefined,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setSpotifyOembed(null);
       });
-
-    void ensureEmbedApi().catch(() => {
-      // silent fallback: connection notice remains available
-    });
-
     return () => {
-      disposed = true;
-      window.removeEventListener("cifra:spotify-embed-command", onEmbedCommand as EventListener);
-      if (mountEl.isConnected) mountEl.replaceChildren();
-      controller = null;
+      cancelled = true;
     };
-  }, [isClientMounted, spotifyTrackId, spotifyReadyForPlayback]);
+  }, [isClientMounted, spotifyTrackId]);
 
   useEffect(() => {
     const scrollRoot = scrollRootRef.current;
@@ -464,67 +336,25 @@ export function CifraPocMount({
 
     async function mountRuntime() {
       try {
-        if (
-          selectedProvider === "spotify" &&
-          spotifyTrackId &&
-          (spotifyStatus.loading || !spotifyStatus.connected || !spotifyStatus.premium)
-        ) {
-          throw new Error("spotify_account_not_ready");
+        if (selectedProvider === "spotify" && spotifyTrackId) {
+          /**
+           * Evita cair no player interno antes de concluir `/api/spotify/status`.
+           * Sem este guard, o primeiro render monta fallback e pode manter UX inconsistente.
+           */
+          if (spotifyStatus.loading) return;
+          if (!spotifyStatus.connected || !spotifyStatus.premium) {
+            throw new Error("spotify_account_not_ready");
+          }
         }
         const adapter =
           selectedProvider === "spotify" && spotifyTrackId
-            ? ({
-              provider: "spotify",
-              async ready() {
-                return;
-              },
-              async play() {
-                spotifyExternalPlayingRef.current = true;
-                window.dispatchEvent(
-                  new CustomEvent("cifra:spotify-embed-command", {
-                    detail: { action: "play", trackId: spotifyTrackId },
-                  }),
-                );
-              },
-              async pause() {
-                spotifyExternalPlayingRef.current = false;
-                window.dispatchEvent(
-                  new CustomEvent("cifra:spotify-embed-command", {
-                    detail: { action: "pause", trackId: spotifyTrackId },
-                  }),
-                );
-              },
-              async seek(seconds: number) {
-                if (!Number.isFinite(seconds)) return;
-                const nextSec = Math.max(0, seconds);
-                spotifyExternalCurrentSecRef.current = nextSec;
-                window.dispatchEvent(
-                  new CustomEvent("cifra:spotify-embed-command", {
-                    detail: {
-                      action: "seek",
-                      trackId: spotifyTrackId,
-                      positionMs: Math.round(nextSec * 1000),
-                    },
-                  }),
-                );
-              },
-              getCurrentTime() {
-                return spotifyExternalCurrentSecRef.current;
-              },
-              getDuration() {
-                return spotifyExternalDurationSecRef.current;
-              },
-              isPlaying() {
-                return spotifyExternalPlayingRef.current;
-              },
-              destroy() {
-                spotifyExternalPlayingRef.current = false;
-                spotifyExternalCurrentSecRef.current = 0;
-                spotifyExternalDurationSecRef.current = 0;
-              },
-            } satisfies PlaybackAdapter)
-            : selectedProvider === "youtube" && youtubeHostRef.current && youtubeVideoId
-              ? createYoutubeAdapter({ hostEl: youtubeHostRef.current, videoId: youtubeVideoId })
+            ? createSpotifyAdapter({
+              trackId: spotifyTrackId,
+              ...(spotifyDurationHintSec != null ? { durationHintSec: spotifyDurationHintSec } : {}),
+              getIframeElement: () => spotifyEmbedIframeRef.current,
+            })
+            : selectedProvider === "youtube" && youtubeVideoId
+              ? createYoutubeMediaElementAdapter({ getMediaElement: () => youtubeMediaRef.current })
               : createInternalAudioAdapter({ audioEl: readyAudioEl, audioUrl: payload.meta?.audioUrl });
 
         if (cancelled) return;
@@ -532,7 +362,7 @@ export function CifraPocMount({
         destroy = startCifraRuntimeV2({
           payloadInput: payloadForRuntime as unknown as Record<string, unknown>,
           chordDiagramScopeKey: trackKey,
-          transposeSemitones,
+          transposeSemitones: runtimeTransposeSemitones,
           els: {
             scrollRoot: readyScrollRoot,
             cifraContainer: readyCifraContainer,
@@ -542,12 +372,14 @@ export function CifraPocMount({
             timeLabel: readyTimeLabel,
             currentSectionEl: readySectionEl,
             currentChordEl: readyChordEl,
+            currentChordDiagramEl: chordDiagramRef.current,
             autoScrollBtn: autoScrollBtnRef.current,
             autoScrollLeadEl: autoScrollLeadRef.current,
             autoScrollLeadValEl: autoScrollLeadValRef.current,
             autoScrollDurEl: autoScrollDurRef.current,
             autoScrollDurValEl: autoScrollDurValRef.current,
             showFloatingChordEl: showFloatingChordRef.current,
+            showCurrentChordDiagramEl: showCurrentChordDiagramRef.current,
             scrollModeAutomaticEl: scrollModeAutomaticRef.current,
             scrollModeSmartEl: scrollModeSmartRef.current,
           },
@@ -563,7 +395,7 @@ export function CifraPocMount({
         destroy = startCifraRuntimeV2({
           payloadInput: payloadForRuntime as unknown as Record<string, unknown>,
           chordDiagramScopeKey: trackKey,
-          transposeSemitones,
+          transposeSemitones: runtimeTransposeSemitones,
           els: {
             scrollRoot: readyScrollRoot,
             cifraContainer: readyCifraContainer,
@@ -573,12 +405,14 @@ export function CifraPocMount({
             timeLabel: readyTimeLabel,
             currentSectionEl: readySectionEl,
             currentChordEl: readyChordEl,
+            currentChordDiagramEl: chordDiagramRef.current,
             autoScrollBtn: autoScrollBtnRef.current,
             autoScrollLeadEl: autoScrollLeadRef.current,
             autoScrollLeadValEl: autoScrollLeadValRef.current,
             autoScrollDurEl: autoScrollDurRef.current,
             autoScrollDurValEl: autoScrollDurValRef.current,
             showFloatingChordEl: showFloatingChordRef.current,
+            showCurrentChordDiagramEl: showCurrentChordDiagramRef.current,
             scrollModeAutomaticEl: scrollModeAutomaticRef.current,
             scrollModeSmartEl: scrollModeSmartRef.current,
           },
@@ -602,23 +436,19 @@ export function CifraPocMount({
     spotifyStatus.premium,
     youtubeVideoId,
     payload.meta?.audioUrl,
-    transposeSemitones,
+    spotifyDurationHintSec,
+    runtimeTransposeSemitones,
+    trackDraft.capoAt,
+    trackDraft.originalTune,
+    trackDraft.trackKey,
   ]);
-
-  const effectiveOriginalTune =
-    trackDraft.trackKey === trackKey ? trackDraft.originalTune : payload.original_tune ?? "";
-  const effectiveCapoAt =
-    trackDraft.trackKey === trackKey
-      ? trackDraft.capoAt
-      : Number.isFinite(payload.capo_at)
-        ? Math.min(24, Math.max(0, Math.round(Number(payload.capo_at))))
-        : 0;
 
   const titleFromPayload =
     typeof payload.meta?.name === "string" && payload.meta.name.trim()
       ? payload.meta.name.trim()
       : trackTitle;
   const effectiveDisplayTune = transposeTuneLabel(effectiveOriginalTune, transposeSemitones) || effectiveOriginalTune;
+
 
   return (
     <div className={cn("flex min-h-0 w-full min-w-0 flex-1 flex-col gap-2.5 sm:gap-3", className)}>
@@ -715,6 +545,11 @@ export function CifraPocMount({
             0:00 / 0:00
           </p>
           <div className="flex min-w-0 shrink-0 items-center justify-end gap-2.5 sm:ml-auto">
+            <div
+              ref={chordDiagramRef}
+              className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-md border border-white/10 bg-black/20 p-0.5 sm:h-[56px] sm:w-[56px]"
+              aria-hidden
+            />
             <p
               ref={sectionRef}
               className="max-w-[min(100%,200px)] truncate text-right text-[11px] font-medium text-cifra-text"
@@ -732,52 +567,69 @@ export function CifraPocMount({
           {providerNotice}
         </p>
       ) : null}
-      {selectedProvider === "spotify" && spotifyTrackId && (!spotifyStatus.connected || !spotifyStatus.premium) ? (
-        <div className="rounded-xl border border-white/10 bg-linear-to-br from-[#0f1020] to-[#0b0c16] px-4 py-3.5 sm:px-5 sm:py-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-cifra-text">Spotify indisponível nesta conta</p>
-              <p className="mt-1 text-[11px] leading-relaxed text-cifra-muted">
-                {!spotifyStatus.connected
-                  ? "Conecte sua conta Spotify para liberar reprodução completa desta faixa."
-                  : "A conta conectada não possui plano Premium. Conecte outra conta para continuar no Spotify."}
-              </p>
-            </div>
-            <Link
-              href={`/api/spotify/connect?returnTo=${encodeURIComponent(returnToForSpotifyConnect)}`}
-              className="shrink-0 rounded-full bg-cifra-teal px-3.5 py-1.5 text-[11px] font-semibold text-cifra-bg shadow-[0_0_0_1px_rgba(15,210,193,0.25)] transition-opacity hover:opacity-95"
-              onClick={() => trackAnalyticsEvent(GA_EVENTS.SPOTIFY_CONNECT_CLICK)}
-            >
-              {spotifyStatus.loading ? "Verificando..." : "Conectar Spotify"}
-            </Link>
-          </div>
-        </div>
-      ) : null}
-      <div
-        className={cn(
-          hydratedProvider === "spotify"
-            ? "border-0 bg-transparent p-0"
-            : "rounded-lg border border-white/6 bg-[#0d0d18] p-2",
-        )}
-      >
-        {isClientMounted ? (
-          <div
-            className={cn(
-              "overflow-hidden rounded-lg border border-white/10 bg-black/20",
-              hydratedProvider === "spotify" && spotifyReadyForPlayback ? "block" : "hidden",
+      <div className="space-y-2 rounded-lg border border-white/6 bg-[#0d0d18] p-2">
+        {isClientMounted && spotifyTrackId && selectedProvider === "spotify" ? (
+          <div className="overflow-hidden rounded-lg border border-white/10 bg-black/25">
+            {spotifyStatus.loading ? (
+              <div className="flex h-[152px] items-center gap-3 px-4">
+                <div className="size-[100px] shrink-0 animate-pulse rounded-md bg-white/10" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-3 w-[70%] max-w-[220px] animate-pulse rounded bg-white/10" />
+                  <div className="h-3 w-[45%] animate-pulse rounded bg-white/10" />
+                </div>
+              </div>
+            ) : !spotifyStatus.connected || !spotifyStatus.premium ? (
+              <div className="flex min-h-[152px] flex-col justify-centser gap-2.5 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-cifra-text">
+                    {!spotifyStatus.connected ? "Ligue o Spotify novamente" : "Spotify Premium necessário"}
+                  </p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-cifra-muted">
+                    {!spotifyStatus.connected
+                      ? "A sessão com o Spotify não está ativa ou expirou. Volte a autenticar-se para ouvir a faixa completa e manter a cifra sincronizada com o áudio."
+                      : "A conta Spotify ligada não tem plano Premium. Use uma conta Premium ou escolha outra fonte de áudio."}
+                  </p>
+                </div>
+                <Link
+                  href={`/api/spotify/connect?returnTo=${encodeURIComponent(returnToForSpotifyConnect)}`}
+                  className="shrink-0 self-start rounded-full bg-cifra-teal px-3.5 py-2 text-[11px] font-semibold text-cifra-bg shadow-[0_0_0_1px_rgba(15,210,193,0.25)] transition-opacity hover:opacity-95 sm:self-center"
+                  onClick={() => trackAnalyticsEvent(GA_EVENTS.SPOTIFY_CONNECT_CLICK)}
+                >
+                  {!spotifyStatus.connected ? "Entrar no Spotify" : "Trocar de conta"}
+                </Link>
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-lg bg-black/20 p-2">
+                <iframe
+                  ref={spotifyEmbedIframeRef}
+                  title={spotifyOembed?.title ?? titleFromPayload ?? "Spotify player"}
+                  src={`https://open.spotify.com/embed/track/${encodeURIComponent(spotifyTrackId)}?utm_source=generator&theme=0`}
+                  width="100%"
+                  height="152"
+                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                  loading="lazy"
+                  className="block w-full rounded-md border-0"
+                />
+              </div>
             )}
-          >
-            <div ref={spotifyEmbedMountRef} className="h-[152px] w-full" />
           </div>
         ) : null}
-        {isClientMounted ? (
+        {isClientMounted && youtubeVideoId ? (
           <div
-            ref={youtubeHostRef}
             className={cn(
               "h-[200px] w-full overflow-hidden rounded-lg border border-white/10 bg-black/20",
               hydratedProvider === "youtube" ? "block" : "hidden",
             )}
-          />
+          >
+            <ReactPlayer
+              ref={youtubeMediaRef}
+              src={`https://www.youtube.com/watch?v=${encodeURIComponent(youtubeVideoId)}`}
+              controls
+              width="100%"
+              height="100%"
+              style={{ maxHeight: "200px" }}
+            />
+          </div>
         ) : null}
       </div>
 
@@ -831,6 +683,7 @@ export function CifraPocMount({
             autoScrollDurRef={autoScrollDurRef}
             autoScrollDurValRef={autoScrollDurValRef}
             showFloatingChordRef={showFloatingChordRef}
+            showCurrentChordDiagramRef={showCurrentChordDiagramRef}
             onMount={bumpRightSidebarMount}
             className={cn(
               rightSidebarLayoutClassName,
