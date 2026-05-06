@@ -13,13 +13,16 @@ export const metadata: Metadata = {
 };
 
 type PageProps = {
-  searchParams?: Promise<{ baseTrackId?: string | string[] }>;
+  searchParams?: Promise<{ baseTrackId?: string | string[]; fromSpotify?: string | string[] }>;
 };
 
 export default async function BibliotecaImportarArquivoPage({ searchParams }: PageProps) {
   const sp = searchParams ? await searchParams : {};
   const rawBaseTrackId = Array.isArray(sp.baseTrackId) ? sp.baseTrackId[0] : sp.baseTrackId;
   const baseTrackId = typeof rawBaseTrackId === "string" ? rawBaseTrackId.trim() : "";
+  const rawFromSpotify = Array.isArray(sp.fromSpotify) ? sp.fromSpotify[0] : sp.fromSpotify;
+  const fromSpotifyImport =
+    rawFromSpotify === "1" || rawFromSpotify === "true" || rawFromSpotify === "yes";
   const session = await getAuth0SessionCached();
   const user = session?.user
     ? {
@@ -39,6 +42,7 @@ export default async function BibliotecaImportarArquivoPage({ searchParams }: Pa
       billingPlan={billingPlan}
       initialVariationBaseTrackId={baseTrackId || null}
       initialVariationBaseTrack={initialVariationBaseTrack}
+      fromSpotifyImport={fromSpotifyImport}
     />
   );
 }

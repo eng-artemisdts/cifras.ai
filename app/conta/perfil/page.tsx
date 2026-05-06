@@ -5,7 +5,7 @@ import { ArrowLeft, Shield, Sparkles, UserRound } from "lucide-react";
 
 import { SpotifyAccountSection } from "@/components/conta/spotify-account-section";
 import { getAuth0SessionCached } from "@/lib/auth0";
-import { auth0LoginHref } from "@/lib/auth0-routes";
+import { appLoginHref } from "@/lib/auth0-routes";
 import { isAuth0Configured } from "@/lib/auth0-env";
 import { isAuth0ManagementConfigured } from "@/lib/billing/auth0-management";
 import { spotifyStatusForUser } from "@/lib/spotify-auth";
@@ -38,7 +38,9 @@ export default async function PerfilPage({ searchParams }: PerfilPageProps) {
 
   const session = await getAuth0SessionCached();
   if (!session?.user) {
-    redirect(auth0LoginHref({ returnTo: "/conta/perfil" }));
+    // Evita salto direto para `/auth/login` quando há leitura transitória de sessão no SSR.
+    // Primeiro vai para a página de login da app, que depois inicia o fluxo Auth0 de forma explícita.
+    redirect(appLoginHref("/conta/perfil"));
   }
 
   const sub = session.user.sub?.trim();

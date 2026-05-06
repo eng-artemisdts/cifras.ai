@@ -5,6 +5,7 @@ import type { LibraryNavItem } from "@/lib/library/types";
 import { cn } from "@/lib/utils";
 
 import { ImportStreamingLinkPanel } from "./import-streaming-link-panel";
+import { SpotifyImportPanel } from "./spotify-import-panel";
 import { LibraryPageFooter } from "./library-page-footer";
 import { LibraryTopNav, type LibraryTopNavUser } from "./library-top-nav";
 
@@ -51,11 +52,19 @@ export function LibraryImportProviderView({
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-h-dvh lg:border-l lg:border-white/7">
         <LibraryTopNav items={navItems} user={user} billingPlan={billingPlan ?? undefined} />
-        <ImportStreamingLinkPanel
-          config={panel}
-          proEntitled={proEntitled}
-          className="mx-auto min-h-0 w-full max-w-2xl flex-1 overflow-auto px-5 py-1 md:px-8 md:pb-3 md:pt-1"
-        />
+        {panel.slug === "spotify" ? (
+          <SpotifyImportPanel
+            config={panel}
+            proEntitled={proEntitled}
+            className="mx-auto min-h-0 w-full max-w-4xl flex-1 overflow-auto px-5 py-1 md:px-8 md:pb-3 md:pt-1"
+          />
+        ) : (
+          <ImportStreamingLinkPanel
+            config={panel}
+            proEntitled={proEntitled}
+            className="mx-auto min-h-0 w-full max-w-2xl flex-1 overflow-auto px-5 py-1 md:px-8 md:pb-3 md:pt-1"
+          />
+        )}
         <LibraryPageFooter className="mt-0 shrink-0 border-t border-white/7" />
       </div>
     </div>

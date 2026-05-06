@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import Link from "next/link";
 import { CheckCircle2, Loader2, Music2, Unplug, XCircle } from "lucide-react";
 
 import { GA_EVENTS } from "@/lib/analytics/events";
@@ -47,6 +46,7 @@ export function SpotifyAccountSection({
   const [status, setStatus] = useState<SpotifyStatus>(initialStatus);
   const [loading, setLoading] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [confirmDisconnectOpen, setConfirmDisconnectOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const spotifyQuery = spotifyQueryProp?.trim() ?? "";
@@ -93,9 +93,6 @@ export function SpotifyAccountSection({
 
   async function onDisconnect() {
     if (!status.connected) return;
-    if (!window.confirm("Desligar o Spotify desta conta cifra.ai? O playback integrado deixará de usar a sua conta.")) {
-      return;
-    }
     setDisconnecting(true);
     setError(null);
     try {
@@ -115,6 +112,7 @@ export function SpotifyAccountSection({
       setError("Não foi possível desligar o Spotify. Tente outra vez.");
     } finally {
       setDisconnecting(false);
+      setConfirmDisconnectOpen(false);
     }
   }
 
@@ -222,7 +220,7 @@ export function SpotifyAccountSection({
             {status.connected ? (
               <button
                 type="button"
-                onClick={() => void onDisconnect()}
+                onClick={() => setConfirmDisconnectOpen(true)}
                 disabled={disconnecting || !managementConfigured}
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-400/30 bg-red-500/10 px-5 py-2.5 text-sm font-semibold text-red-200 transition hover:border-red-400/45 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -230,7 +228,7 @@ export function SpotifyAccountSection({
                 Desligar Spotify
               </button>
             ) : (
-              <Link
+              <a
                 href={connectHref}
                 onClick={() => trackAnalyticsEvent(GA_EVENTS.SPOTIFY_CONNECT_CLICK, { surface: "conta_perfil" })}
                 className={cn(
@@ -241,10 +239,10 @@ export function SpotifyAccountSection({
                 aria-disabled={!managementConfigured}
               >
                 Ligar Spotify
-              </Link>
+              </a>
             )}
             {status.connected ? (
-              <Link
+              <a
                 href={connectHref}
                 onClick={() => trackAnalyticsEvent(GA_EVENTS.SPOTIFY_CONNECT_CLICK, { surface: "conta_perfil_trocar" })}
                 className={cn(
@@ -254,11 +252,42 @@ export function SpotifyAccountSection({
                 aria-disabled={!managementConfigured}
               >
                 Trocar de conta
-              </Link>
+              </a>
             ) : null}
           </div>
         </div>
       </div>
+
+      {confirmDisconnectOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-[1px]">
+          <div className="w-full max-w-md rounded-2xl border border-cifra-border bg-cifra-surface p-5 shadow-2xl">
+            <h3 className="font-serif text-xl text-white">Desligar Spotify?</h3>
+            <p className="mt-2 text-sm leading-relaxed text-cifra-muted">
+              O player integrado deixará de usar esta conta e você precisará ligar o Spotify novamente
+              para retomar reprodução e importação.
+            </p>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmDisconnectOpen(false)}
+                disabled={disconnecting}
+                className="inline-flex items-center justify-center rounded-xl border border-cifra-border bg-cifra-surface-2 px-4 py-2.5 text-sm font-semibold text-cifra-text transition hover:border-cifra-teal/35 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void onDisconnect()}
+                disabled={disconnecting}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-400/35 bg-red-500/15 px-4 py-2.5 text-sm font-semibold text-red-200 transition hover:border-red-400/50 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {disconnecting ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Unplug className="size-4" aria-hidden />}
+                Confirmar desligamento
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -17,6 +17,8 @@ export type LibraryImportAudioUploadViewProps = {
   existingChordDialogLayout?: ExistingChordDialogLayout;
   initialVariationBaseTrackId?: string | null;
   initialVariationBaseTrack?: SchubertTrackJson | null;
+  /** Escolha feita em `/biblioteca/importar/spotify` (sessionStorage + `?fromSpotify=1`). */
+  fromSpotifyImport?: boolean;
 };
 
 /**
@@ -31,6 +33,7 @@ export function LibraryImportAudioUploadView({
   existingChordDialogLayout,
   initialVariationBaseTrackId,
   initialVariationBaseTrack,
+  fromSpotifyImport = false,
 }: LibraryImportAudioUploadViewProps) {
   return (
     <ImportAudioLibraryFlow
@@ -41,6 +44,7 @@ export function LibraryImportAudioUploadView({
       existingChordDialogLayout={existingChordDialogLayout}
       initialVariationBaseTrackId={initialVariationBaseTrackId}
       initialVariationBaseTrack={initialVariationBaseTrack}
+      fromSpotifyImport={fromSpotifyImport}
     />
   );
 }

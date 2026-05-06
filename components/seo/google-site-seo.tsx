@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 const DEFAULT_SITE_URL = "https://cifra.ai";
 
 export function getSiteUrl(): string {
-  const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  const fromEnv =
+    process.env.APP_BASE_URL?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (fromEnv) {
     try {
       return new URL(fromEnv).origin;

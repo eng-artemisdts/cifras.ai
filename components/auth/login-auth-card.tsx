@@ -31,7 +31,7 @@ export function LoginAuthCard({ className, returnTo }: LoginAuthCardProps) {
             Entrar na sua conta
           </h1>
           <p className="mt-1 text-xs leading-snug text-cifra-muted">
-            Google, Apple, Spotify ou e-mail.
+            Google, Apple ou e-mail.
           </p>
         </div>
 
@@ -39,7 +39,6 @@ export function LoginAuthCard({ className, returnTo }: LoginAuthCardProps) {
           flow="login"
           hrefGoogle={auth0LoginHref({ connection: conn.google, ...rt })}
           hrefApple={auth0LoginHref({ connection: conn.apple, ...rt })}
-          hrefSpotify={auth0LoginHref({ connection: conn.spotify, ...rt })}
         />
 
         <div className="flex items-center gap-3 pt-1">

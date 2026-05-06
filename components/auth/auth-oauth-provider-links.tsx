@@ -1,6 +1,6 @@
 "use client";
 
-import { Apple, Music2 } from "lucide-react";
+import { Apple } from "lucide-react";
 
 import { GA_EVENTS } from "@/lib/analytics/events";
 import { trackAnalyticsEvent } from "@/lib/analytics/track";
@@ -12,7 +12,6 @@ type Props = {
   flow: Flow;
   hrefGoogle: string;
   hrefApple: string;
-  hrefSpotify: string;
 };
 
 function trackOAuth(connection: string, flow: Flow) {
@@ -35,13 +34,8 @@ const signupApple =
 const loginApple =
   "flex w-full items-center justify-center gap-2.5 rounded-xl border border-white/[0.07] bg-cifra-surface-2 py-3 pl-3.5 pr-3.5 text-sm font-semibold text-cifra-text transition-colors hover:border-white/15";
 
-const signupSpotify =
-  "flex w-full items-center justify-center gap-2.5 rounded-xl border border-[#1DB954]/27 bg-cifra-surface-2 py-2.5 pl-3 pr-3 text-sm font-semibold text-cifra-text transition-colors hover:border-[#1DB954]/50";
-const loginSpotify =
-  "flex w-full items-center justify-center gap-2.5 rounded-xl border border-[#1DB954]/27 bg-cifra-surface-2 py-3 pl-3.5 pr-3.5 text-sm font-semibold text-cifra-text transition-colors hover:border-[#1DB954]/50";
-
 /** Links OAuth com métrica de clique (Auth0 Universal Login). */
-export function AuthOauthProviderLinks({ flow, hrefGoogle, hrefApple, hrefSpotify }: Props) {
+export function AuthOauthProviderLinks({ flow, hrefGoogle, hrefApple }: Props) {
   const isSignup = flow === "signup";
   return (
     <div className={cn(isSignup ? signupWrap : loginWrap)}>
@@ -62,14 +56,6 @@ export function AuthOauthProviderLinks({ flow, hrefGoogle, hrefApple, hrefSpotif
       >
         <Apple className="size-5 text-white" strokeWidth={1.5} />
         Continuar com Apple
-      </a>
-      <a
-        href={hrefSpotify}
-        className={isSignup ? signupSpotify : loginSpotify}
-        onClick={() => trackOAuth("spotify", flow)}
-      >
-        <Music2 className="size-5 text-[#1DB954]" strokeWidth={1.75} />
-        Continuar com Spotify
       </a>
     </div>
   );

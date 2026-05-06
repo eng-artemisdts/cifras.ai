@@ -31,6 +31,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "cdn.auth0.com", pathname: "/**" },
       { protocol: "https", hostname: "avatars.githubusercontent.com", pathname: "/**" },
       { protocol: "https", hostname: "i.scdn.co", pathname: "/**" },
+      { protocol: "https", hostname: "mosaic.scdn.co", pathname: "/**" },
       { protocol: "https", hostname: "image-cdn-ak.spotifycdn.com", pathname: "/**" },
       { protocol: "https", hostname: "image-cdn-fa.spotifycdn.com", pathname: "/**" },
     ],

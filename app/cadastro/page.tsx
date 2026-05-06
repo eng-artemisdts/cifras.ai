@@ -12,7 +12,7 @@ import {
 export const metadata: Metadata = {
   title: "Criar conta",
   description:
-    "Cadastre-se no cifra.ai com Google, Apple, Spotify ou formulário completo.",
+    "Cadastre-se no cifra.ai com Google, Apple ou formulário completo.",
   alternates: { canonical: "/cadastro" },
 };
 

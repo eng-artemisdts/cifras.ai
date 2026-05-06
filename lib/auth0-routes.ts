@@ -31,7 +31,6 @@ export function getAuth0ConnectionEnv() {
   return {
     google: process.env.AUTH0_CONNECTION_GOOGLE ?? "google-oauth2",
     apple: process.env.AUTH0_CONNECTION_APPLE ?? "apple",
-    spotify: process.env.AUTH0_CONNECTION_SPOTIFY ?? "spotify",
   };
 }
 

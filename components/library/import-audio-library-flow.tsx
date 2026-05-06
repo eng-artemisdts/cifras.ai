@@ -48,6 +48,7 @@ export type ImportAudioLibraryFlowProps = {
   existingChordDialogLayout?: ExistingChordDialogLayout;
   initialVariationBaseTrackId?: string | null;
   initialVariationBaseTrack?: SchubertTrackJson | null;
+  fromSpotifyImport?: boolean;
 };
 
 export function ImportAudioLibraryFlow({
@@ -58,6 +59,7 @@ export function ImportAudioLibraryFlow({
   existingChordDialogLayout,
   initialVariationBaseTrackId,
   initialVariationBaseTrack,
+  fromSpotifyImport = false,
 }: ImportAudioLibraryFlowProps) {
   const initialBaseTrackId = initialVariationBaseTrackId?.trim() ?? "";
   const canStartOnVariation =
@@ -144,6 +146,7 @@ export function ImportAudioLibraryFlow({
             onProceedToMetadata={handleProceedToMetadata}
             className="min-h-0 min-w-0 w-full flex-1 overflow-auto px-5 py-1 md:px-10 md:pb-3 md:pt-1"
             existingChordDialogLayout={existingChordDialogLayout}
+            fromSpotifyImport={fromSpotifyImport}
           />
         )}
         <LibraryPageFooter className="mt-0 shrink-0 border-t border-white/7" />

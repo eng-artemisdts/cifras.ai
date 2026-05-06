@@ -11,6 +11,9 @@ const SPOTIFY_SCOPES = [
   "user-read-private",
   "user-read-playback-state",
   "user-modify-playback-state",
+  /** Importação: listar playlists e faixas da conta. */
+  "playlist-read-private",
+  "playlist-read-collaborative",
 ] as const;
 
 export type SpotifyConnectionStatus = {
@@ -50,8 +53,10 @@ function spotifyClientSecret(): string {
 export function spotifyRedirectUri(): string {
   const explicit = process.env.SPOTIFY_REDIRECT_URI?.trim();
   if (explicit) return explicit;
-  const appBase = process.env.APP_BASE_URL?.trim() ?? process.env.AUTH0_BASE_URL?.trim();
-  if (!appBase) throw new Error("SPOTIFY_REDIRECT_URI_or_APP_BASE_URL_not_configured");
+
+  const appBase =
+    process.env.APP_BASE_URL?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (!appBase) throw new Error("APP_BASE_URL_or_NEXT_PUBLIC_SITE_URL_not_configured");
   return `${appBase.replace(/\/$/, "")}/api/spotify/callback`;
 }
 
@@ -102,13 +107,15 @@ async function tokenRequest(body: URLSearchParams): Promise<SpotifyTokenResponse
   return (await res.json()) as SpotifyTokenResponse;
 }
 
-export function spotifyAuthorizeUrl(state: string): string {
+export function spotifyAuthorizeUrl(state: string, redirectUri?: string): string {
   const url = new URL("https://accounts.spotify.com/authorize");
   url.searchParams.set("client_id", spotifyClientId());
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("redirect_uri", spotifyRedirectUri());
+  url.searchParams.set("redirect_uri", redirectUri?.trim() || spotifyRedirectUri());
   url.searchParams.set("scope", SPOTIFY_SCOPES.join(" "));
   url.searchParams.set("state", state);
+  // Força a tela de consentimento para renovar refresh token com scopes novos.
+  url.searchParams.set("show_dialog", "true");
   return url.toString();
 }
 
@@ -116,12 +123,12 @@ export function newOauthState(): string {
   return crypto.randomBytes(24).toString("base64url");
 }
 
-export async function exchangeCodeForSpotifySession(params: { code: string }) {
+export async function exchangeCodeForSpotifySession(params: { code: string; redirectUri?: string }) {
   const token = await tokenRequest(
     new URLSearchParams({
       grant_type: "authorization_code",
       code: params.code,
-      redirect_uri: spotifyRedirectUri(),
+      redirect_uri: params.redirectUri?.trim() || spotifyRedirectUri(),
     }),
   );
   const meRes = await fetch("https://api.spotify.com/v1/me", {
@@ -164,7 +171,6 @@ export async function spotifyStatusForUser(auth0UserId: string): Promise<Spotify
   const product = typeof meta?.spotify_product === "string" ? meta.spotify_product : null;
   const accountId = typeof meta?.spotify_account_id === "string" ? meta.spotify_account_id : null;
 
-  console.log("spotifyStatusForUser", { connected, product, accountId });
   return {
     connected,
     product,

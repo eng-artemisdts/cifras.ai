@@ -31,6 +31,10 @@ import {
   recognizedSongForVariation,
   type ImportMetadataContext,
 } from "@/lib/library/import-metadata-context";
+import {
+  SPOTIFY_IMPORT_PREFILL_STORAGE_KEY,
+  type SpotifyImportPrefill,
+} from "@/lib/library/spotify-import-storage";
 import type { SchubertTrackJson } from "@/lib/schubert-api";
 import { cn } from "@/lib/utils";
 
@@ -79,6 +83,8 @@ export type ImportAudioUploadPanelProps = {
   initialQueue?: QueuedFile[];
   /** Variante visual do modal de confirmação da música (alinhada ao frame de variante no Pencil). */
   existingChordDialogLayout?: ExistingChordDialogLayout;
+  /** Metadados da faixa escolhida em «Importar · Spotify». */
+  fromSpotifyImport?: boolean;
 };
 
 export function ImportAudioUploadPanel({
@@ -86,6 +92,7 @@ export function ImportAudioUploadPanel({
   onProceedToMetadata,
   initialQueue,
   existingChordDialogLayout = "default",
+  fromSpotifyImport = false,
 }: ImportAudioUploadPanelProps) {
   const inputId = useId();
   const addInputRef = useRef<HTMLInputElement>(null);
@@ -105,6 +112,39 @@ export function ImportAudioUploadPanel({
   const [identifyMessage, setIdentifyMessage] = useState<string | null>(null);
   /** Metadados AudD quando a faixa é reconhecida — capa na fila antes ou depois do modal. */
   const [recognizedSong, setRecognizedSong] = useState<SchubertRecognizedSong | null>(null);
+  const [spotifyPrefill, setSpotifyPrefill] = useState<SpotifyImportPrefill | null>(null);
+
+  useEffect(() => {
+    if (!fromSpotifyImport || typeof window === "undefined") return;
+    try {
+      const raw = sessionStorage.getItem(SPOTIFY_IMPORT_PREFILL_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as SpotifyImportPrefill;
+      if (parsed?.trackId?.trim()) {
+        setSpotifyPrefill(parsed);
+      }
+      sessionStorage.removeItem(SPOTIFY_IMPORT_PREFILL_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }, [fromSpotifyImport]);
+
+  const mergeSpotifyPrefill = useCallback(
+    (song: SchubertRecognizedSong): SchubertRecognizedSong => {
+      if (!spotifyPrefill) return song;
+      const link = `https://open.spotify.com/track/${spotifyPrefill.trackId}`;
+      return {
+        ...song,
+        title: song.title?.trim() || spotifyPrefill.title,
+        artist: song.artist?.trim() || spotifyPrefill.artistLine,
+        album: song.album?.trim() || spotifyPrefill.album,
+        spotify_track_id: spotifyPrefill.trackId,
+        song_link: song.song_link?.trim() || link,
+        cover_image_url: song.cover_image_url?.trim() || spotifyPrefill.coverUrl || "",
+      };
+    },
+    [spotifyPrefill],
+  );
 
   const ingestLabel =
     queue.length === 0 ? "Nenhum arquivo ainda" : "1 arquivo · pronto para processar";
@@ -181,11 +221,17 @@ export function ImportAudioUploadPanel({
     if (!pendingIngest) return;
     setIdentifyMessage(null);
     onProceedToMetadata(
-      { file: pendingIngest.file, mode: "ingest", song: pendingIngest.song },
+      { file: pendingIngest.file, mode: "ingest", song: mergeSpotifyPrefill(pendingIngest.song) },
       queue,
     );
     handleRecognitionDialogOpenChange(false);
-  }, [pendingIngest, queue, onProceedToMetadata, handleRecognitionDialogOpenChange]);
+  }, [
+    pendingIngest,
+    queue,
+    mergeSpotifyPrefill,
+    onProceedToMetadata,
+    handleRecognitionDialogOpenChange,
+  ]);
 
   const handleMatchedChordDialogOpenChange = useCallback((open: boolean) => {
     setMatchedChordOpen(open);
@@ -208,7 +254,10 @@ export function ImportAudioUploadPanel({
       {
         file,
         mode: "variation",
-        song: recognizedSongForVariation(baseTrack, recognizedSong),
+        song: recognizedSongForVariation(
+          baseTrack,
+          recognizedSong ? mergeSpotifyPrefill(recognizedSong) : null,
+        ),
         variationBaseTrack: baseTrack,
         variationBaseTrackId: baseTrackId,
       },
@@ -220,6 +269,7 @@ export function ImportAudioUploadPanel({
     variationBaseTrack,
     queue,
     recognizedSong,
+    mergeSpotifyPrefill,
     onProceedToMetadata,
     handleMatchedChordDialogOpenChange,
   ]);
@@ -241,8 +291,9 @@ export function ImportAudioUploadPanel({
     try {
       const res = await identifyTrackFromMp3(item.file);
       if (res.recognized && res.song && res.track) {
-        setRecognizedSong(res.song);
-        const preview = mapSchubertMatchToChordPreview(res.track, res.song);
+        const mergedSong = mergeSpotifyPrefill(res.song);
+        setRecognizedSong(mergedSong);
+        const preview = mapSchubertMatchToChordPreview(res.track, mergedSong);
         const matchedTrack = res.track as { trackId?: unknown };
         const resolvedTrackId =
           typeof matchedTrack.trackId === "string" && matchedTrack.trackId.trim()
@@ -270,13 +321,17 @@ export function ImportAudioUploadPanel({
         return;
       }
       if (res.recognized && res.song) {
-        setRecognizedSong(res.song);
-        setRecognitionPreview(mapRecognizedSongToChordPreview(res.song));
-        setPendingIngest({ file: item.file, song: res.song });
+        const mergedSong = mergeSpotifyPrefill(res.song);
+        setRecognizedSong(mergedSong);
+        setRecognitionPreview(mapRecognizedSongToChordPreview(mergedSong));
+        setPendingIngest({ file: item.file, song: mergedSong });
         setRecognitionConfirmOpen(true);
         return;
       }
-      onProceedToMetadata({ file: item.file, mode: "ingest", song: emptyRecognizedSong() }, queue);
+      onProceedToMetadata(
+        { file: item.file, mode: "ingest", song: mergeSpotifyPrefill(emptyRecognizedSong()) },
+        queue,
+      );
       return;
     } catch (e) {
       if (e instanceof SchubertIdentifyError) {
@@ -287,7 +342,7 @@ export function ImportAudioUploadPanel({
     } finally {
       setDetecting(false);
     }
-  }, [queue, onProceedToMetadata]);
+  }, [queue, mergeSpotifyPrefill, onProceedToMetadata]);
 
   const onDrop = useCallback(
     (e: DragEvent<HTMLDivElement>) => {
@@ -345,6 +400,34 @@ export function ImportAudioUploadPanel({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-2.5 md:gap-3">
+        {spotifyPrefill ? (
+          <div
+            role="status"
+            className="flex gap-3 rounded-xl border border-[#1db954]/35 bg-[#1db954]/8 px-3 py-2.5"
+          >
+            <div className="size-11 shrink-0 overflow-hidden rounded-md border border-white/10 bg-black/30">
+              {spotifyPrefill.coverUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- URL CDN Spotify
+                <img
+                  src={spotifyPrefill.coverUrl}
+                  alt=""
+                  className="size-full object-cover"
+                />
+              ) : (
+                <div className="flex size-full items-center justify-center">
+                  <Music2 className="size-5 text-[#1db954]/80" strokeWidth={1.5} aria-hidden />
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#1db954]">
+                Faixa escolhida no Spotify
+              </p>
+              <p className="truncate text-xs font-semibold text-cifra-text">{spotifyPrefill.title}</p>
+              <p className="truncate font-mono text-[10px] text-cifra-muted">{spotifyPrefill.artistLine}</p>
+            </div>
+          </div>
+        ) : null}
         {identifyMessage ? (
           <p
             role="status"
@@ -433,14 +516,18 @@ export function ImportAudioUploadPanel({
                     key={q.id}
                     className="flex items-center gap-3 border-b border-white/6 bg-[#0c0c16] px-5 py-3"
                   >
-                    <QueueCoverThumb coverUrl={recognizedSong?.cover_image_url} />
+                    <QueueCoverThumb
+                      coverUrl={recognizedSong?.cover_image_url ?? spotifyPrefill?.coverUrl ?? undefined}
+                    />
                     <div className="min-w-0 flex-1 space-y-0.5">
                       <p className="truncate text-xs font-semibold text-cifra-text">{q.file.name}</p>
                       <p className="font-mono text-[10px] text-cifra-muted">
                         {formatBytes(q.file.size)}
                         {recognizedSong
                           ? ` · identificada: ${recognizedSong.artist} — ${recognizedSong.title}`
-                          : " · aguardando análise"}
+                          : spotifyPrefill
+                            ? ` · Spotify: ${spotifyPrefill.artistLine} — ${spotifyPrefill.title}`
+                            : " · aguardando análise"}
                       </p>
                     </div>
                     <span className="shrink-0 rounded-md border border-cifra-teal/30 bg-cifra-teal/10 px-2.5 py-1 font-mono text-[9px] text-cifra-teal">

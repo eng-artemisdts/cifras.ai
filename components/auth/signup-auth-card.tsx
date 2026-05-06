@@ -42,7 +42,6 @@ export function SignupAuthCard({ className }: SignupAuthCardProps) {
           flow="signup"
           hrefGoogle={auth0LoginHref({ connection: conn.google, screenHint: "signup" })}
           hrefApple={auth0LoginHref({ connection: conn.apple, screenHint: "signup" })}
-          hrefSpotify={auth0LoginHref({ connection: conn.spotify, screenHint: "signup" })}
         />
 
         <div className="flex items-center gap-2.5 pt-0.5">

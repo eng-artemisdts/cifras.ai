@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-import { getAuth0Session } from "@/lib/auth0";
+import { getAuth0, getAuth0Session } from "@/lib/auth0";
 import { isAuth0Configured } from "@/lib/auth0-env";
 import {
   exchangeCodeForSpotifySession,
@@ -12,12 +12,26 @@ export const runtime = "nodejs";
 
 const STATE_COOKIE = "spotify_oauth_state";
 const RETURN_TO_COOKIE = "spotify_oauth_return_to";
+const REDIRECT_URI_COOKIE = "spotify_oauth_redirect_uri";
+
+function nextRequestForSessionOnly(req: Request): NextRequest {
+  if (req instanceof NextRequest) {
+    return req;
+  }
+  return new NextRequest(req.url, {
+    method: req.method,
+    headers: req.headers,
+  });
+}
 
 export async function GET(req: Request) {
   if (!isAuth0Configured()) {
     return NextResponse.json({ ok: false, error: "auth0_not_configured" }, { status: 503 });
   }
-  const session = await getAuth0Session();
+  let session = await getAuth0Session();
+  if (!session?.user) {
+    session = await getAuth0().getSession(nextRequestForSessionOnly(req));
+  }
   const sub = session?.user?.sub?.trim();
   if (!sub) {
     return NextResponse.redirect(new URL("/login", req.url));
@@ -29,8 +43,10 @@ export async function GET(req: Request) {
   const cookieStore = await cookies();
   const expectedState = cookieStore.get(STATE_COOKIE)?.value ?? "";
   const returnTo = cookieStore.get(RETURN_TO_COOKIE)?.value ?? "/explorar";
+  const redirectUri = cookieStore.get(REDIRECT_URI_COOKIE)?.value ?? "";
   cookieStore.delete(STATE_COOKIE);
   cookieStore.delete(RETURN_TO_COOKIE);
+  cookieStore.delete(REDIRECT_URI_COOKIE);
 
   if (!code) {
     return NextResponse.redirect(new URL(`${returnTo}?spotify=missing_code`, req.url));
@@ -40,7 +56,10 @@ export async function GET(req: Request) {
   }
 
   try {
-    const spotifySession = await exchangeCodeForSpotifySession({ code });
+    const spotifySession = await exchangeCodeForSpotifySession({
+      code,
+      redirectUri: redirectUri.trim() || undefined,
+    });
     await saveSpotifySessionForUser(sub, spotifySession);
     return NextResponse.redirect(new URL(`${returnTo}?spotify=connected`, req.url));
   } catch {
