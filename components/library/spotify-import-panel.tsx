@@ -1,16 +1,30 @@
 "use client";
 
+import { useUser } from "@auth0/nextjs-auth0/client";
 import { ChevronRight, Library, Link2, ListMusic, Loader2, Music2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { ChordFoundAccessDialog } from "@/components/library/chord-found-access-dialog";
+import type { ExistingChordDialogLayout } from "@/components/library/library-import-dialog-layout";
+import { RecognizedMusicConfirmDialog } from "@/components/library/recognized-music-confirm-dialog";
+import { fetchMyBeethovenVariationByBaseTrackIdFromBrowser } from "@/lib/beethoven-variations";
 import type { StreamingLinkImportPanelConfig } from "@/lib/library/streaming-link-import-config";
 import {
   SPOTIFY_IMPORT_PREFILL_STORAGE_KEY,
   type SpotifyImportPrefill,
 } from "@/lib/library/spotify-import-storage";
+import {
+  mapRecognizedSongToChordPreview,
+  mapSchubertMatchToChordPreview,
+  type ChordFoundPreview,
+} from "@/lib/schubert-identify-service";
+import type { SchubertRecognizedSong } from "@/lib/schubert-identify-types";
+import { fetchSchubertFromBrowser } from "@/lib/schubert-api";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
 function extractSpotifyTrackId(input: string): string | null {
@@ -64,6 +78,32 @@ type TrackRow = {
   importable?: boolean;
 };
 
+function trackRowToSong(tr: TrackRow): SchubertRecognizedSong {
+  return {
+    title: tr.name,
+    artist: tr.artistLine,
+    album: tr.album,
+    release_date: "",
+    label: "",
+    timecode: "",
+    song_link: `https://open.spotify.com/track/${tr.id}`,
+    spotify_track_id: tr.id,
+    spotify_artist_ids: [],
+    cover_image_url: tr.coverUrl ?? "",
+  };
+}
+
+function isTrackOwner(track: Record<string, unknown>, sub?: string | null): boolean {
+  if (!sub?.trim()) return false;
+  const owner =
+    typeof track.owner === "string" && track.owner.trim()
+      ? track.owner.trim()
+      : typeof track.userId === "string" && track.userId.trim()
+        ? track.userId.trim()
+        : "";
+  return owner === sub.trim();
+}
+
 function formatMs(ms: number) {
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
@@ -74,10 +114,18 @@ function formatMs(ms: number) {
 export type SpotifyImportPanelProps = {
   config: StreamingLinkImportPanelConfig;
   proEntitled?: boolean;
+  /** Variante visual dos modais (alinhada ao fluxo de importação por ficheiro). */
+  existingChordDialogLayout?: ExistingChordDialogLayout;
   className?: string;
 };
 
-export function SpotifyImportPanel({ config, proEntitled = false, className }: SpotifyImportPanelProps) {
+export function SpotifyImportPanel({
+  config,
+  proEntitled = false,
+  existingChordDialogLayout = "default",
+  className,
+}: SpotifyImportPanelProps) {
+  const { user } = useUser();
   const router = useRouter();
   const pathname = usePathname();
   const returnToConnect = `${pathname || "/biblioteca/importar/spotify"}`;
@@ -103,6 +151,12 @@ export function SpotifyImportPanel({ config, proEntitled = false, className }: S
   const [tracksError, setTracksError] = useState<string | null>(null);
   const [tracksErrorDetails, setTracksErrorDetails] = useState<string | null>(null);
   const [tracksNeedReconnect, setTracksNeedReconnect] = useState(false);
+
+  const [matchedChordPreview, setMatchedChordPreview] = useState<ChordFoundPreview | null>(null);
+  const [matchedChordOpen, setMatchedChordOpen] = useState(false);
+  const [recognitionPreview, setRecognitionPreview] = useState<ChordFoundPreview | null>(null);
+  const [recognitionConfirmOpen, setRecognitionConfirmOpen] = useState(false);
+  const [trackLookupLoading, setTrackLookupLoading] = useState(false);
 
   const proGateActive = Boolean(config.requiresPro && !proEntitled);
 
@@ -221,6 +275,16 @@ export function SpotifyImportPanel({ config, proEntitled = false, className }: S
     void loadPlaylists(playlistsOffset + 20, true);
   }, [playlistsLoading, playlists.length, playlistsTotal, playlistsOffset, loadPlaylists]);
 
+  const handleMatchedChordDialogOpenChange = useCallback((open: boolean) => {
+    setMatchedChordOpen(open);
+    if (!open) setMatchedChordPreview(null);
+  }, []);
+
+  const handleRecognitionDialogOpenChange = useCallback((open: boolean) => {
+    setRecognitionConfirmOpen(open);
+    if (!open) setRecognitionPreview(null);
+  }, []);
+
   const proceedToAudioCapture = useCallback(
     async (prefill: SpotifyImportPrefill) => {
       try {
@@ -234,16 +298,56 @@ export function SpotifyImportPanel({ config, proEntitled = false, className }: S
   );
 
   const onPickTrack = useCallback(
-    (tr: TrackRow) => {
-      void proceedToAudioCapture({
-        trackId: tr.id,
-        title: tr.name,
-        artistLine: tr.artistLine,
-        album: tr.album,
-        coverUrl: tr.coverUrl,
-      });
+    async (tr: TrackRow) => {
+      if (tr.importable === false || trackLookupLoading) return;
+      setTrackLookupLoading(true);
+      setMatchedChordOpen(false);
+      setMatchedChordPreview(null);
+      setRecognitionConfirmOpen(false);
+      setRecognitionPreview(null);
+      try {
+        const res = await fetchSchubertFromBrowser(`tracks/by-key/${encodeURIComponent(tr.id)}`);
+        if (res.status === 404) {
+          setRecognitionPreview(mapRecognizedSongToChordPreview(trackRowToSong(tr)));
+          setRecognitionConfirmOpen(true);
+          return;
+        }
+        if (!res.ok) {
+          setTracksError("Não foi possível verificar se já existe cifra para esta faixa.");
+          return;
+        }
+        const trackJson = (await res.json()) as Record<string, unknown>;
+        const song = trackRowToSong(tr);
+        let preview = mapSchubertMatchToChordPreview(trackJson, song);
+        const matchedTrack = trackJson as { trackId?: unknown };
+        const resolvedTrackId =
+          typeof matchedTrack.trackId === "string" && matchedTrack.trackId.trim()
+            ? matchedTrack.trackId.trim()
+            : null;
+        const canEditTrack = isTrackOwner(trackJson, user?.sub);
+        let editHref = preview.editHref;
+        if (resolvedTrackId && !canEditTrack) {
+          const ownedVariation = await fetchMyBeethovenVariationByBaseTrackIdFromBrowser(resolvedTrackId).catch(
+            () => null,
+          );
+          const ownedVariationTrackId =
+            ownedVariation && typeof ownedVariation.trackId === "string" ? ownedVariation.trackId.trim() : "";
+          if (ownedVariationTrackId && preview.editHref) {
+            editHref = `${preview.editHref}?v=${encodeURIComponent(ownedVariationTrackId)}`;
+          }
+        }
+        setMatchedChordPreview({
+          ...preview,
+          editHref,
+        });
+        setMatchedChordOpen(true);
+      } catch {
+        setTracksError("Não foi possível verificar se já existe cifra para esta faixa.");
+      } finally {
+        setTrackLookupLoading(false);
+      }
     },
-    [proceedToAudioCapture],
+    [trackLookupLoading, user?.sub],
   );
 
   const onContinueLink = useCallback(async () => {
@@ -264,7 +368,7 @@ export function SpotifyImportPanel({ config, proEntitled = false, className }: S
     }
   }, [url, proceedToAudioCapture]);
 
-  const canLoadMorePlaylists = playlists.length < playlistsTotal && !playlistsLoading;
+  const showLoadMorePlaylistsButton = playlists.length < playlistsTotal;
 
   const browseHint = useMemo(
     () =>
@@ -274,6 +378,38 @@ export function SpotifyImportPanel({ config, proEntitled = false, className }: S
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col gap-3 md:gap-4", className)}>
+      {matchedChordPreview ? (
+        <ChordFoundAccessDialog
+          open={matchedChordOpen}
+          onOpenChange={handleMatchedChordDialogOpenChange}
+          songTitle={matchedChordPreview.songTitle}
+          artistName={matchedChordPreview.artistName}
+          coverImageUrl={matchedChordPreview.coverImageUrl}
+          chordHref={matchedChordPreview.chordHref}
+          editHref={matchedChordPreview.editHref}
+          onAccessClick={() => {
+            setRecognitionPreview(null);
+            setRecognitionConfirmOpen(false);
+          }}
+          canCreateVariation={false}
+          creatingVariation={false}
+          layout={existingChordDialogLayout}
+        />
+      ) : null}
+      {recognitionPreview ? (
+        <RecognizedMusicConfirmDialog
+          open={recognitionConfirmOpen}
+          onOpenChange={handleRecognitionDialogOpenChange}
+          songTitle={recognitionPreview.songTitle}
+          artistName={recognitionPreview.artistName}
+          coverImageUrl={recognitionPreview.coverImageUrl}
+          copyVariant="spotify"
+          montarComIaHref={null}
+          confirmLoading={false}
+          onNotThisMusic={() => handleRecognitionDialogOpenChange(false)}
+          layout={existingChordDialogLayout}
+        />
+      ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Link2 className="size-4 shrink-0 text-cifra-teal" strokeWidth={1.75} aria-hidden />
@@ -328,70 +464,84 @@ export function SpotifyImportPanel({ config, proEntitled = false, className }: S
             </div>
 
             {tab === "browse" ? (
-              <div className="flex min-h-[320px] flex-col gap-3 lg:min-h-[380px] lg:flex-row lg:gap-4">
-                <div className="flex min-h-[180px] min-w-0 flex-1 flex-col rounded-xl border border-white/8 bg-[#0c0c14] lg:max-w-[min(100%,280px)]">
-                  <div className="flex items-center gap-2 border-b border-white/8 px-3 py-2">
+              <div className="flex min-h-0 flex-col gap-3 sm:min-h-[320px] lg:h-[380px] lg:min-h-[380px] lg:flex-row lg:gap-4">
+                <div className="flex max-h-[min(280px,48vh)] min-h-0 min-w-0 shrink-0 flex-col overflow-hidden rounded-xl border border-white/8 bg-[#0c0c14] lg:max-h-none lg:h-full lg:max-w-[min(100%,280px)] lg:shrink lg:flex-1">
+                  <div className="flex shrink-0 items-center gap-2 border-b border-white/8 px-3 py-2">
                     <Library className="size-4 text-cifra-teal" strokeWidth={1.75} aria-hidden />
                     <span className="text-[11px] font-semibold text-cifra-text">Playlists</span>
                   </div>
-                  <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
-                    {playlistsError ? (
-                      <div className="space-y-2 px-2 py-2">
-                        <p className="text-[11px] leading-snug text-cifra-muted">{playlistsError}</p>
-                        <Link
-                          href={connectHref}
-                          className="inline-flex rounded-full bg-cifra-teal px-3 py-1.5 text-[11px] font-semibold text-cifra-bg"
-                        >
-                          Ligar Spotify
-                        </Link>
-                      </div>
-                    ) : null}
-                    {!playlistsError && playlistsLoading && playlists.length === 0 ? (
-                      <div className="flex items-center justify-center gap-2 py-12 text-[11px] text-cifra-muted">
-                        <Loader2 className="size-4 animate-spin" aria-hidden />
-                        A carregar…
-                      </div>
-                    ) : null}
-                    <ul className="space-y-0.5">
-                      {playlists.map((pl) => (
-                        <li key={pl.id}>
-                          <button
-                            type="button"
-                            onClick={() => selectPlaylist(pl)}
-                            className={cn(
-                              "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[11px] transition",
-                              selectedPlaylist?.id === pl.id
-                                ? "bg-cifra-teal/15 text-cifra-text"
-                                : "text-cifra-text hover:bg-white/6",
-                            )}
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    <ScrollArea className="min-h-0 flex-1 px-1 pt-1">
+                      {playlistsError ? (
+                        <div className="space-y-2 px-2 py-2">
+                          <p className="text-[11px] leading-snug text-cifra-muted">{playlistsError}</p>
+                          <Link
+                            href={connectHref}
+                            className="inline-flex rounded-full bg-cifra-teal px-3 py-1.5 text-[11px] font-semibold text-cifra-bg"
                           >
-                            <div className="relative size-9 shrink-0 overflow-hidden rounded bg-[#16162a]">
-                              {pl.imageUrl ? (
-                                <Image src={pl.imageUrl} alt="" fill className="object-cover" sizes="36px" />
-                              ) : (
-                                <Music2 className="absolute inset-0 m-auto size-4 text-cifra-muted" strokeWidth={1.5} />
+                            Ligar Spotify
+                          </Link>
+                        </div>
+                      ) : null}
+                      {!playlistsError && playlistsLoading && playlists.length === 0 ? (
+                        <div className="flex items-center justify-center gap-2 py-12 text-[11px] text-cifra-muted">
+                          <Loader2 className="size-4 animate-spin" aria-hidden />
+                          A carregar…
+                        </div>
+                      ) : null}
+                      <ul className="space-y-0.5 pb-1">
+                        {playlists.map((pl) => (
+                          <li key={pl.id}>
+                            <button
+                              type="button"
+                              onClick={() => selectPlaylist(pl)}
+                              className={cn(
+                                "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[11px] transition",
+                                selectedPlaylist?.id === pl.id
+                                  ? "bg-cifra-teal/15 text-cifra-text"
+                                  : "text-cifra-text hover:bg-white/6",
                               )}
-                            </div>
-                            <span className="min-w-0 flex-1 truncate font-medium">{pl.name}</span>
-                            <ChevronRight className="size-4 shrink-0 text-cifra-muted" strokeWidth={1.75} aria-hidden />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                    {canLoadMorePlaylists ? (
-                      <button
-                        type="button"
-                        onClick={loadMorePlaylists}
-                        className="mt-2 w-full rounded-lg border border-white/10 py-2 text-[10px] font-semibold text-cifra-teal hover:bg-white/5"
-                      >
-                        Carregar mais playlists
-                      </button>
+                            >
+                              <div className="relative size-9 shrink-0 overflow-hidden rounded bg-[#16162a]">
+                                {pl.imageUrl ? (
+                                  <Image src={pl.imageUrl} alt="" fill className="object-cover" sizes="36px" />
+                                ) : (
+                                  <Music2 className="absolute inset-0 m-auto size-4 text-cifra-muted" strokeWidth={1.5} />
+                                )}
+                              </div>
+                              <span className="min-w-0 flex-1 truncate font-medium">{pl.name}</span>
+                              <ChevronRight className="size-4 shrink-0 text-cifra-muted" strokeWidth={1.75} aria-hidden />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </ScrollArea>
+                    {showLoadMorePlaylistsButton ? (
+                      <div className="shrink-0 border-t border-white/8 px-2 pb-2 pt-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={loadMorePlaylists}
+                          disabled={playlistsLoading}
+                          className="h-auto w-full gap-1.5 border-white/10 bg-transparent py-2 text-[10px] font-semibold text-cifra-teal hover:bg-white/5"
+                        >
+                          {playlistsLoading ? (
+                            <>
+                              <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                              A carregar…
+                            </>
+                          ) : (
+                            "Carregar mais playlists"
+                          )}
+                        </Button>
+                      </div>
                     ) : null}
                   </div>
                 </div>
 
-                <div className="flex min-h-[180px] min-w-0 flex-[1.25] flex-col rounded-xl border border-white/8 bg-[#0c0c14]">
-                  <div className="flex items-center justify-between gap-2 border-b border-white/8 px-3 py-2">
+                <div className="flex min-h-[min(280px,48vh)] min-w-0 flex-[1.25] flex-col overflow-hidden rounded-xl border border-white/8 bg-[#0c0c14] lg:min-h-0 lg:h-full">
+                  <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/8 px-3 py-2">
                     <span className="min-w-0 truncate text-[11px] font-semibold text-cifra-text">
                       {selectedPlaylist ? selectedPlaylist.name : "Faixas"}
                     </span>
@@ -401,7 +551,7 @@ export function SpotifyImportPanel({ config, proEntitled = false, className }: S
                       </span>
                     ) : null}
                   </div>
-                  <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 py-1">
                     {!selectedPlaylist ? (
                       <p className="px-3 py-8 text-center text-[11px] leading-relaxed text-cifra-muted">
                         Selecione uma playlist para ver as músicas.
@@ -439,8 +589,8 @@ export function SpotifyImportPanel({ config, proEntitled = false, className }: S
                           <li key={`${selectedPlaylist.id}-${tr.id}-${tr.name}`}>
                             <button
                               type="button"
-                              disabled={tr.importable === false}
-                              onClick={() => onPickTrack(tr)}
+                              disabled={tr.importable === false || trackLookupLoading}
+                              onClick={() => void onPickTrack(tr)}
                               className={cn(
                                 "flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left text-[11px] text-cifra-text transition",
                                 tr.importable === false

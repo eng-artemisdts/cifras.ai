@@ -36,6 +36,8 @@ export type RecognizedMusicConfirmDialogProps = {
   songTitle: string;
   artistName: string;
   coverImageUrl?: string | null;
+  /** Texto do corpo: detecção por áudio (predefinição) vs faixa escolhida no Spotify. */
+  copyVariant?: "audio" | "spotify";
   /**
    * URL para abrir a cifra (`/cifras/...` ou legado `?trackId=`).
    * Quando ausente, usa-se `onMontarComIaSemHref` (ex.: ingestão antes do catálogo principal).
@@ -55,6 +57,7 @@ export function RecognizedMusicConfirmDialog({
   songTitle,
   artistName,
   coverImageUrl,
+  copyVariant = "audio",
   montarComIaHref,
   onMontarComIaSemHref,
   confirmLoading = false,
@@ -142,14 +145,29 @@ export function RecognizedMusicConfirmDialog({
                 </div>
 
                 <Dialog.Description className="space-y-2 text-[12px] leading-[1.5] text-cifra-muted">
-                  <span className="block">
-                    O serviço identificou esta faixa a partir do seu áudio. Confirme se corresponde mesmo à música
-                    que pretende tratar.
-                  </span>
-                  <span className="block">
-                    Se estiver correto, pode avançar para montar a cifra com a nossa IA (letra e sincronização). Se não
-                    for esta música, cancele e envie outro ficheiro ou rode a detecção de novo.
-                  </span>
+                  {copyVariant === "spotify" ? (
+                    <>
+                      <span className="block">
+                        Esta é a faixa que escolheu na sua conta Spotify. Confirme se corresponde à música que pretende
+                        tratar.
+                      </span>
+                      <span className="block">
+                        Não encontrámos uma cifra na biblioteca para esta faixa. Para gerar com IA, use Importar arquivo e
+                        envie um excerto de áudio — o fluxo de detecção ativará o passo seguinte.
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="block">
+                        O serviço identificou esta faixa a partir do seu áudio. Confirme se corresponde mesmo à música
+                        que pretende tratar.
+                      </span>
+                      <span className="block">
+                        Se estiver correto, pode avançar para montar a cifra com a nossa IA (letra e sincronização). Se não
+                        for esta música, cancele e envie outro ficheiro ou rode a detecção de novo.
+                      </span>
+                    </>
+                  )}
                 </Dialog.Description>
               </div>
             </div>
