@@ -147,6 +147,43 @@ export async function postTrackIngestWithMeta(
   return json as SchubertTrackIngestResponse;
 }
 
+/**
+ * Inicia ingestão assíncrona a partir de metadados Spotify (áudio obtido no servidor via YouTube).
+ * Requer Schubert com `INGEST_ASYNC_ENABLED=1`, Redis e `YOUTUBE_DATA_API_KEY`.
+ */
+export async function postSpotifySourceIngest(input: {
+  trackId?: string;
+  url?: string;
+  meta: SchubertRecognizedSong;
+}): Promise<SchubertTrackIngestResponse> {
+  const res = await fetchSchubertFromBrowser("tracks/ingest/spotify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...(input.trackId?.trim() ? { trackId: input.trackId.trim() } : {}),
+      ...(input.url?.trim() ? { url: input.url.trim() } : {}),
+      meta: input.meta,
+    }),
+  });
+
+  const raw = await res.text();
+  let json: unknown = null;
+  if (raw) {
+    try {
+      json = JSON.parse(raw) as unknown;
+    } catch {
+      json = { raw };
+    }
+  }
+
+  if (!res.ok) {
+    const msg = formatUpstreamErrorMessage(json, res.statusText);
+    throw new SchubertIdentifyError(msg, res.status, json);
+  }
+
+  return json as SchubertTrackIngestResponse;
+}
+
 export async function getIngestJobStatus(jobId: string): Promise<SchubertIngestJobResponse> {
   const res = await fetchSchubertFromBrowser(`tracks/ingest/jobs/${encodeURIComponent(jobId)}`, {
     method: "GET",

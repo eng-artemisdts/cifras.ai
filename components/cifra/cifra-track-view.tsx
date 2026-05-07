@@ -6,6 +6,7 @@ import { CifraVariationSelect } from "@/components/cifra/cifra-variation-select"
 import { resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-routes";
 import { normalizeDemoPayload } from "@/lib/cifra/normalize-payload";
 import {
+  mergeVariationWithBaseMedia,
   resolveArtistNameFromSchubertTrack,
   schubertTrackToDemoPayload,
 } from "@/lib/cifra/schubert-to-payload";
@@ -160,7 +161,14 @@ export async function CifraTrackView(props: CifraTrackViewProps) {
     mergedVariations.push(selectedVariation);
   }
 
-  const resolvedTrack = selectedVariation ?? track;
+  /**
+   * Variações herdam a mesma gravação da faixa base — sem este merge, `spotifyId` (índice
+   * único na Schubert) e `youtubeUrl` (ausente no schema da Beethoven) ficam vazios e o
+   * transport cai sempre no player interno.
+   */
+  const resolvedTrack: SchubertTrackJson = selectedVariation
+    ? mergeVariationWithBaseMedia(selectedVariation, track as SchubertTrackJson)
+    : (track as SchubertTrackJson);
 
   const slugPair = resolveCifraSlugPairFromTrack(track);
   const mp3Id =

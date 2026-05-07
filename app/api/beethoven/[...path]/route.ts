@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { isAccessTokenLikelyJwt } from "@/lib/access-token-shape";
 import { getAuth0 } from "@/lib/auth0";
 import { isAuth0Configured } from "@/lib/auth0-env";
+import {
+  isAuth0SessionExpiredError,
+  sessionExpiredResponse,
+} from "@/lib/auth0-session-expired";
 
 /** Mesma porta por defeito que `beethoven-api` (evita confundir com Schubert em 3001). */
 const beethovenBase = () =>
@@ -80,7 +84,15 @@ async function proxyToBeethoven(req: Request, ctx: RouteCtx) {
   const incoming = new URL(req.url);
   const target = `${beethovenBase()}/${suffix}${incoming.search}`;
 
-  const { token } = await getAuth0().getAccessToken({ audience });
+  let token: string | undefined;
+  try {
+    ({ token } = await getAuth0().getAccessToken({ audience }));
+  } catch (err) {
+    if (isAuth0SessionExpiredError(err)) {
+      return sessionExpiredResponse();
+    }
+    throw err;
+  }
 
   if (!isAccessTokenLikelyJwt(token)) {
     return NextResponse.json(

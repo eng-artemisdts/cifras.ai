@@ -5,6 +5,7 @@ import { CifraEditShell } from "@/components/cifra/cifra-edit-shell";
 import { resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-routes";
 import { normalizeDemoPayload } from "@/lib/cifra/normalize-payload";
 import {
+  mergeVariationWithBaseMedia,
   resolveArtistNameFromSchubertTrack,
   schubertLyricsSourceEditorLabel,
   schubertTrackToDemoPayload,
@@ -158,7 +159,14 @@ export async function CifraEditView(props: CifraEditViewProps) {
         | (typeof selectedVariation)
         | null);
   }
-  const resolvedTrack = selectedVariation ?? track;
+  /**
+   * Variações partilham a gravação da faixa base — sem este merge, o iframe Spotify/YouTube
+   * (alimentado por `payload.meta.spotifyTrackId` / `youtubeUrl`) some assim que se abre uma
+   * versão personalizada, embora a base tenha esses links.
+   */
+  const resolvedTrack: SchubertTrackJson = selectedVariation
+    ? mergeVariationWithBaseMedia(selectedVariation, track as SchubertTrackJson)
+    : (track as SchubertTrackJson);
 
   const pairFromDoc = resolveCifraSlugPairFromTrack(track);
   const lyricsSource = resolveLyricsSource(resolvedTrack);

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { unstable_rethrow } from "next/navigation";
 
 import { LibraryExploreView } from "@/components/library/library-explore-view";
 import { getAuth0SessionCached } from "@/lib/auth0";
@@ -24,10 +25,15 @@ export default async function ExplorarPage() {
   const billingPlan = await resolveBillingPlanForSessionUser(session?.user ?? null);
   const { recommendationItems, recentAccessItems } = await fetchLibraryHomeFeed(
     session?.user?.sub,
-  ).catch(() => ({
-    recommendationItems: [],
-    recentAccessItems: [],
-  }));
+  ).catch((err) => {
+    /**
+     * Não engolir `redirect()` (lança `NEXT_REDIRECT`) quando o BFF detecta sessão Auth0
+     * expirada — `fetchBeethovenFromServer` redirige para `/auth/logout`. Outros erros caem na
+     * UI vazia (degradação suave) sem partir a página.
+     */
+    unstable_rethrow(err);
+    return { recommendationItems: [], recentAccessItems: [] };
+  });
 
   return (
     <LibraryExploreView

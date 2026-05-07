@@ -7,4 +7,6 @@ export type SpotifyImportPrefill = {
   artistLine: string;
   album: string;
   coverUrl: string | null;
+  /** URL HTTPS do MP3 de preview da Spotify (`preview_url`), quando existir. */
+  previewUrl?: string | null;
 };

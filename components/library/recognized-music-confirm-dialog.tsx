@@ -43,6 +43,8 @@ export type RecognizedMusicConfirmDialogProps = {
    * Quando ausente, usa-se `onMontarComIaSemHref` (ex.: ingestão antes do catálogo principal).
    */
   montarComIaHref: string | null;
+  /** Rótulo do botão principal quando não há link direto (ex.: Spotify → «Criar cifra»). */
+  primaryMontarSemHrefLabel?: string;
   onMontarComIaSemHref?: () => Promise<void>;
   confirmLoading?: boolean;
   onNotThisMusic: () => void;
@@ -59,6 +61,7 @@ export function RecognizedMusicConfirmDialog({
   coverImageUrl,
   copyVariant = "audio",
   montarComIaHref,
+  primaryMontarSemHrefLabel = "Sim, montar cifra com IA",
   onMontarComIaSemHref,
   confirmLoading = false,
   onNotThisMusic,
@@ -149,11 +152,12 @@ export function RecognizedMusicConfirmDialog({
                     <>
                       <span className="block">
                         Esta é a faixa que escolheu na sua conta Spotify. Confirme se corresponde à música que pretende
-                        tratar.
+                        analisar.
                       </span>
                       <span className="block">
-                        Não encontrámos uma cifra na biblioteca para esta faixa. Para gerar com IA, use Importar arquivo e
-                        envie um excerto de áudio — o fluxo de detecção ativará o passo seguinte.
+                        Não há cifra no catálogo para esta faixa. Ao confirmar, obtemos o áudio oficial de pré-visualização
+                        da Spotify (quando disponível) e iniciamos a montagem da cifra com IA — pode acompanhar o progresso
+                        no ecrã seguinte.
                       </span>
                     </>
                   ) : (
@@ -196,7 +200,7 @@ export function RecognizedMusicConfirmDialog({
                   disabled={confirmLoading || !onMontarComIaSemHref}
                   onClick={() => void handleMontarAsync()}
                 >
-                  {confirmLoading ? "A processar…" : "Sim, montar cifra com IA"}
+                  {confirmLoading ? "A processar…" : primaryMontarSemHrefLabel}
                 </button>
               )}
               <button

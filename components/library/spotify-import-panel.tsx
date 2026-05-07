@@ -11,18 +11,19 @@ import { ChordFoundAccessDialog } from "@/components/library/chord-found-access-
 import type { ExistingChordDialogLayout } from "@/components/library/library-import-dialog-layout";
 import { RecognizedMusicConfirmDialog } from "@/components/library/recognized-music-confirm-dialog";
 import { fetchMyBeethovenVariationByBaseTrackIdFromBrowser } from "@/lib/beethoven-variations";
+import { cifraEditHref, resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-routes";
 import type { StreamingLinkImportPanelConfig } from "@/lib/library/streaming-link-import-config";
+import type { SpotifyImportPrefill } from "@/lib/library/spotify-import-storage";
 import {
-  SPOTIFY_IMPORT_PREFILL_STORAGE_KEY,
-  type SpotifyImportPrefill,
-} from "@/lib/library/spotify-import-storage";
-import {
+  getIngestJobStatus,
   mapRecognizedSongToChordPreview,
   mapSchubertMatchToChordPreview,
+  postSpotifySourceIngest,
+  SchubertIdentifyError,
   type ChordFoundPreview,
 } from "@/lib/schubert-identify-service";
-import type { SchubertRecognizedSong } from "@/lib/schubert-identify-types";
-import { fetchSchubertFromBrowser } from "@/lib/schubert-api";
+import type { SchubertIngestJobResponse, SchubertRecognizedSong } from "@/lib/schubert-identify-types";
+import { fetchSchubertFromBrowser, type SchubertTrackJson } from "@/lib/schubert-api";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -49,6 +50,7 @@ async function buildPrefillFromTrackId(trackId: string): Promise<SpotifyImportPr
         artistLine: j.artistLine,
         album: j.album,
         coverUrl: j.coverUrl,
+        previewUrl: j.previewUrl ?? null,
       };
     }
   } catch {
@@ -75,6 +77,8 @@ type TrackRow = {
   album: string;
   durationMs: number;
   coverUrl: string | null;
+  /** MP3 preview (~30 s) da Spotify Web API, quando existir. */
+  previewUrl?: string | null;
   importable?: boolean;
 };
 
@@ -90,7 +94,70 @@ function trackRowToSong(tr: TrackRow): SchubertRecognizedSong {
     spotify_track_id: tr.id,
     spotify_artist_ids: [],
     cover_image_url: tr.coverUrl ?? "",
+    ...(Number.isFinite(tr.durationMs) && tr.durationMs > 0 ? { duration_ms: tr.durationMs } : {}),
+    ...(tr.previewUrl?.trim() ? { spotify_preview_url: tr.previewUrl.trim() } : {}),
   };
+}
+
+function prefillToRecognizedSong(p: SpotifyImportPrefill): SchubertRecognizedSong {
+  return {
+    title: p.title,
+    artist: p.artistLine,
+    album: p.album ?? "",
+    release_date: "",
+    label: "",
+    timecode: "",
+    song_link: `https://open.spotify.com/track/${p.trackId}`,
+    spotify_track_id: p.trackId,
+    spotify_artist_ids: [],
+    cover_image_url: p.coverUrl ?? "",
+    ...(p.previewUrl?.trim() ? { spotify_preview_url: p.previewUrl.trim() } : {}),
+  };
+}
+
+/** Refresca `preview_url` via BFF quando a lista de playlist não o tinha. */
+async function enrichSongWithSpotifyTrackApi(
+  song: SchubertRecognizedSong,
+  trackId: string,
+): Promise<SchubertRecognizedSong> {
+  if (song.spotify_preview_url?.trim()) return song;
+  try {
+    const r = await fetch(`/api/spotify/tracks/${encodeURIComponent(trackId)}`, {
+      credentials: "include",
+    });
+    if (!r.ok) return song;
+    const j = (await r.json()) as { previewUrl?: string | null };
+    const p = typeof j.previewUrl === "string" ? j.previewUrl.trim() : "";
+    if (p) return { ...song, spotify_preview_url: p };
+  } catch {
+    /* ignore */
+  }
+  return song;
+}
+
+function humanizeIngestStage(stage: string): string {
+  const map: Record<string, string> = {
+    queued: "Na fila…",
+    downloadSpotifySource: "A obter áudio do Spotify…",
+    uploadAudio: "A processar áudio…",
+    recognizeSong: "A reconhecer música…",
+    resolveChordsAndSections: "Acordes e secções…",
+    resolveLyrics: "Letra…",
+    resolveYoutube: "YouTube…",
+    persistTrack: "A guardar…",
+    processIngest: "Pipeline de ingestão…",
+    completed: "Concluído",
+    failed: "Falhou",
+  };
+  return map[stage] ?? stage;
+}
+
+function formatIngestProgressLabel(job: SchubertIngestJobResponse): string {
+  const stages = job.stages ?? [];
+  const running = [...stages].reverse().find((s) => s.status === "running");
+  if (running?.stageName) return humanizeIngestStage(running.stageName);
+  if (job.currentStage) return humanizeIngestStage(job.currentStage);
+  return "A processar…";
 }
 
 function isTrackOwner(track: Record<string, unknown>, sub?: string | null): boolean {
@@ -154,9 +221,22 @@ export function SpotifyImportPanel({
 
   const [matchedChordPreview, setMatchedChordPreview] = useState<ChordFoundPreview | null>(null);
   const [matchedChordOpen, setMatchedChordOpen] = useState(false);
+  const [trackLookupLoading, setTrackLookupLoading] = useState(false);
+  const [spotifyIngestOverlay, setSpotifyIngestOverlay] = useState<{
+    songTitle: string;
+    artistName: string;
+    coverUrl: string | null;
+    percent: number;
+    stageLabel: string;
+    error: string | null;
+  } | null>(null);
+
   const [recognitionPreview, setRecognitionPreview] = useState<ChordFoundPreview | null>(null);
   const [recognitionConfirmOpen, setRecognitionConfirmOpen] = useState(false);
-  const [trackLookupLoading, setTrackLookupLoading] = useState(false);
+  const [pendingSpotifyIngest, setPendingSpotifyIngest] = useState<{
+    song: SchubertRecognizedSong;
+    trackId: string;
+  } | null>(null);
 
   const proGateActive = Boolean(config.requiresPro && !proEntitled);
 
@@ -282,20 +362,113 @@ export function SpotifyImportPanel({
 
   const handleRecognitionDialogOpenChange = useCallback((open: boolean) => {
     setRecognitionConfirmOpen(open);
-    if (!open) setRecognitionPreview(null);
+    if (!open) {
+      setRecognitionPreview(null);
+      setPendingSpotifyIngest(null);
+    }
   }, []);
 
-  const proceedToAudioCapture = useCallback(
-    async (prefill: SpotifyImportPrefill) => {
+  const runSpotifyIngestFlow = useCallback(
+    async (song: SchubertRecognizedSong, spotifyTrackId: string) => {
+      setSpotifyIngestOverlay({
+        songTitle: song.title,
+        artistName: song.artist,
+        coverUrl:
+          typeof song.cover_image_url === "string" && song.cover_image_url.trim()
+            ? song.cover_image_url.trim()
+            : null,
+        percent: 0,
+        stageLabel: "A iniciar…",
+        error: null,
+      });
       try {
-        sessionStorage.setItem(SPOTIFY_IMPORT_PREFILL_STORAGE_KEY, JSON.stringify(prefill));
-      } catch {
-        /* ignore */
+        const ingestResp = await postSpotifySourceIngest({ trackId: spotifyTrackId, meta: song });
+        const jobId = typeof ingestResp.jobId === "string" ? ingestResp.jobId.trim() : "";
+        if (!jobId) {
+          throw new Error("O servidor não devolveu um jobId de ingestão.");
+        }
+        const startedAt = Date.now();
+        let last = await getIngestJobStatus(jobId);
+        setSpotifyIngestOverlay((prev) =>
+          prev
+            ? {
+                ...prev,
+                percent: last.progressPercent,
+                stageLabel: formatIngestProgressLabel(last),
+              }
+            : prev,
+        );
+
+        for (let attempt = 0; attempt < 240; attempt++) {
+          if (last.status === "completed") break;
+          if (last.status === "failed" || last.status === "cancelled") {
+            throw new Error(last.error?.trim() || "A ingestão falhou.");
+          }
+          const waitMs = attempt < 12 ? 1200 : 2800;
+          await new Promise((r) => setTimeout(r, waitMs));
+          last = await getIngestJobStatus(jobId);
+          setSpotifyIngestOverlay((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  percent: last.progressPercent,
+                  stageLabel: formatIngestProgressLabel(last),
+                }
+              : prev,
+          );
+          if (Date.now() - startedAt > 15 * 60 * 1000) {
+            throw new Error("Tempo limite ao aguardar a ingestão (15 minutos).");
+          }
+        }
+
+        const resultKey = last.resultTrackId?.trim();
+        if (!resultKey) {
+          throw new Error("Ingestão concluída sem identificador da faixa.");
+        }
+        const trackRes = await fetchSchubertFromBrowser(`tracks/by-key/${encodeURIComponent(resultKey)}`, {
+          method: "GET",
+        });
+        if (!trackRes.ok) {
+          throw new Error("Não foi possível carregar a faixa após a ingestão.");
+        }
+        const resolvedTrack = (await trackRes.json()) as SchubertTrackJson;
+        setSpotifyIngestOverlay(null);
+        const pair = resolveCifraSlugPairFromTrack(resolvedTrack);
+        if (pair) {
+          router.push(cifraEditHref(pair.artistSlug, pair.songSlug));
+          return;
+        }
+        const tid =
+          typeof resolvedTrack.trackId === "string" && resolvedTrack.trackId.trim()
+            ? resolvedTrack.trackId.trim()
+            : "";
+        if (tid) {
+          router.push(`/cifras/edit?trackId=${encodeURIComponent(tid)}`);
+          return;
+        }
+        const q = encodeURIComponent(`${song.title} ${song.artist}`.trim());
+        router.push(`/biblioteca?q=${q}`);
+      } catch (e) {
+        const msg =
+          e instanceof SchubertIdentifyError
+            ? e.message
+            : e instanceof Error
+              ? e.message
+              : "Não foi possível concluir a ingestão.";
+        setSpotifyIngestOverlay((prev) => (prev ? { ...prev, error: msg } : prev));
       }
-      router.push("/biblioteca/importar/arquivo?fromSpotify=1");
     },
     [router],
   );
+
+  const onConfirmSpotifyIngest = useCallback(async () => {
+    const p = pendingSpotifyIngest;
+    if (!p) return;
+    setRecognitionConfirmOpen(false);
+    setRecognitionPreview(null);
+    setPendingSpotifyIngest(null);
+    await runSpotifyIngestFlow(p.song, p.trackId);
+  }, [pendingSpotifyIngest, runSpotifyIngestFlow]);
 
   const onPickTrack = useCallback(
     async (tr: TrackRow) => {
@@ -303,12 +476,13 @@ export function SpotifyImportPanel({
       setTrackLookupLoading(true);
       setMatchedChordOpen(false);
       setMatchedChordPreview(null);
-      setRecognitionConfirmOpen(false);
-      setRecognitionPreview(null);
       try {
         const res = await fetchSchubertFromBrowser(`tracks/by-key/${encodeURIComponent(tr.id)}`);
         if (res.status === 404) {
-          setRecognitionPreview(mapRecognizedSongToChordPreview(trackRowToSong(tr)));
+          const base = trackRowToSong(tr);
+          const song = await enrichSongWithSpotifyTrackApi(base, tr.id);
+          setPendingSpotifyIngest({ song, trackId: tr.id });
+          setRecognitionPreview(mapRecognizedSongToChordPreview(song));
           setRecognitionConfirmOpen(true);
           return;
         }
@@ -360,41 +534,88 @@ export function SpotifyImportPanel({
     setLinkBusy(true);
     try {
       const prefill = await buildPrefillFromTrackId(id);
-      await proceedToAudioCapture(prefill);
+      let song = prefillToRecognizedSong(prefill);
+      song = await enrichSongWithSpotifyTrackApi(song, prefill.trackId);
+      setPendingSpotifyIngest({ song, trackId: prefill.trackId });
+      setRecognitionPreview(mapRecognizedSongToChordPreview(song));
+      setRecognitionConfirmOpen(true);
     } catch {
       setLinkError("Não foi possível ler esta faixa. Verifique o link ou ligue o Spotify.");
     } finally {
       setLinkBusy(false);
     }
-  }, [url, proceedToAudioCapture]);
+  }, [url]);
 
   const showLoadMorePlaylistsButton = playlists.length < playlistsTotal;
 
   const browseHint = useMemo(
     () =>
-      "Escolha uma playlist à esquerda e depois uma faixa. Segue para enviar um excerto de áudio (MP3 / WAV / M4A) para a IA analisar — o mesmo fluxo que «Importar arquivo».",
+      "Escolha uma playlist e uma faixa. Se ainda não existir cifra, a plataforma obtém o áudio e corre a IA automaticamente — acompanhe o progresso no ecrã.",
     [],
   );
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col gap-3 md:gap-4", className)}>
-      {matchedChordPreview ? (
-        <ChordFoundAccessDialog
-          open={matchedChordOpen}
-          onOpenChange={handleMatchedChordDialogOpenChange}
-          songTitle={matchedChordPreview.songTitle}
-          artistName={matchedChordPreview.artistName}
-          coverImageUrl={matchedChordPreview.coverImageUrl}
-          chordHref={matchedChordPreview.chordHref}
-          editHref={matchedChordPreview.editHref}
-          onAccessClick={() => {
-            setRecognitionPreview(null);
-            setRecognitionConfirmOpen(false);
-          }}
-          canCreateVariation={false}
-          creatingVariation={false}
-          layout={existingChordDialogLayout}
-        />
+      {spotifyIngestOverlay ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-cifra-bg/88 p-4 backdrop-blur-[2px]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="spotify-ingest-title"
+          aria-describedby="spotify-ingest-desc"
+        >
+          <div className="w-full max-w-[400px] rounded-2xl border border-cifra-border bg-cifra-surface p-6 shadow-xl">
+            <div className="flex gap-3">
+              <div className="relative size-14 shrink-0 overflow-hidden rounded-lg bg-[#16162a]">
+                {spotifyIngestOverlay.coverUrl ? (
+                  <Image
+                    src={spotifyIngestOverlay.coverUrl}
+                    alt=""
+                    fill
+                    className="object-cover"
+                    sizes="56px"
+                  />
+                ) : (
+                  <Music2 className="absolute inset-0 m-auto size-6 text-cifra-muted" strokeWidth={1.5} aria-hidden />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 id="spotify-ingest-title" className="truncate text-sm font-semibold text-cifra-text">
+                  {spotifyIngestOverlay.songTitle}
+                </h3>
+                <p className="truncate text-[11px] text-cifra-muted">{spotifyIngestOverlay.artistName}</p>
+              </div>
+            </div>
+            <p id="spotify-ingest-desc" className="mt-4 text-[11px] leading-snug text-cifra-muted">
+              {spotifyIngestOverlay.error
+                ? spotifyIngestOverlay.error
+                : `${spotifyIngestOverlay.stageLabel} Isto pode levar alguns minutos.`}
+            </p>
+            {!spotifyIngestOverlay.error ? (
+              <div className="mt-4 space-y-2">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-cifra-teal transition-[width] duration-500 ease-out"
+                    style={{ width: `${Math.min(100, Math.max(0, spotifyIngestOverlay.percent))}%` }}
+                  />
+                </div>
+                <p className="text-center font-mono text-[11px] tabular-nums text-cifra-teal">
+                  {Math.min(100, Math.max(0, Math.round(spotifyIngestOverlay.percent)))}%
+                </p>
+              </div>
+            ) : (
+              <div className="mt-5 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSpotifyIngestOverlay(null)}
+                  className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-[11px] font-semibold text-cifra-text transition hover:bg-white/10"
+                >
+                  Fechar
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       ) : null}
       {recognitionPreview ? (
         <RecognizedMusicConfirmDialog
@@ -405,8 +626,23 @@ export function SpotifyImportPanel({
           coverImageUrl={recognitionPreview.coverImageUrl}
           copyVariant="spotify"
           montarComIaHref={null}
-          confirmLoading={false}
+          primaryMontarSemHrefLabel="Criar cifra"
+          onMontarComIaSemHref={onConfirmSpotifyIngest}
           onNotThisMusic={() => handleRecognitionDialogOpenChange(false)}
+          layout={existingChordDialogLayout}
+        />
+      ) : null}
+      {matchedChordPreview ? (
+        <ChordFoundAccessDialog
+          open={matchedChordOpen}
+          onOpenChange={handleMatchedChordDialogOpenChange}
+          songTitle={matchedChordPreview.songTitle}
+          artistName={matchedChordPreview.artistName}
+          coverImageUrl={matchedChordPreview.coverImageUrl}
+          chordHref={matchedChordPreview.chordHref}
+          editHref={matchedChordPreview.editHref}
+          canCreateVariation={false}
+          creatingVariation={false}
           layout={existingChordDialogLayout}
         />
       ) : null}
@@ -551,86 +787,99 @@ export function SpotifyImportPanel({
                       </span>
                     ) : null}
                   </div>
-                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 py-1">
-                    {!selectedPlaylist ? (
-                      <p className="px-3 py-8 text-center text-[11px] leading-relaxed text-cifra-muted">
-                        Selecione uma playlist para ver as músicas.
-                      </p>
-                    ) : tracksError ? (
-                      <div className="space-y-2 px-3 py-6">
-                        <p className="text-[11px] text-red-300/90">{tracksError}</p>
-                        {process.env.NODE_ENV === "development" && tracksErrorDetails ? (
-                          <details className="rounded-md border border-white/10 bg-[#12121f] px-2.5 py-2">
-                            <summary className="cursor-pointer text-[10px] font-semibold text-cifra-muted">
-                              Mostrar detalhes técnicos
-                            </summary>
-                            <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-[10px] leading-relaxed text-cifra-muted">
-                              {tracksErrorDetails}
-                            </pre>
-                          </details>
-                        ) : null}
-                        {tracksNeedReconnect ? (
-                          <Link
-                            href={connectHref}
-                            className="inline-flex rounded-full bg-cifra-teal px-3 py-1.5 text-[11px] font-semibold text-cifra-bg"
-                          >
-                            Reconectar Spotify
-                          </Link>
-                        ) : null}
-                      </div>
-                    ) : tracksLoading && tracks.length === 0 ? (
-                      <div className="flex items-center justify-center gap-2 py-12 text-[11px] text-cifra-muted">
-                        <Loader2 className="size-4 animate-spin" aria-hidden />
-                        A carregar faixas…
-                      </div>
-                    ) : (
-                      <ul className="space-y-0.5">
-                        {tracks.map((tr) => (
-                          <li key={`${selectedPlaylist.id}-${tr.id}-${tr.name}`}>
-                            <button
-                              type="button"
-                              disabled={tr.importable === false || trackLookupLoading}
-                              onClick={() => void onPickTrack(tr)}
-                              className={cn(
-                                "flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left text-[11px] text-cifra-text transition",
-                                tr.importable === false
-                                  ? "cursor-not-allowed opacity-55"
-                                  : "hover:bg-cifra-teal/12",
-                              )}
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    <ScrollArea className="min-h-0 flex-1 px-1 pt-1">
+                      {!selectedPlaylist ? (
+                        <p className="px-3 py-8 text-center text-[11px] leading-relaxed text-cifra-muted">
+                          Selecione uma playlist para ver as músicas.
+                        </p>
+                      ) : tracksError ? (
+                        <div className="space-y-2 px-3 py-6">
+                          <p className="text-[11px] text-red-300/90">{tracksError}</p>
+                          {process.env.NODE_ENV === "development" && tracksErrorDetails ? (
+                            <details className="rounded-md border border-white/10 bg-[#12121f] px-2.5 py-2">
+                              <summary className="cursor-pointer text-[10px] font-semibold text-cifra-muted">
+                                Mostrar detalhes técnicos
+                              </summary>
+                              <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-[10px] leading-relaxed text-cifra-muted">
+                                {tracksErrorDetails}
+                              </pre>
+                            </details>
+                          ) : null}
+                          {tracksNeedReconnect ? (
+                            <Link
+                              href={connectHref}
+                              className="inline-flex rounded-full bg-cifra-teal px-3 py-1.5 text-[11px] font-semibold text-cifra-bg"
                             >
-                              <div className="relative mt-0.5 size-10 shrink-0 overflow-hidden rounded bg-[#16162a]">
-                                {tr.coverUrl ? (
-                                  <Image src={tr.coverUrl} alt="" fill className="object-cover" sizes="40px" />
-                                ) : (
-                                  <Music2 className="absolute inset-0 m-auto size-4 text-cifra-muted" strokeWidth={1.5} />
+                              Reconectar Spotify
+                            </Link>
+                          ) : null}
+                        </div>
+                      ) : tracksLoading && tracks.length === 0 ? (
+                        <div className="flex items-center justify-center gap-2 py-12 text-[11px] text-cifra-muted">
+                          <Loader2 className="size-4 animate-spin" aria-hidden />
+                          A carregar faixas…
+                        </div>
+                      ) : (
+                        <ul className="space-y-0.5 pb-1">
+                          {tracks.map((tr) => (
+                            <li key={`${selectedPlaylist.id}-${tr.id}-${tr.name}`}>
+                              <button
+                                type="button"
+                                disabled={tr.importable === false || trackLookupLoading}
+                                onClick={() => void onPickTrack(tr)}
+                                className={cn(
+                                  "flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left text-[11px] text-cifra-text transition",
+                                  tr.importable === false
+                                    ? "cursor-not-allowed opacity-55"
+                                    : "hover:bg-cifra-teal/12",
                                 )}
-                              </div>
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate font-semibold">{tr.name}</span>
-                                <span className="block truncate text-[10px] text-cifra-muted">{tr.artistLine}</span>
-                                {tr.importable === false ? (
-                                  <span className="block truncate text-[10px] text-cifra-muted/80">
-                                    Item indisponível para importação via API.
-                                  </span>
-                                ) : null}
-                              </span>
-                              <span className="shrink-0 font-mono text-[10px] tabular-nums text-cifra-muted">
-                                {formatMs(tr.durationMs)}
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                              >
+                                <div className="relative mt-0.5 size-10 shrink-0 overflow-hidden rounded bg-[#16162a]">
+                                  {tr.coverUrl ? (
+                                    <Image src={tr.coverUrl} alt="" fill className="object-cover" sizes="40px" />
+                                  ) : (
+                                    <Music2 className="absolute inset-0 m-auto size-4 text-cifra-muted" strokeWidth={1.5} />
+                                  )}
+                                </div>
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate font-semibold">{tr.name}</span>
+                                  <span className="block truncate text-[10px] text-cifra-muted">{tr.artistLine}</span>
+                                  {tr.importable === false ? (
+                                    <span className="block truncate text-[10px] text-cifra-muted/80">
+                                      Item indisponível para importação via API.
+                                    </span>
+                                  ) : null}
+                                </span>
+                                <span className="shrink-0 font-mono text-[10px] tabular-nums text-cifra-muted">
+                                  {formatMs(tr.durationMs)}
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </ScrollArea>
                     {selectedPlaylist && tracksHasMore ? (
-                      <button
-                        type="button"
-                        disabled={tracksLoading}
-                        onClick={loadMoreTracks}
-                        className="mt-2 w-full rounded-lg border border-white/10 py-2 text-[10px] font-semibold text-cifra-teal hover:bg-white/5 disabled:opacity-45"
-                      >
-                        {tracksLoading ? "A carregar…" : "Carregar mais faixas"}
-                      </button>
+                      <div className="shrink-0 border-t border-white/8 px-2 pb-2 pt-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={loadMoreTracks}
+                          disabled={tracksLoading}
+                          className="h-auto w-full gap-1.5 border-white/10 bg-transparent py-2 text-[10px] font-semibold text-cifra-teal hover:bg-white/5 disabled:opacity-45"
+                        >
+                          {tracksLoading ? (
+                            <>
+                              <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                              A carregar…
+                            </>
+                          ) : (
+                            "Carregar mais faixas"
+                          )}
+                        </Button>
+                      </div>
                     ) : null}
                   </div>
                 </div>
@@ -670,7 +919,7 @@ export function SpotifyImportPanel({
                   onClick={() => void onContinueLink()}
                   className="rounded-lg bg-cifra-teal px-4 py-2 text-[11px] font-semibold text-cifra-bg transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {linkBusy ? "A preparar…" : "Continuar para enviar áudio"}
+                  {linkBusy ? "A iniciar…" : "Gerar cifra com IA"}
                 </button>
               </div>
             )}

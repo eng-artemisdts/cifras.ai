@@ -48,12 +48,18 @@ export async function GET(_req: Request, ctx: { params: Promise<{ trackId: strin
     artists?: { name?: string }[];
     album?: { name?: string; images?: { url?: string }[] };
     duration_ms?: number;
+    preview_url?: string | null;
   };
 
   const artists = Array.isArray(t.artists) ? t.artists.map((a) => a.name ?? "").filter(Boolean) : [];
   const cover =
     Array.isArray(t.album?.images) && t.album!.images!.length
       ? t.album!.images![0]?.url ?? null
+      : null;
+
+  const previewUrl =
+    typeof t.preview_url === "string" && /^https:\/\//i.test(t.preview_url.trim())
+      ? t.preview_url.trim()
       : null;
 
   return NextResponse.json({
@@ -63,5 +69,6 @@ export async function GET(_req: Request, ctx: { params: Promise<{ trackId: strin
     album: typeof t.album?.name === "string" ? t.album.name : "",
     durationMs: typeof t.duration_ms === "number" ? t.duration_ms : 0,
     coverUrl: cover,
+    previewUrl,
   });
 }

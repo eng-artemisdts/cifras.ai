@@ -1,3 +1,8 @@
+import {
+  logoutHrefWithReturnTo,
+  responseIndicatesSessionExpired,
+} from "@/lib/auth0-session-expired";
+
 import type {
   MusicAiChordEvent,
   MusicAiLyricSegment,
@@ -56,13 +61,28 @@ export function schubertProxyUrl(path: string): string {
   return `${proxyPrefix}/${p}`;
 }
 
+function redirectSchubertBrowserToLogout(): Promise<never> {
+  if (typeof window !== "undefined") {
+    const current = `${window.location.pathname}${window.location.search}`;
+    window.location.href = logoutHrefWithReturnTo(current);
+  }
+  return new Promise<never>(() => {});
+}
+
 /**
  * Chamadas do browser à Schubert API (Nest) via BFF — cookies de sessão Auth0.
  * `SCHUBERT_AUTH0_AUDIENCE` (ou `AUTH0_AUDIENCE`) deve corresponder à API registada no Auth0.
+ *
+ * Se o BFF reportar sessão expirada (401 + `code: session_expired`), força logout no cliente
+ * para limpar a sessão e enviar o utilizador ao login.
  */
-export function fetchSchubertFromBrowser(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(schubertProxyUrl(path), {
+export async function fetchSchubertFromBrowser(path: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(schubertProxyUrl(path), {
     ...init,
     credentials: "include",
   });
+  if (await responseIndicatesSessionExpired(res)) {
+    await redirectSchubertBrowserToLogout();
+  }
+  return res;
 }

@@ -11,6 +11,8 @@ export type SchubertRecognizedSong = {
   spotify_artist_ids: string[];
   duration_ms?: number;
   cover_image_url?: string;
+  /** Preview MP3 (~30 s) da Spotify Web API — preferido para ingest sem YouTube. */
+  spotify_preview_url?: string;
 };
 
 /** Resposta de `POST /tracks/identify`. */
@@ -31,6 +33,16 @@ export type SchubertTrackIngestResponse = {
   progressPercent?: number;
 };
 
+export type SchubertIngestJobStage = {
+  stageName: string;
+  status: string;
+  startedAt?: string;
+  endedAt?: string;
+  durationMs?: number;
+  cacheHit?: boolean;
+  error?: string;
+};
+
 export type SchubertIngestJobResponse = {
   jobId: string;
   status: "queued" | "running" | "completed" | "failed" | "cancelled";
@@ -38,4 +50,5 @@ export type SchubertIngestJobResponse = {
   currentStage: string;
   resultTrackId?: string;
   error?: string;
+  stages?: SchubertIngestJobStage[];
 };

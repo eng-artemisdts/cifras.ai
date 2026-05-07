@@ -1,8 +1,61 @@
+import type { BeethovenVariationJson } from "../beethoven-variations";
 import type { MusicAiDemoPayload, MusicAiLyricSegment, MusicAiMeta } from "./musicai-types";
 import type { SchubertLyricsSource, SchubertTrackJson } from "../schubert-api";
 
 function isLyricSegmentArray(v: unknown): v is MusicAiLyricSegment[] {
   return Array.isArray(v);
+}
+
+function pickNonEmptyString(...values: Array<string | undefined | null>): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed) return trimmed;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Variações partilham a mesma gravação da faixa base. O documento da variação tipicamente:
+ * - Schubert: tem `spotifyId` `undefined` (índice único impede repetir).
+ * - Beethoven: o schema não tem `youtubeUrl`, `spotifyId`, etc. (não persiste mídia).
+ *
+ * Esta helper devolve a variação com fallback para os campos de mídia da faixa base, mantendo
+ * acordes/letra/secções/transposição da variação. Os valores da variação têm precedência se
+ * estiverem preenchidos (cobre o caso raro de o utilizador apontar para outra gravação).
+ */
+export function mergeVariationWithBaseMedia(
+  variation: SchubertTrackJson | BeethovenVariationJson,
+  base: SchubertTrackJson,
+): SchubertTrackJson {
+  const v = variation as SchubertTrackJson & BeethovenVariationJson;
+  const merged: SchubertTrackJson = { ...v };
+  const spotifyId = pickNonEmptyString(v.spotifyId, base.spotifyId);
+  if (spotifyId) merged.spotifyId = spotifyId;
+  const spotifyTrackId = pickNonEmptyString(
+    (v as SchubertTrackJson).spotifyTrackId,
+    base.spotifyTrackId,
+  );
+  if (spotifyTrackId) merged.spotifyTrackId = spotifyTrackId;
+  const spotifyUrl = pickNonEmptyString(
+    (v as SchubertTrackJson).spotifyUrl,
+    base.spotifyUrl,
+  );
+  if (spotifyUrl) merged.spotifyUrl = spotifyUrl;
+  const youtubeVideoId = pickNonEmptyString(
+    (v as SchubertTrackJson).youtubeVideoId,
+    base.youtubeVideoId,
+  );
+  if (youtubeVideoId) merged.youtubeVideoId = youtubeVideoId;
+  const youtubeUrl = pickNonEmptyString(
+    (v as SchubertTrackJson).youtubeUrl,
+    base.youtubeUrl,
+  );
+  if (youtubeUrl) merged.youtubeUrl = youtubeUrl;
+  const coverImageUrl = pickNonEmptyString(v.coverImageUrl, base.coverImageUrl);
+  if (coverImageUrl) merged.coverImageUrl = coverImageUrl;
+  return merged;
 }
 
 /**

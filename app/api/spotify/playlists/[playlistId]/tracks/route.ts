@@ -16,6 +16,7 @@ type SpotifyTrackObj = {
   artists?: SpotifyTrackArtist[];
   album?: SpotifyAlbum;
   duration_ms?: number;
+  preview_url?: string | null;
 };
 
 type PlaylistTrackItemEntry = {
@@ -195,6 +196,11 @@ export async function GET(req: Request, ctx: { params: Promise<{ playlistId: str
         ? t.album.images[0]?.url ?? null
         : null;
     const spotifyTrackId = typeof t?.id === "string" && t.id.length > 0 ? t.id : null;
+    const previewUrl =
+      typeof t?.preview_url === "string" && /^https:\/\//i.test(t.preview_url.trim())
+        ? t.preview_url.trim()
+        : null;
+
     return {
       id:
         spotifyTrackId ??
@@ -206,6 +212,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ playlistId: str
       album: typeof t?.album?.name === "string" ? t.album.name : "",
       durationMs: typeof t?.duration_ms === "number" ? t.duration_ms : 0,
       coverUrl: cover,
+      previewUrl,
       importable: Boolean(spotifyTrackId),
     };
   });

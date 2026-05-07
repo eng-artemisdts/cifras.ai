@@ -5,6 +5,10 @@ import { isAccessTokenLikelyJwt } from "@/lib/access-token-shape";
 import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-plan";
 import { getAuth0 } from "@/lib/auth0";
 import { isAuth0Configured } from "@/lib/auth0-env";
+import {
+  isAuth0SessionExpiredError,
+  sessionExpiredResponse,
+} from "@/lib/auth0-session-expired";
 import { permissionsFromSessionUser } from "@/lib/entitlements";
 
 /**
@@ -101,7 +105,15 @@ async function proxyToSchubert(req: Request, ctx: RouteCtx, forward: SchubertFor
    */
   const { body, contentType } = await readProxyBody(req);
 
-  const { token } = await getAuth0().getAccessToken({ audience });
+  let token: string | undefined;
+  try {
+    ({ token } = await getAuth0().getAccessToken({ audience }));
+  } catch (err) {
+    if (isAuth0SessionExpiredError(err)) {
+      return sessionExpiredResponse();
+    }
+    throw err;
+  }
 
   if (!isAccessTokenLikelyJwt(token)) {
     return NextResponse.json(

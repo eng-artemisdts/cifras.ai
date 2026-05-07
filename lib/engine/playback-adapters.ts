@@ -176,20 +176,6 @@ async function spotifyApiCall(path: string, init?: RequestInit): Promise<Respons
   });
 }
 
-type SpotifyCurrentPlaybackResponse = {
-  ok?: boolean;
-  playing?: boolean;
-  trackId?: string;
-  positionMs?: number;
-  durationMs?: number;
-};
-
-async function fetchSpotifyCurrentPlayback(): Promise<SpotifyCurrentPlaybackResponse> {
-  const res = await spotifyApiCall("/api/spotify/currently-playing", { method: "GET" });
-  if (!res.ok) throw new Error("spotify_currently_playing_failed");
-  return (await res.json()) as SpotifyCurrentPlaybackResponse;
-}
-
 async function fetchSpotifyAccessToken(): Promise<string> {
   const res = await spotifyApiCall("/api/spotify/token");
   if (!res.ok) throw new Error("spotify_user_token_unavailable");
@@ -264,7 +250,6 @@ export function createSpotifyAdapter(opts: SpotifyAdapterOptions): PlaybackAdapt
     typeof startAtSec === "number" && Number.isFinite(startAtSec) && startAtSec >= 0
       ? Math.round(startAtSec * 1000)
       : null;
-  let playbackPollTimer: number | null = null;
   /** Relógio local entre eventos do Web Playback SDK. */
   let playbackAnchorWallMs = 0;
   let playbackAnchorPositionMs = 0;
@@ -289,23 +274,6 @@ export function createSpotifyAdapter(opts: SpotifyAdapterOptions): PlaybackAdapt
     const wall = typeof performance !== "undefined" ? performance.now() : Date.now();
     const delta = Math.max(0, wall - playbackAnchorWallMs);
     return playbackAnchorPositionMs + delta;
-  }
-
-  function applyRemotePlaybackSnapshot(snapshot: SpotifyCurrentPlaybackResponse) {
-    const sameTrack = typeof snapshot.trackId === "string" && snapshot.trackId === trackId;
-    if (!sameTrack) {
-      isPaused = true;
-      return;
-    }
-    const remotePaused = snapshot.playing === true ? false : true;
-    const remotePosition = Number.isFinite(snapshot.positionMs) ? Math.max(0, Number(snapshot.positionMs)) : 0;
-    const remoteDuration = Number.isFinite(snapshot.durationMs) ? Math.max(0, Number(snapshot.durationMs)) : 0;
-    isPaused = remotePaused;
-    positionMs = remotePosition;
-    if (remoteDuration > 0) durationMs = remoteDuration;
-    applyDurationHintIfNeeded();
-    syncPlaybackClockFromEmbed(remotePosition, remotePaused);
-    if (!remotePaused) hasPrimedPlayback = true;
   }
 
   function ensureSpotifyIframeApi(): Promise<SpotifyIframeApi> {
@@ -336,15 +304,12 @@ export function createSpotifyAdapter(opts: SpotifyAdapterOptions): PlaybackAdapt
   return {
     provider: "spotify",
     async ready() {
-      playbackPollTimer = window.setInterval(() => {
-        void fetchSpotifyCurrentPlayback()
-          .then(applyRemotePlaybackSnapshot)
-          .catch(() => undefined);
-      }, 1200);
-      void fetchSpotifyCurrentPlayback()
-        .then(applyRemotePlaybackSnapshot)
-        .catch(() => undefined);
-
+      /**
+       * O estado vem dos eventos do Iframe API (`playback_update`) ou do Web Playback SDK
+       * (`player_state_changed`). Não fazemos polling de `/me/player/currently-playing`:
+       * o endpoint `/api/spotify/currently-playing` não existe e o sync cross-device não é
+       * suportado nesta UI.
+       */
       const iframeEl = getIframeElement?.();
       if (iframeEl) {
         try {
@@ -563,10 +528,6 @@ export function createSpotifyAdapter(opts: SpotifyAdapterOptions): PlaybackAdapt
       return !isPaused;
     },
     destroy() {
-      if (playbackPollTimer != null) {
-        window.clearInterval(playbackPollTimer);
-        playbackPollTimer = null;
-      }
       iframeController?.destroy();
       iframeController = null;
       player?.disconnect();
