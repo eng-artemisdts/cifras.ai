@@ -36,6 +36,10 @@ function schubertAudience(): string | null {
 
 type RouteCtx = { params?: Promise<{ path?: string[] }> };
 
+/** Hobby: máx. 60s; Pro pode subir para 300 e `SCHUBERT_PROXY_TIMEOUT_MS` até ~280000. */
+export const maxDuration = 60;
+export const runtime = "nodejs";
+
 const SCHUBERT_PROXY_TIMEOUT_MS = Number.parseInt(
   process.env.SCHUBERT_PROXY_TIMEOUT_MS ?? "900000",
   10,

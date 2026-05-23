@@ -25,10 +25,11 @@ export type SchubertTrackIdentifyResponse = {
   canEditTrack?: boolean;
 };
 
-/** Resposta de `POST /tracks/ingest` (áudio + `meta` JSON). */
+/** Resposta de `POST /tracks/ingest` ou ingest por URL / Spotify. */
 export type SchubertTrackIngestResponse = {
   track?: Record<string, unknown>;
   jobId?: string;
+  /** `completed` quando `INGEST_ASYNC_ENABLED=0` e o servidor processa na mesma request. */
   status?: "queued" | "running" | "completed" | "failed";
   progressPercent?: number;
 };

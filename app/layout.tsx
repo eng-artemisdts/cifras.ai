@@ -4,6 +4,7 @@ import Script from "next/script";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { AnalyticsRoot } from "@/components/analytics/analytics-root";
+import { AppShellProviders } from "@/components/providers/app-shell-providers";
 import { buildRootMetadata, GoogleSiteSeo } from "@/components/seo/google-site-seo";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
@@ -41,6 +42,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col font-sans">
         <GoogleSiteSeo />
         <AnalyticsRoot />
+        <AppShellProviders>{children}</AppShellProviders>
         {process.env.NODE_ENV === "development" && (
           <Script
             src="https://unpkg.com/react-grab@0.1.31/dist/index.global.js"
@@ -48,7 +50,6 @@ export default function RootLayout({
             strategy="beforeInteractive"
           />
         )}
-        {children}
       </body>
     </html>
   );

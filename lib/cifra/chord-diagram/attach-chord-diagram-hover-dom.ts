@@ -42,8 +42,8 @@ export function attachChordDiagramHoverDom(
 
   let pinned = false;
   let currentVariation = 0;
-  let hideTimer: ReturnType<typeof setTimeout> | null = null;
-  let persistTimer: ReturnType<typeof setTimeout> | null = null;
+  let hideTimer: number | null = null;
+  let persistTimer: number | null = null;
   let ro: ResizeObserver | null = null;
   let onScroll: (() => void) | null = null;
   let onResize: (() => void) | null = null;

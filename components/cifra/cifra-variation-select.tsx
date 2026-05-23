@@ -48,10 +48,14 @@ export function CifraVariationSelect({
     (v: string) => {
       const trackId = v === CIFRA_VARIATION_BASE_VALUE ? "" : v;
       const url = trackId ? `${basePath}?v=${encodeURIComponent(trackId)}` : basePath;
-      startTransition(() => {
-        router.push(url);
-        router.refresh();
-      });
+      // Adiar para depois do fecho do Select (Portal Radix); navegação imediata com Next.js
+      // pode desmontar a árvore enquanto o Radix ainda faz removeChild no overlay → NotFoundError.
+      window.setTimeout(() => {
+        startTransition(() => {
+          router.push(url);
+          router.refresh();
+        });
+      }, 0);
     },
     [router, basePath],
   );

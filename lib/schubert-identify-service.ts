@@ -148,22 +148,38 @@ export async function postTrackIngestWithMeta(
 }
 
 /**
- * Inicia ingestão assíncrona a partir de metadados Spotify (áudio obtido no servidor via YouTube).
- * Requer Schubert com `INGEST_ASYNC_ENABLED=1`, Redis e `YOUTUBE_DATA_API_KEY`.
+ * Inicia ingestão a partir de uma faixa Spotify (`POST /tracks/ingest/spotify`).
+ * O servidor resolve metadata, obtém áudio (ex.: via YouTube + yt-dlp) e devolve `jobId` (async)
+ * ou `track` + `status: completed` (sync quando `INGEST_ASYNC_ENABLED=0`).
  */
 export async function postSpotifySourceIngest(input: {
-  trackId?: string;
-  url?: string;
+  trackId: string;
   meta: SchubertRecognizedSong;
+  /** Substitui o URL enviado ao servidor (deve ser um link open.spotify.com/track/…). */
+  sourceUrlOverride?: string;
 }): Promise<SchubertTrackIngestResponse> {
+  const tid = input.trackId.trim();
+  const song = input.meta;
+  const sourceUrl =
+    input.sourceUrlOverride?.trim() ||
+    (song.song_link?.trim() && /open\.spotify\.com\/track/i.test(song.song_link.trim())
+      ? song.song_link.trim()
+      : `https://open.spotify.com/track/${tid}`);
+
+  const payload: Record<string, string> = {
+    sourceUrl,
+    title: song.title.trim(),
+    artist: song.artist.trim(),
+    album: typeof song.album === "string" ? song.album.trim() : "",
+  };
+  const spotifyTrackId = song.spotify_track_id?.trim() || tid;
+  if (spotifyTrackId) payload.spotifyTrackId = spotifyTrackId;
+  if (song.cover_image_url?.trim()) payload.coverImageUrl = song.cover_image_url.trim();
+
   const res = await fetchSchubertFromBrowser("tracks/ingest/spotify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      ...(input.trackId?.trim() ? { trackId: input.trackId.trim() } : {}),
-      ...(input.url?.trim() ? { url: input.url.trim() } : {}),
-      meta: input.meta,
-    }),
+    body: JSON.stringify(payload),
   });
 
   const raw = await res.text();
