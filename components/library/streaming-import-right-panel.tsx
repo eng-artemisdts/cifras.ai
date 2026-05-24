@@ -88,8 +88,9 @@ function PlatformRow({ row }: { row: RowBase }) {
   );
 }
 
-export function StreamingImportRightPanel({ className }: { className?: string }) {
-  const rows: RowBase[] = [
+function platformRowsForProEntitlement(hasProStreaming: boolean): RowBase[] {
+  const hasPro = hasProStreaming;
+  return [
     {
       id: "youtube",
       href: "/biblioteca/importar/youtube",
@@ -106,21 +107,36 @@ export function StreamingImportRightPanel({ className }: { className?: string })
     },
     {
       id: "tiktok",
-      href: "/biblioteca/importar/tiktok",
+      href: hasPro ? "/biblioteca/importar/tiktok" : "/conta/assinatura?plan=pro",
       title: "TikTok",
-      description: "Exclusivo Pro — faça upgrade para importar do TikTok.",
+      description: hasPro
+        ? "Vídeos e sons públicos — cole o link na etapa seguinte"
+        : "Exclusivo Pro — faça upgrade para importar do TikTok.",
       logoSrc: platformLogo.tiktok,
-      locked: true,
+      locked: !hasPro,
     },
     {
       id: "instagram",
-      href: "/biblioteca/importar/instagram",
+      href: hasPro ? "/biblioteca/importar/instagram" : "/conta/assinatura?plan=pro",
       title: "Instagram Reels",
-      description: "Exclusivo Pro — faça upgrade para importar Reels do Instagram.",
+      description: hasPro
+        ? "Reels públicos — cole o link na etapa seguinte"
+        : "Exclusivo Pro — faça upgrade para importar Reels do Instagram.",
       logoSrc: platformLogo.instagram,
-      locked: true,
+      locked: !hasPro,
     },
   ];
+}
+
+export type StreamingImportRightPanelProps = {
+  /** Plano Pro (ou `api:access`) — desbloqueia TikTok e Instagram. */
+  proStreamingUnlocked: boolean;
+  className?: string;
+};
+
+export function StreamingImportRightPanel({ proStreamingUnlocked, className }: StreamingImportRightPanelProps) {
+  const rows = platformRowsForProEntitlement(proStreamingUnlocked);
+  const hasPro = proStreamingUnlocked;
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col gap-3 md:gap-4", className)}>
@@ -130,7 +146,7 @@ export function StreamingImportRightPanel({ className }: { className?: string })
           <h2 className="text-xs font-semibold leading-none text-cifra-text">Escolha a plataforma</h2>
         </div>
         <p className="text-right font-mono text-[10px] leading-tight text-cifra-teal">
-          Reels e TikTok · exclusivo Pro
+          {hasPro ? "Reels e TikTok · incluídos no seu Pro" : "Reels e TikTok · exclusivo Pro"}
         </p>
       </div>
 
@@ -140,7 +156,7 @@ export function StreamingImportRightPanel({ className }: { className?: string })
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/6 px-5 py-3">
             <span className="font-mono text-[10px] tracking-[0.2em] text-cifra-muted">ORIGEM</span>
             <span className="max-w-[min(100%,220px)] text-right font-mono text-[9px] leading-snug text-cifra-muted">
-              Pro: Reels e TikTok bloqueados no Free
+              {hasPro ? "Pro: TikTok e Reels desbloqueados" : "Pro: Reels e TikTok bloqueados no Free"}
             </span>
           </div>
           <div className="flex flex-1 flex-col gap-2.5 px-5 pb-3 pt-3">

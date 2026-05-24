@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 
 import { LibraryImportStreamingView } from "@/components/library/library-import-streaming-view";
 import { getAuth0SessionCached } from "@/lib/auth0";
+import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-plan";
+import { hasProStreamingImports } from "@/lib/entitlements";
 import { libraryNavForPath } from "@/lib/library/mock-data";
 
 export const metadata: Metadata = {
@@ -20,7 +22,15 @@ export default async function BibliotecaImportarPage() {
       }
     : null;
 
+  const billingPlan = await resolveBillingPlanForSessionUser(session?.user ?? null);
+  const proStreamingUnlocked = hasProStreamingImports(session?.user ?? null, billingPlan);
+
   return (
-    <LibraryImportStreamingView navItems={libraryNavForPath("/biblioteca/importar")} user={user} />
+    <LibraryImportStreamingView
+      navItems={libraryNavForPath("/biblioteca/importar")}
+      user={user}
+      billingPlan={billingPlan}
+      proStreamingUnlocked={proStreamingUnlocked}
+    />
   );
 }

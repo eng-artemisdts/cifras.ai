@@ -27,15 +27,15 @@ export const loginAuthSidebarFeatures: AuthSidebarFeature[] = [
   },
 ];
 
+/** Header em `/login`: utilizador ainda não autenticado — sem link à biblioteca (área protegida). */
 export const defaultAuthShellNav: AuthShellNavItem[] = [
-  { href: "/", label: "Explorar" },
-  { href: "/biblioteca", label: "Biblioteca" },
+  { href: "/explorar", label: "Explorar" },
   { href: "/login", label: "Entrar", current: true },
 ];
 
+/** Header em `/cadastro`: mesmo critério que `defaultAuthShellNav`. */
 export const signupAuthShellNav: AuthShellNavItem[] = [
-  { href: "/", label: "Explorar" },
-  { href: "/biblioteca", label: "Biblioteca" },
+  { href: "/explorar", label: "Explorar" },
   { href: "/cadastro", label: "Cadastro", current: true },
 ];
 

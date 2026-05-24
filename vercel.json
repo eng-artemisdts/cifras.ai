@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm run build",
+  "functions": {
+    "app/api/schubert/[...path]/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/beethoven/[...path]/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}

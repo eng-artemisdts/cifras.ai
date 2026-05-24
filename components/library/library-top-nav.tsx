@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { Auth0UserMenu } from "@/components/auth/auth0-user-menu";
+import type { BillingPlan } from "@/lib/billing/plan-types";
 import type { LibraryNavItem } from "@/lib/library/types";
 import { cn } from "@/lib/utils";
 
@@ -15,13 +16,25 @@ export type LibraryTopNavProps = {
   items: LibraryNavItem[];
   /** Quando definido, mostra o avatar em vez de Entrar/Começar. */
   user?: LibraryTopNavUser | null;
+  /** Plano de billing (Auth0 + Stripe); tarjas Starter / Pro no header. */
+  billingPlan?: BillingPlan | null;
   className?: string;
 };
 
 /**
  * Barra superior da área logada (logo + links + CTAs secundários).
  */
-export function LibraryTopNav({ items, user, className }: LibraryTopNavProps) {
+export function LibraryTopNav({ items, user, billingPlan, className }: LibraryTopNavProps) {
+  const resolvedPlan = billingPlan ?? "free";
+  const planLabel = resolvedPlan === "pro" ? "PRO" : resolvedPlan === "starter" ? "STARTER" : "FREE";
+  const planClassName =
+    resolvedPlan === "pro"
+      ? "border-cifra-gold/55 bg-cifra-gold/12 text-cifra-gold"
+      : resolvedPlan === "starter"
+        ? "border-cifra-teal/45 bg-cifra-teal/12 text-cifra-teal"
+        : "border-[#F0B42944] text-cifra-gold";
+  const planStyle = resolvedPlan === "free" ? { backgroundColor: "#F0B42918" } : undefined;
+
   return (
     <header
       className={cn(
@@ -29,39 +42,52 @@ export function LibraryTopNav({ items, user, className }: LibraryTopNavProps) {
         className
       )}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-6 md:gap-8">
-        <Link href="/" className="flex shrink-0 items-center gap-2">
-          <span className="relative block size-[30px] overflow-hidden rounded-md">
+      <div className="flex min-w-0 flex-1 items-center">
+        <Link href="/" className="flex shrink-0 items-center gap-2.5">
+          <span className="relative block h-[30px] w-[78px] overflow-hidden">
             <Image
               src="/logo.svg"
               alt="cifra.ai"
               width={828}
-              height={220}
+              height={320}
               className="h-full w-full object-contain object-left"
               unoptimized
             />
           </span>
+          <span className="inline-flex h-5 self-center items-center rounded-md border border-cifra-teal/45 bg-cifra-teal/12 px-2 font-mono text-[9px] font-bold leading-none tracking-widest text-cifra-teal">
+            BETA
+          </span>
         </Link>
-        <nav
-          className="flex min-w-0 items-center gap-4 overflow-x-auto text-[13px] max-md:[-ms-overflow-style:none] max-md:[scrollbar-width:none] md:gap-5 max-md:[&::-webkit-scrollbar]:hidden"
-        >
-          {items.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "shrink-0 transition-colors",
-                item.current
-                  ? "font-semibold text-cifra-teal"
-                  : "font-normal text-cifra-muted hover:text-cifra-text"
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <nav
+        className="flex min-w-0 items-center justify-center gap-4 overflow-x-auto px-3 text-[13px] max-md:[-ms-overflow-style:none] max-md:[scrollbar-width:none] md:gap-5 max-md:[&::-webkit-scrollbar]:hidden"
+      >
+        {items.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={cn(
+              "shrink-0 transition-colors",
+              item.current
+                ? "font-semibold text-cifra-teal"
+                : "font-normal text-cifra-muted hover:text-cifra-text"
+            )}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-2.5 md:gap-3">
+        <span
+          className={cn(
+            "inline-flex shrink-0 items-center rounded-md border px-2 py-1 font-mono text-[9px] font-bold tracking-[0.12em]",
+            planClassName,
+          )}
+          style={planStyle}
+          title={`Plano ${planLabel} ativo`}
+        >
+          {planLabel}
+        </span>
         {user ? <Auth0UserMenu user={user} /> : (
           <>
             <Link

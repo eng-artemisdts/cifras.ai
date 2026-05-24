@@ -10,14 +10,17 @@ import { cn } from "@/lib/utils";
 export type ImportStreamingLinkPanelProps = {
   /** Dados do provider (frames lCtH3, 0dhNf, O39X7, o1Z4x no Pencil). */
   config: StreamingLinkImportPanelConfig;
+  /** Plano Pro ativo (Management API / claims) — desbloqueia origens `requiresPro`. */
+  proEntitled?: boolean;
   className?: string;
 };
 
 /**
  * Painel único de importação por URL — recebe `config` por provider (YouTube, Spotify, TikTok, Instagram).
  */
-export function ImportStreamingLinkPanel({ config, className }: ImportStreamingLinkPanelProps) {
+export function ImportStreamingLinkPanel({ config, proEntitled = false, className }: ImportStreamingLinkPanelProps) {
   const [url, setUrl] = useState("");
+  const proGateActive = Boolean(config.requiresPro && !proEntitled);
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col gap-3 md:gap-4", className)}>
@@ -40,7 +43,7 @@ export function ImportStreamingLinkPanel({ config, className }: ImportStreamingL
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-5 pb-4 pt-4">
-            {config.requiresPro ? (
+            {proGateActive ? (
               <div className="flex items-start gap-2 rounded-xl border border-cifra-gold/40 bg-cifra-gold/10 px-3.5 py-2.5 text-[11px] leading-snug text-cifra-gold">
                 <Lock className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} aria-hidden />
                 <span>
@@ -92,7 +95,7 @@ export function ImportStreamingLinkPanel({ config, className }: ImportStreamingL
               </Link>
               <button
                 type="button"
-                disabled={config.requiresPro || !url.trim()}
+                disabled={proGateActive || !url.trim()}
                 className="rounded-lg bg-cifra-teal px-4 py-2 text-[11px] font-semibold text-cifra-bg transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Continuar

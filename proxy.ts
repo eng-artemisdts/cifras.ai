@@ -42,8 +42,13 @@ export async function proxy(request: Request) {
   return getAuth0().middleware(request);
 }
 
+/**
+ * Excluir `api/schubert`: o Auth0 `middleware()` no boundary do proxy faz clone/buffer do body com limite baixo.
+ * Uploads multipart grandes (> ~16 KiB) chegam truncados ao Route Handler → Nest/Multer reporta
+ * «Multipart: Unexpected end of form». O BFF `/api/schubert/*` faz sessão + JWT na própria rota.
+ */
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|api/schubert|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

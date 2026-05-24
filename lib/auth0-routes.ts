@@ -31,7 +31,6 @@ export function getAuth0ConnectionEnv() {
   return {
     google: process.env.AUTH0_CONNECTION_GOOGLE ?? "google-oauth2",
     apple: process.env.AUTH0_CONNECTION_APPLE ?? "apple",
-    spotify: process.env.AUTH0_CONNECTION_SPOTIFY ?? "spotify",
   };
 }
 
@@ -44,4 +43,14 @@ export function auth0LoginHref(opts?: Auth0LoginOptions): string {
   if (safeReturn) params.set("returnTo", safeReturn);
   const q = params.toString();
   return q ? `${AUTH0_LOGIN}?${q}` : AUTH0_LOGIN;
+}
+
+/**
+ * Redirecionamento para a página de entrada da app (`/login`), não para a Universal Login (`/auth/login`).
+ * Use em páginas protegidas quando o utilizador deve ver primeiro a nossa UI e só depois o Auth0.
+ */
+export function appLoginHref(returnTo?: string): string {
+  const safe = sanitizeAuthReturnTo(returnTo);
+  if (!safe) return APP_LOGIN_PATH;
+  return `${APP_LOGIN_PATH}?${new URLSearchParams({ returnTo: safe }).toString()}`;
 }

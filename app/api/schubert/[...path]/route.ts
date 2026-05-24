@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 
 import { isAccessTokenLikelyJwt } from "@/lib/access-token-shape";
+import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-plan";
 import { getAuth0 } from "@/lib/auth0";
 import { isAuth0Configured } from "@/lib/auth0-env";
+import {
+  isAuth0SessionExpiredError,
+  sessionExpiredResponse,
+} from "@/lib/auth0-session-expired";
+import { permissionsFromSessionUser } from "@/lib/entitlements";
 
 /**
  * O `withApiAuthRequired` do SDK chama `getSession()` sem argumentos (usa só `cookies()`).
@@ -29,7 +36,58 @@ function schubertAudience(): string | null {
 
 type RouteCtx = { params?: Promise<{ path?: string[] }> };
 
-async function proxyToSchubert(req: Request, ctx: RouteCtx) {
+/** Hobby: máx. 60s; Pro pode subir para 300 e `SCHUBERT_PROXY_TIMEOUT_MS` até ~280000. */
+export const maxDuration = 60;
+export const runtime = "nodejs";
+
+const SCHUBERT_PROXY_TIMEOUT_MS = Number.parseInt(
+  process.env.SCHUBERT_PROXY_TIMEOUT_MS ?? "900000",
+  10,
+);
+
+/** Repete contexto de sessão para a Schubert API (o JWT de API muitas vezes não inclui claims `https://cifra.ai/*`). */
+type SchubertForwardIdentity = {
+  auth0Sub: string;
+  billingPlan: string;
+  appPermissions: string[];
+};
+
+/**
+ * Lê o corpo para reenvio à Schubert sem corromper bytes (`req.text()` usa UTF-8 e estraga multipart).
+ * Só usa texto para JSON e `application/x-www-form-urlencoded`; todo o resto (incl. `multipart/*`
+ * com boundary) passa por `arrayBuffer()`.
+ */
+async function readProxyBody(req: Request): Promise<{
+  body: BodyInit | undefined;
+  contentType: string | null;
+}> {
+  const method = req.method;
+  if (method === "GET" || method === "HEAD") {
+    return { body: undefined, contentType: req.headers.get("content-type") };
+  }
+
+  const contentType = req.headers.get("content-type");
+  const ct = (contentType ?? "").trim().toLowerCase();
+
+  if (
+    ct.includes("application/json") ||
+    ct.includes("application/x-www-form-urlencoded")
+  ) {
+    const text = await req.text();
+    return {
+      body: text.length > 0 ? text : undefined,
+      contentType,
+    };
+  }
+
+  const buf = await req.arrayBuffer();
+  return {
+    body: buf.byteLength > 0 ? buf : undefined,
+    contentType,
+  };
+}
+
+async function proxyToSchubert(req: Request, ctx: RouteCtx, forward: SchubertForwardIdentity) {
   const audience = schubertAudience();
   if (!audience) {
     return NextResponse.json(
@@ -44,7 +102,22 @@ async function proxyToSchubert(req: Request, ctx: RouteCtx) {
   const incoming = new URL(req.url);
   const target = `${schubertBase()}/${suffix}${incoming.search}`;
 
-  const { token } = await getAuth0().getAccessToken({ audience });
+  /**
+   * Ler o corpo antes de `getAccessToken` (buffer completo antes de esperar pelo Auth0) e usar
+   * bytes brutos para multipart — `text()` invalida o boundary e o busboy falha com
+   * «Multipart: Unexpected end of form».
+   */
+  const { body, contentType } = await readProxyBody(req);
+
+  let token: string | undefined;
+  try {
+    ({ token } = await getAuth0().getAccessToken({ audience }));
+  } catch (err) {
+    if (isAuth0SessionExpiredError(err)) {
+      return sessionExpiredResponse();
+    }
+    throw err;
+  }
 
   if (!isAccessTokenLikelyJwt(token)) {
     return NextResponse.json(
@@ -59,28 +132,63 @@ async function proxyToSchubert(req: Request, ctx: RouteCtx) {
 
   const headers: Record<string, string> = {
     authorization: `Bearer ${token}`,
+    "x-cifra-auth0-sub": forward.auth0Sub,
+    "x-cifra-billing-plan": forward.billingPlan,
+    "x-cifra-app-permissions": JSON.stringify(forward.appPermissions),
   };
-  const contentType = req.headers.get("content-type");
   if (contentType) {
     headers["content-type"] = contentType;
   }
 
-  let body: BodyInit | undefined;
-
-  if (!["GET", "HEAD"].includes(req.method)) {
-    if (contentType?.toLowerCase().includes("multipart/form-data")) {
-      body = await req.arrayBuffer();
-    } else {
-      const text = await req.text();
-      body = text.length > 0 ? text : undefined;
-    }
+  let upstream: Response;
+  try {
+    upstream = await fetch(target, {
+      method: req.method,
+      headers,
+      body,
+      signal: AbortSignal.timeout(
+        Number.isFinite(SCHUBERT_PROXY_TIMEOUT_MS)
+          ? SCHUBERT_PROXY_TIMEOUT_MS
+          : 900_000,
+      ),
+    });
+  } catch (error) {
+    Sentry.captureException(error, {
+      tags: {
+        area: "schubert-proxy",
+        upstream: "schubert-api",
+      },
+      extra: {
+        method: req.method,
+        target,
+      },
+    });
+    throw error;
   }
 
-  const upstream = await fetch(target, {
-    method: req.method,
-    headers,
-    body,
-  });
+  if (upstream.status >= 500) {
+    let upstreamBodyPreview: string | null = null;
+    try {
+      upstreamBodyPreview = (await upstream.clone().text()).slice(0, 2000);
+    } catch {
+      upstreamBodyPreview = null;
+    }
+
+    Sentry.captureMessage("Schubert upstream returned 5xx", {
+      level: "error",
+      tags: {
+        area: "schubert-proxy",
+        upstream: "schubert-api",
+      },
+      extra: {
+        method: req.method,
+        target,
+        upstreamStatus: upstream.status,
+        upstreamStatusText: upstream.statusText,
+        upstreamBodyPreview,
+      },
+    });
+  }
 
   const responseHeaders = new Headers();
   const passCt = upstream.headers.get("content-type");
@@ -117,7 +225,15 @@ async function runAuthed(req: Request, ctx: RouteCtx) {
     );
   }
 
-  return proxyToSchubert(req, ctx);
+  const auth0Sub = typeof session.user.sub === "string" ? session.user.sub : "";
+  const billingPlan = await resolveBillingPlanForSessionUser(session.user);
+  const appPermissions = permissionsFromSessionUser(session.user);
+
+  return proxyToSchubert(req, ctx, {
+    auth0Sub,
+    billingPlan,
+    appPermissions,
+  });
 }
 
 export const GET = runAuthed;
@@ -126,3 +242,4 @@ export const PUT = runAuthed;
 export const PATCH = runAuthed;
 export const DELETE = runAuthed;
 export const HEAD = runAuthed;
+
