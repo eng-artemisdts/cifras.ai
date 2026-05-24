@@ -5,6 +5,8 @@ import { Menu } from "@base-ui/react/menu";
 import { LogOut } from "lucide-react";
 import Image from "next/image";
 
+import { GA_EVENTS } from "@/lib/analytics/events";
+import { trackAnalyticsEvent } from "@/lib/analytics/track";
 import { AUTH0_LOGOUT_PATH } from "@/lib/auth0-routes";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +76,7 @@ export function Auth0UserMenu({ user: serverUser, className }: Auth0UserMenuProp
             height={36}
             className="size-full object-cover"
             unoptimized
+            referrerPolicy="no-referrer"
           />
         ) : (
           <span aria-hidden className="text-[11px] font-semibold tracking-wide text-cifra-teal">
@@ -92,11 +95,55 @@ export function Auth0UserMenu({ user: serverUser, className }: Auth0UserMenuProp
                 ) : null}
               </div>
               <Menu.Group className="py-1">
-                <Menu.LinkItem href="/" closeOnClick className={linkItemClass}>
-                  Início
+                <Menu.LinkItem
+                  href="/conta/perfil"
+                  closeOnClick
+                  className={linkItemClass}
+                  onClick={() =>
+                    trackAnalyticsEvent(GA_EVENTS.ACCOUNT_MENU_NAV, { destination: "perfil" })
+                  }
+                >
+                  Perfil
                 </Menu.LinkItem>
-                <Menu.LinkItem href="/biblioteca" closeOnClick className={linkItemClass}>
+                <Menu.LinkItem
+                  href="/biblioteca"
+                  closeOnClick
+                  className={linkItemClass}
+                  onClick={() =>
+                    trackAnalyticsEvent(GA_EVENTS.ACCOUNT_MENU_NAV, { destination: "biblioteca" })
+                  }
+                >
                   Biblioteca
+                </Menu.LinkItem>
+                <Menu.LinkItem
+                  href="/explorar"
+                  closeOnClick
+                  className={linkItemClass}
+                  onClick={() =>
+                    trackAnalyticsEvent(GA_EVENTS.ACCOUNT_MENU_NAV, { destination: "explorar" })
+                  }
+                >
+                  Explorar
+                </Menu.LinkItem>
+                <Menu.LinkItem
+                  href="/cifras/edit"
+                  closeOnClick
+                  className={linkItemClass}
+                  onClick={() =>
+                    trackAnalyticsEvent(GA_EVENTS.ACCOUNT_MENU_NAV, { destination: "identificar_cifra" })
+                  }
+                >
+                  Identificar Cifra
+                </Menu.LinkItem>
+                <Menu.LinkItem
+                  href="/conta/assinatura"
+                  closeOnClick
+                  className={linkItemClass}
+                  onClick={() =>
+                    trackAnalyticsEvent(GA_EVENTS.ACCOUNT_MENU_NAV, { destination: "assinatura" })
+                  }
+                >
+                  Assinatura
                 </Menu.LinkItem>
               </Menu.Group>
               <Menu.Separator className="my-1 h-px bg-white/[0.06]" />
@@ -105,6 +152,7 @@ export function Auth0UserMenu({ user: serverUser, className }: Auth0UserMenuProp
                   href={AUTH0_LOGOUT_PATH}
                   closeOnClick
                   className={cn(linkItemClass, "text-cifra-muted hover:text-cifra-text")}
+                  onClick={() => trackAnalyticsEvent(GA_EVENTS.LOGOUT_CLICK)}
                 >
                   <LogOut className="size-3.5 shrink-0 opacity-80" aria-hidden />
                   Terminar sessão

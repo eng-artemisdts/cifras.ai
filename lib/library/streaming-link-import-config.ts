@@ -102,26 +102,26 @@ export const streamingLinkImportConfig: Record<StreamingImportProviderSlug, Stre
     pageTitle: "Spotify",
     sidebar: {
       titleLine1: "Spotify",
-      titleLine2Gradient: "como enviar",
-      titleLine3Muted: "o link",
+      titleLine2Gradient: "playlists",
+      titleLine3Muted: "ou link",
       introText:
-        "Use o menu Compartilhar do Spotify para copiar o URL da faixa, playlist ou álbum público.",
+        "Com a conta Spotify ligada ao cifra.ai, navegue pelas suas playlists e escolha uma faixa; ou cole o link open.spotify.com da música.",
       features: [
-        { title: "01  Origem", description: "Link open.spotify.com", accent: "teal" },
+        { title: "01  Origem", description: "Playlists · URL da faixa", accent: "teal" },
         ...steps23,
       ],
     },
     panel: {
       slug: "spotify",
       requiresPro: false,
-      rowTopTitle: "Instruções · Spotify",
-      rowTopMonoHint: "Copiar link no app ou web player",
+      rowTopTitle: "Importar · Spotify",
+      rowTopMonoHint: "Conta ligada · playlists e links",
       cardTag: "SPOTIFY",
-      cardTagRight: "Faixa, álbum ou playlist pública",
+      cardTagRight: "Playlists da conta ou link da faixa",
       instructions: [
-        "1. Abra a música, o álbum ou a playlist no app Spotify (ou em open.spotify.com).",
-        "2. Toque em ⋯ (Mais) ou no ícone de compartilhar e escolha Copiar link da música / da playlist / do álbum.",
-        "3. Cole o link no campo abaixo ou na captura seguinte. Playlists e faixas precisam estar acessíveis sem login de assinante (modo público / link aberto).",
+        "1. Ligue o Spotify em Conta · Perfil se ainda não estiver ligado (permite ler as suas playlists).",
+        "2. No separador «Minhas playlists», escolha uma lista e depois uma faixa — segue para enviar um excerto de áudio para a IA.",
+        "3. Ou no separador «Colar link», use o URL da faixa (open.spotify.com/track/…) como antes.",
       ],
       exampleUrls:
         "https://open.spotify.com/track/…\nhttps://open.spotify.com/playlist/…\nhttps://open.spotify.com/album/…",

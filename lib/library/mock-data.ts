@@ -8,21 +8,29 @@ import type {
 } from "./types";
 
 const libraryNavBase: LibraryNavItem[] = [
-  { href: "/", label: "Explorar" },
+  { href: "/explorar", label: "Explorar" },
   { href: "/biblioteca", label: "Biblioteca" },
-  { href: "#", label: "Ao vivo" },
   { href: "/biblioteca/importar", label: "Importar música" },
+  { href: "/biblioteca/ingestoes", label: "Ingestões" },
 ];
 
 function libraryNavItemIsCurrent(item: LibraryNavItem, activePath: string): boolean {
   if (item.href === "#") return false;
+  if (item.href === "/biblioteca/ingestoes") {
+    return activePath.startsWith("/biblioteca/ingestoes");
+  }
   if (item.href === "/biblioteca/importar") {
     return activePath.startsWith("/biblioteca/importar");
+  }
+  if (item.href === "/explorar") {
+    return activePath === "/explorar" || activePath.startsWith("/explorar/");
   }
   if (item.href === "/biblioteca") {
     return (
       activePath === "/biblioteca" ||
-      (activePath.startsWith("/biblioteca/") && !activePath.startsWith("/biblioteca/importar"))
+      (activePath.startsWith("/biblioteca/") &&
+        !activePath.startsWith("/biblioteca/importar") &&
+        !activePath.startsWith("/biblioteca/ingestoes"))
     );
   }
   if (item.href === "/") {

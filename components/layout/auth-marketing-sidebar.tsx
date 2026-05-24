@@ -2,9 +2,9 @@
 
 import Image from "next/image";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { useCallback, useState } from "react";
 
 import { defaultAuthSidebarFeatures } from "@/lib/auth-layout/default-copy";
+import { useMarketingSidebarUiStore } from "@/lib/auth-layout/marketing-sidebar-ui-store";
 import type { AuthSidebarFeature } from "@/lib/auth-layout/types";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +21,8 @@ export type AuthMarketingSidebarProps = {
   introText?: string;
   features?: AuthSidebarFeature[];
   brandName?: string;
+  /** Exibe o texto da marca abaixo do logo (ex.: «cifra.ai»). */
+  showBrandCaption?: boolean;
   footerNote?: string;
   className?: string;
 };
@@ -34,11 +36,12 @@ export function AuthMarketingSidebar({
   introText,
   features = defaultAuthSidebarFeatures,
   brandName = "cifra.ai",
+  showBrandCaption = true,
   footerNote = "© 2026 Artemis Digital Tech",
   className,
 }: AuthMarketingSidebarProps) {
-  const [collapsed, setCollapsed] = useState(false);
-  const toggle = useCallback(() => setCollapsed((c) => !c), []);
+  const collapsed = useMarketingSidebarUiStore((s) => s.collapsed);
+  const toggle = useMarketingSidebarUiStore((s) => s.toggleCollapsed);
 
   return (
     <aside
@@ -154,7 +157,9 @@ export function AuthMarketingSidebar({
         </div>
         {!collapsed && (
           <>
-            <p className="font-serif text-[15px] text-cifra-teal">{brandName}</p>
+            {showBrandCaption ? (
+              <p className="font-serif text-[15px] text-cifra-teal">{brandName}</p>
+            ) : null}
             <p className="font-mono text-[9px] text-[#6a6a88]">{footerNote}</p>
           </>
         )}

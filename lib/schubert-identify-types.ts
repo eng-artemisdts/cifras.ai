@@ -10,6 +10,9 @@ export type SchubertRecognizedSong = {
   spotify_track_id?: string;
   spotify_artist_ids: string[];
   duration_ms?: number;
+  cover_image_url?: string;
+  /** Preview MP3 (~30 s) da Spotify Web API — preferido para ingest sem YouTube. */
+  spotify_preview_url?: string;
 };
 
 /** Resposta de `POST /tracks/identify`. */
@@ -18,4 +21,35 @@ export type SchubertTrackIdentifyResponse = {
   song: SchubertRecognizedSong | null;
   /** Presente quando `recognized` e existe `Track` na base Mongo. */
   track: Record<string, unknown> | null;
+  canCreateVariation?: boolean;
+  canEditTrack?: boolean;
+};
+
+/** Resposta de `POST /tracks/ingest` ou ingest por URL / Spotify. */
+export type SchubertTrackIngestResponse = {
+  track?: Record<string, unknown>;
+  jobId?: string;
+  /** `completed` quando `INGEST_ASYNC_ENABLED=0` e o servidor processa na mesma request. */
+  status?: "queued" | "running" | "completed" | "failed";
+  progressPercent?: number;
+};
+
+export type SchubertIngestJobStage = {
+  stageName: string;
+  status: string;
+  startedAt?: string;
+  endedAt?: string;
+  durationMs?: number;
+  cacheHit?: boolean;
+  error?: string;
+};
+
+export type SchubertIngestJobResponse = {
+  jobId: string;
+  status: "queued" | "running" | "completed" | "failed" | "cancelled";
+  progressPercent: number;
+  currentStage: string;
+  resultTrackId?: string;
+  error?: string;
+  stages?: SchubertIngestJobStage[];
 };

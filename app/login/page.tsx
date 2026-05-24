@@ -9,7 +9,7 @@ import { sanitizeAuthReturnTo } from "@/lib/auth0-routes";
 
 export const metadata: Metadata = {
   title: "Entrar",
-  description: "Acesse sua conta cifra.ai com Google, Apple, Spotify ou e-mail (Auth0).",
+  description: "Acesse sua conta cifra.ai com Google, Apple ou e-mail (Auth0).",
   alternates: { canonical: "/login" },
 };
 
@@ -25,7 +25,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const returnTo = sanitizeAuthReturnTo(rawReturn);
 
   if (session?.user) {
-    redirect(returnTo ?? "/biblioteca");
+    redirect(returnTo ?? "/explorar");
   }
 
   return (

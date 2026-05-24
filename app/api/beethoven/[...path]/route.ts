@@ -3,11 +3,74 @@ import { NextResponse } from "next/server";
 import { isAccessTokenLikelyJwt } from "@/lib/access-token-shape";
 import { getAuth0 } from "@/lib/auth0";
 import { isAuth0Configured } from "@/lib/auth0-env";
+import {
+  isAuth0SessionExpiredError,
+  sessionExpiredResponse,
+} from "@/lib/auth0-session-expired";
 
+/** Mesma porta por defeito que `beethoven-api` (evita confundir com Schubert em 3001). */
 const beethovenBase = () =>
-  (process.env.BEETHOVEN_API_BASE_URL ?? "http://127.0.0.1:3001").replace(/\/$/, "");
+  (process.env.BEETHOVEN_API_BASE_URL ?? "http://127.0.0.1:3002").replace(/\/$/, "");
+
+/** Limite do termo de busca na rota pública (evita abuso no proxy). */
+const PUBLIC_LIBRARY_SEARCH_MAX_CHARS = 200;
 
 type RouteCtx = { params?: Promise<{ path?: string[] }> };
+
+function isPublicLibraryCatalogSearch(method: string, segments: string[]): boolean {
+  if (method !== "GET" && method !== "HEAD") return false;
+  return segments.length === 2 && segments[0] === "library-home" && segments[1] === "search";
+}
+
+function isPublicVariationRead(method: string, segments: string[]): boolean {
+  if (method !== "GET" && method !== "HEAD") return false;
+  return (
+    segments.length === 4 &&
+    segments[0] === "tracks" &&
+    segments[1] === "variations" &&
+    (segments[2] === "by-base-key" || segments[2] === "by-track-id")
+  );
+}
+
+/**
+ * Catálogo: busca de faixas para visitantes (sem sessão).
+ * O Nest em `library-home/search` não exige JWT; o BFF antes bloqueava tudo com `withApiAuthRequired`.
+ * Mantemos apenas este caminho explícito e só GET/HEAD — o resto continua com Bearer do utilizador.
+ */
+async function proxyPublicLibraryCatalogSearch(req: Request, ctx: RouteCtx): Promise<Response> {
+  const resolved = await ctx.params;
+  const segments = resolved?.path ?? [];
+  if (!isPublicLibraryCatalogSearch(req.method, segments)) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const incoming = new URL(req.url);
+  const searchRaw = incoming.searchParams.get("search") ?? "";
+  if (searchRaw.length > PUBLIC_LIBRARY_SEARCH_MAX_CHARS) {
+    return NextResponse.json({ error: "search_too_long" }, { status: 400 });
+  }
+
+  const suffix = segments.join("/");
+  const target = `${beethovenBase()}/${suffix}${incoming.search}`;
+
+  const headers: Record<string, string> = {};
+  const accept = req.headers.get("accept");
+  if (accept) headers.accept = accept;
+
+  const upstream = await fetch(target, { method: req.method, headers });
+
+  const responseHeaders = new Headers();
+  const passCt = upstream.headers.get("content-type");
+  if (passCt) {
+    responseHeaders.set("content-type", passCt);
+  }
+
+  return new NextResponse(upstream.body, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers: responseHeaders,
+  });
+}
 
 async function proxyToBeethoven(req: Request, ctx: RouteCtx) {
   const audience = process.env.AUTH0_AUDIENCE?.trim();
@@ -21,7 +84,15 @@ async function proxyToBeethoven(req: Request, ctx: RouteCtx) {
   const incoming = new URL(req.url);
   const target = `${beethovenBase()}/${suffix}${incoming.search}`;
 
-  const { token } = await getAuth0().getAccessToken({ audience });
+  let token: string | undefined;
+  try {
+    ({ token } = await getAuth0().getAccessToken({ audience }));
+  } catch (err) {
+    if (isAuth0SessionExpiredError(err)) {
+      return sessionExpiredResponse();
+    }
+    throw err;
+  }
 
   if (!isAccessTokenLikelyJwt(token)) {
     return NextResponse.json(
@@ -90,9 +161,27 @@ async function runAuthed(req: Request, ctx: RouteCtx) {
   return authed(req, ctx);
 }
 
-export const GET = runAuthed;
+async function dispatchGet(req: Request, ctx: RouteCtx) {
+  const resolved = await ctx.params;
+  const segments = resolved?.path ?? [];
+  if (isPublicLibraryCatalogSearch(req.method, segments) || isPublicVariationRead(req.method, segments)) {
+    return proxyPublicLibraryCatalogSearch(req, ctx);
+  }
+  return runAuthed(req, ctx);
+}
+
+async function dispatchHead(req: Request, ctx: RouteCtx) {
+  const resolved = await ctx.params;
+  const segments = resolved?.path ?? [];
+  if (isPublicLibraryCatalogSearch(req.method, segments) || isPublicVariationRead(req.method, segments)) {
+    return proxyPublicLibraryCatalogSearch(req, ctx);
+  }
+  return runAuthed(req, ctx);
+}
+
+export const GET = dispatchGet;
 export const POST = runAuthed;
 export const PUT = runAuthed;
 export const PATCH = runAuthed;
 export const DELETE = runAuthed;
-export const HEAD = runAuthed;
+export const HEAD = dispatchHead;

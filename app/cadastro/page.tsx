@@ -12,13 +12,13 @@ import {
 export const metadata: Metadata = {
   title: "Criar conta",
   description:
-    "Cadastre-se no cifra.ai com Google, Apple, Spotify ou formulário completo.",
+    "Cadastre-se no cifra.ai com Google, Apple ou formulário completo.",
   alternates: { canonical: "/cadastro" },
 };
 
 export default async function CadastroPage() {
   const session = await getAuth0Session();
-  if (session?.user) redirect("/biblioteca");
+  if (session?.user) redirect("/explorar");
 
   return (
     <AuthSplitShell

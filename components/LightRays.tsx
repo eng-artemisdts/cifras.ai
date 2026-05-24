@@ -106,6 +106,8 @@ const LightRays: React.FC<LightRaysProps> = ({
   const animationIdRef = useRef<number | null>(null);
   const meshRef = useRef<Mesh | null>(null);
   const cleanupFunctionRef = useRef<(() => void) | null>(null);
+  const webglUnavailableRef = useRef(false);
+  const [useFallbackBackground, setUseFallbackBackground] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
 
@@ -132,6 +134,7 @@ const LightRays: React.FC<LightRaysProps> = ({
 
   useEffect(() => {
     if (!isVisible || !containerRef.current) return;
+    if (webglUnavailableRef.current) return;
 
     if (cleanupFunctionRef.current) {
       cleanupFunctionRef.current();
@@ -145,10 +148,33 @@ const LightRays: React.FC<LightRaysProps> = ({
 
       if (!containerRef.current) return;
 
-      const renderer = new Renderer({
-        dpr: Math.min(window.devicePixelRatio, 2),
-        alpha: true
-      });
+      const supportCanvas = document.createElement('canvas');
+      const hasWebGLSupport = Boolean(
+        supportCanvas.getContext('webgl2') ||
+          supportCanvas.getContext('webgl') ||
+          supportCanvas.getContext('experimental-webgl')
+      );
+      if (!hasWebGLSupport) {
+        webglUnavailableRef.current = true;
+        setUseFallbackBackground(true);
+        return;
+      }
+
+      let renderer: Renderer;
+      try {
+        renderer = new Renderer({
+          dpr: Math.min(window.devicePixelRatio, 2),
+          alpha: true
+        });
+      } catch (error) {
+        webglUnavailableRef.current = true;
+        setUseFallbackBackground(true);
+        rendererRef.current = null;
+        uniformsRef.current = null;
+        meshRef.current = null;
+        return;
+      }
+      setUseFallbackBackground(false);
       rendererRef.current = renderer;
 
       const gl = renderer.gl;
@@ -370,7 +396,9 @@ void main() {
       };
     };
 
-    initializeWebGL();
+    initializeWebGL().catch(error => {
+      console.warn('Unexpected error during WebGL initialization:', error);
+    });
 
     return () => {
       if (cleanupFunctionRef.current) {
@@ -449,7 +477,21 @@ void main() {
     <div
       ref={containerRef}
       className={`w-full h-full pointer-events-none z-[3] overflow-hidden relative ${className}`.trim()}
-    />
+    >
+      {useFallbackBackground ? (
+        <div
+          className="absolute inset-0"
+          style={{
+            background: `
+              radial-gradient(60% 80% at 50% -10%, color-mix(in srgb, ${raysColor} 36%, transparent) 0%, transparent 70%),
+              conic-gradient(from 180deg at 50% -20%, color-mix(in srgb, ${raysColor} 28%, transparent), transparent 30%, color-mix(in srgb, ${raysColor} 22%, transparent) 50%, transparent 75%, color-mix(in srgb, ${raysColor} 20%, transparent))
+            `,
+            filter: 'blur(22px)',
+            opacity: 0.9,
+          }}
+        />
+      ) : null}
+    </div>
   );
 };
 

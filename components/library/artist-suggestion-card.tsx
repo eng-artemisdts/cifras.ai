@@ -12,6 +12,7 @@ export type ArtistSuggestionCardProps = {
  */
 export function ArtistSuggestionCard({ item, className }: ArtistSuggestionCardProps) {
   const following = item.followState === "following";
+  const avatarUrl = item.avatarImageUrl?.trim();
 
   return (
     <article
@@ -26,7 +27,12 @@ export function ArtistSuggestionCard({ item, className }: ArtistSuggestionCardPr
           artistAvatarClass[item.avatarTone]
         )}
         aria-hidden
-      />
+      >
+        {avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- origem externa dinâmica
+          <img src={avatarUrl} alt="" className="size-full rounded-full object-cover" />
+        ) : null}
+      </div>
       <div className="min-w-0 flex-1 space-y-1">
         <h3 className="text-[15px] font-semibold text-cifra-text">{item.name}</h3>
         <p className="text-xs text-cifra-muted">{item.description}</p>

@@ -20,6 +20,8 @@ export function RecentAccessSection({
   items,
   className,
 }: RecentAccessSectionProps) {
+  const hasItems = items.length > 0;
+
   return (
     <section className={cn("w-full px-6 py-1 md:px-8", className)}>
       <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-2.5">
@@ -32,13 +34,19 @@ export function RecentAccessSection({
             {historyLabel}
           </Link>
         </div>
-        <ul className="flex flex-col gap-2.5" aria-label={title}>
-          {items.map((item) => (
-            <li key={item.id}>
-              <RecentAccessRow item={item} />
-            </li>
-          ))}
-        </ul>
+        {hasItems ? (
+          <ul className="flex flex-col gap-2.5" aria-label={title}>
+            {items.map((item) => (
+              <li key={item.id}>
+                <RecentAccessRow item={item} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="rounded-[10px] border border-dashed border-white/10 bg-cifra-surface/70 px-4 py-4 text-xs text-cifra-muted">
+            Seus últimos acessos vão aparecer aqui assim que você abrir uma música.
+          </div>
+        )}
       </div>
     </section>
   );

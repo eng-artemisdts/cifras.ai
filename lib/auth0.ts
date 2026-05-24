@@ -20,7 +20,7 @@ export function getAuth0(): Auth0Client {
       process.env.AUTH0_SCOPE?.trim() ||
       "openid profile email offline_access";
     client = new Auth0Client({
-      signInReturnToPath: "/biblioteca",
+      signInReturnToPath: "/explorar",
       ...(audience
         ? {
           authorizationParameters: {

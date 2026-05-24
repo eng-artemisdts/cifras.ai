@@ -1,0 +1,68 @@
+import Link from "next/link";
+
+import LightRays from "@/components/LightRays";
+import type { BillingPlan } from "@/lib/billing/plan-types";
+import type { LibraryNavItem, RecentAccessItem, RecommendationTile } from "@/lib/library/types";
+import { cn } from "@/lib/utils";
+
+import { LibraryPageFooter } from "./library-page-footer";
+import { LibrarySearchHero } from "./library-search-hero";
+import { LibraryTopNav, type LibraryTopNavUser } from "./library-top-nav";
+import { RecentAccessSection } from "./recent-access-section";
+import { RecommendationsSection } from "./recommendations-section";
+
+export type LibraryExploreViewProps = {
+  navItems: LibraryNavItem[];
+  user?: LibraryTopNavUser | null;
+  billingPlan?: BillingPlan | null;
+  recommendationItems: RecommendationTile[];
+  recentAccessItems: RecentAccessItem[];
+  className?: string;
+};
+
+/**
+ * Explorar (público): busca, recomendações e últimos acessos.
+ * Catálogo completo na página principal `/biblioteca`.
+ */
+export function LibraryExploreView({
+  navItems,
+  user,
+  billingPlan,
+  recommendationItems,
+  recentAccessItems,
+  className,
+}: LibraryExploreViewProps) {
+  return (
+    <div className={cn("flex min-h-dvh flex-col bg-cifra-bg text-cifra-text", className)}>
+      <LibraryTopNav items={navItems} user={user} billingPlan={billingPlan ?? undefined} />
+      <main className="relative flex flex-1 flex-col items-center overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 z-0 min-h-full">
+          <LightRays
+            raysOrigin="top-center"
+            raysColor="#0fd2c1"
+            raysSpeed={0.85}
+            lightSpread={0.9}
+            rayLength={1.85}
+            fadeDistance={1.05}
+            saturation={0.92}
+            mouseInfluence={0.08}
+            className="min-h-full"
+          />
+        </div>
+        <div
+          className="pointer-events-none absolute inset-0 z-1 opacity-80"
+          style={{
+            background:
+              "radial-gradient(ellipse 80% 60% at 50% -20%, var(--cifra-glow) 0%, transparent 55%), radial-gradient(ellipse 50% 40% at 100% 0%, rgba(28, 31, 62, 0.5) 0%, transparent 50%)",
+          }}
+        />
+        <div className="relative z-10 flex w-full flex-col items-center">
+          <LibrarySearchHero />
+          <RecommendationsSection items={recommendationItems} />
+          <RecentAccessSection items={recentAccessItems} />
+        </div>
+      </main>
+      <LibraryPageFooter />
+    </div>
+  );
+}
