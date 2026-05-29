@@ -95,7 +95,7 @@ export async function CifraTrackView(props: CifraTrackViewProps) {
           Não foi possível contactar a Schubert API. Verifique a rede e as variáveis de ambiente, ou tente novamente
           mais tarde.
         </p>
-        <Link href="/biblioteca/importar/arquivo" className="text-sm font-semibold text-cifra-teal">
+        <Link href="/biblioteca/importar" className="text-sm font-semibold text-cifra-teal">
           Voltar à importação
         </Link>
       </div>

@@ -115,7 +115,7 @@ export async function CifraEditView(props: CifraEditViewProps) {
         <p className="max-w-md text-sm text-cifra-muted">
           Não foi possível contactar a Schubert API. Verifique a rede e tente novamente.
         </p>
-        <Link href="/biblioteca/importar/arquivo" className="text-sm font-semibold text-cifra-teal">
+        <Link href="/biblioteca/importar" className="text-sm font-semibold text-cifra-teal">
           Voltar à importação
         </Link>
       </div>

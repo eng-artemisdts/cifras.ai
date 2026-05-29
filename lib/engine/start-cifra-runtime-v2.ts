@@ -220,7 +220,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
   let timeScrollUserOffsetPx = 0;
   let userInteractingUntilMs = 0;
   let programmaticScrollUntilMs = 0;
-  let showFloatingChord = true;
+  let showFloatingChord = false;
   let floatingChordRoot: HTMLDivElement | null = null;
   let floatingChordLabel: HTMLSpanElement | null = null;
   let floatingChordDiagramEl: HTMLDivElement | null = null;
@@ -435,8 +435,9 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     lsSet(LS_SHOW_FLOATING_CHORD, showFloatingChord ? "1" : "0");
   }
   function initFloatingChordToggle() {
-    const raw = lsGet(LS_SHOW_FLOATING_CHORD);
-    showFloatingChord = raw == null ? true : raw !== "0";
+    // UX: inicia sempre fechado; o utilizador ativa manualmente quando quiser.
+    showFloatingChord = false;
+    lsSet(LS_SHOW_FLOATING_CHORD, "0");
     if (showFloatingChordEl) showFloatingChordEl.checked = showFloatingChord;
   }
   function persistCurrentChordDiagramPref() {
@@ -601,6 +602,8 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     root.style.cursor = "grab";
     root.style.userSelect = "none";
     root.style.position = "fixed";
+    // Evita bloquear drag/click na cifra; só o handle e o botão recebem eventos.
+    root.style.pointerEvents = "none";
     root.setAttribute("role", "status");
     root.setAttribute("aria-live", "polite");
     root.setAttribute("aria-label", "Acorde no tempo");
@@ -608,6 +611,8 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     const title = document.createElement("span");
     title.className = "mb-0.5 w-full text-center font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-cifra-muted";
     title.textContent = "Acorde no tempo";
+    title.style.pointerEvents = "auto";
+    title.style.cursor = "grab";
     root.appendChild(title);
 
     const label = document.createElement("span");
@@ -625,6 +630,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     closeBtn.className =
       "absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded-md text-[11px] font-semibold leading-none text-cifra-muted transition hover:bg-white/10 hover:text-cifra-text";
     closeBtn.setAttribute("aria-label", "Fechar acorde no tempo");
+    closeBtn.style.pointerEvents = "auto";
     closeBtn.innerHTML =
       '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7a1 1 0 0 0-1.41 1.42L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.88a1 1 0 0 0 0-1.41Z"/></svg>';
     root.appendChild(closeBtn);
@@ -705,7 +711,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     const onClosePointerDown = (ev: PointerEvent) => {
       ev.stopPropagation();
     };
-    root.addEventListener("pointerdown", onPointerDown);
+    title.addEventListener("pointerdown", onPointerDown);
     root.addEventListener("pointermove", onPointerMove);
     root.addEventListener("pointerup", onPointerUp);
     root.addEventListener("pointercancel", onPointerUp);
@@ -720,7 +726,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     syncFloatingChordVisibility();
     syncCurrentChordDiagramVisibility();
     floatingChordDestroy = () => {
-      root.removeEventListener("pointerdown", onPointerDown);
+      title.removeEventListener("pointerdown", onPointerDown);
       root.removeEventListener("pointermove", onPointerMove);
       root.removeEventListener("pointerup", onPointerUp);
       root.removeEventListener("pointercancel", onPointerUp);
