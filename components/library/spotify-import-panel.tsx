@@ -168,7 +168,7 @@ export function SpotifyImportPanel({
   className,
 }: SpotifyImportPanelProps) {
   const { user } = useUser();
-  const { registerIngestJob } = useIngestJobs();
+  const { registerIngestJob, blockNewIngestIfBusy } = useIngestJobs();
   const router = useRouter();
   const pathname = usePathname();
   const returnToConnect = `${pathname || "/biblioteca/importar/spotify"}`;
@@ -343,6 +343,7 @@ export function SpotifyImportPanel({
       setSpotifyIngestError(null);
       setSpotifyIngestBusy(true);
       try {
+        if (blockNewIngestIfBusy()) return;
         const ingestResp = await postSpotifySourceIngest({ trackId: spotifyTrackId, meta: song });
 
         if (ingestResp.status === "completed" && ingestResp.track && typeof ingestResp.track === "object") {
@@ -370,7 +371,7 @@ export function SpotifyImportPanel({
           throw new Error("O servidor não devolveu um jobId de ingestão.");
         }
 
-        registerIngestJob({
+        const registered = registerIngestJob({
           jobId,
           title: song.title,
           artist: song.artist,
@@ -380,6 +381,7 @@ export function SpotifyImportPanel({
               ? song.cover_image_url.trim()
               : null,
         });
+        if (!registered) return;
         router.push("/biblioteca/ingestoes");
       } catch (e) {
         const msg =
@@ -393,7 +395,7 @@ export function SpotifyImportPanel({
         setSpotifyIngestBusy(false);
       }
     },
-    [registerIngestJob, router],
+    [blockNewIngestIfBusy, registerIngestJob, router],
   );
 
   const onConfirmSpotifyIngest = useCallback(async () => {

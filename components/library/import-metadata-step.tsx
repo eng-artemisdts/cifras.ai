@@ -83,7 +83,7 @@ export function ImportMetadataStep({
   className,
 }: ImportMetadataStepProps) {
   const router = useRouter();
-  const { registerIngestJob } = useIngestJobs();
+  const { registerIngestJob, blockNewIngestIfBusy } = useIngestJobs();
   const baseId = useId();
   const song = context.song;
   const isVariation = context.mode === "variation";
@@ -244,6 +244,8 @@ export function ImportMetadataStep({
         throw new Error("Arquivo de áudio em falta para ingestão.");
       }
 
+      if (blockNewIngestIfBusy()) return;
+
       const ingestResponse = await postTrackIngestWithMeta(ingestFile, mergedSong, {
         capo_at: capoClamped,
       });
@@ -251,7 +253,7 @@ export function ImportMetadataStep({
       if (!resolvedTrack?.trackId) {
         const jobId = typeof ingestResponse.jobId === "string" ? ingestResponse.jobId.trim() : "";
         if (!jobId) throw new Error("Ingest não retornou track nem jobId.");
-        registerIngestJob({
+        const registered = registerIngestJob({
           jobId,
           title: mergedSong.title,
           artist: mergedSong.artist,
@@ -261,6 +263,7 @@ export function ImportMetadataStep({
               ? mergedSong.cover_image_url.trim()
               : null,
         });
+        if (!registered) return;
         onDoneNavigation();
         router.push("/biblioteca/ingestoes");
         return;
@@ -302,6 +305,7 @@ export function ImportMetadataStep({
     router,
     capoAt,
     registerIngestJob,
+    blockNewIngestIfBusy,
   ]);
 
   return (
