@@ -184,7 +184,7 @@ export function StreamingImportRightPanel({ proStreamingUnlocked, className }: S
           <div className="bg-cifra-surface-2 px-4 py-3 sm:border-r sm:border-white/6">
             <p className="text-[10px] font-semibold leading-tight text-cifra-text">Detecção Pro mais precisa</p>
             <p className="mt-1.5 text-[10px] leading-[1.4] text-cifra-muted">
-              Assinantes Pro usam pipelines de IA com modelos e ajustes extras — acordes mais estáveis em
+              Assinantes Pro beneficiam de detecção de acordes mais precisa — acordes mais estáveis em
               arranjos densos e menos retrabalho manual antes de exportar a cifra.
             </p>
           </div>

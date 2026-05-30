@@ -40,7 +40,7 @@ export function LibraryImportProviderView({
       )}
     >
       <AuthMarketingSidebar
-        contextLabel="cifra · lab"
+        contextLabel="cifra.ai"
         contextUppercase={false}
         titleLine1={sidebar.titleLine1}
         titleLine2={sidebar.titleLine2Gradient}

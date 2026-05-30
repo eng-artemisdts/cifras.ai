@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { AudioWaveform, Menu, Music2, Sparkles, X } from "lucide-react";
+import { AudioWaveform, Menu, Music2, Sparkles, Users, X } from "lucide-react";
 
 import type { Auth0UserMenuUser } from "@/components/auth/auth0-user-menu";
 import { Auth0UserMenu } from "@/components/auth/auth0-user-menu";
@@ -15,12 +15,13 @@ import { ArtemisFooterBrand } from "@/components/layout/artemis-footer-brand";
 
 const navLinks = [
   { href: "#recursos", label: "Recursos" },
+  { href: "#comunidade", label: "Comunidade" },
   { href: "#planos", label: "Planos" },
   { href: "#faq", label: "FAQ" },
 ];
 
 export type LandingPageProps = {
-  /** Quando definido, o header mostra avatar + menu em vez de Entrar / demo / cadastro. */
+  /** Quando definido, o header mostra avatar + menu em vez de Entrar / cadastro. */
   user?: Auth0UserMenuUser | null;
 };
 
@@ -128,15 +129,15 @@ export function LandingPage({ user = null }: LandingPageProps) {
               />
             </div>
             <p className="mt-5 font-mono text-xs font-medium uppercase tracking-wider text-cifra-teal motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-3 motion-safe:delay-100 motion-safe:duration-600 motion-safe:fill-mode-both motion-safe:ease-out sm:mt-6">
-              NOVO · Cifras e acordes com IA
+              Comunidade · Cifras e acordes com IA
             </p>
             <h1 className="mt-6 font-serif text-4xl font-normal leading-tight tracking-tight text-white motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:delay-150 motion-safe:duration-700 motion-safe:fill-mode-both motion-safe:ease-out sm:text-5xl lg:text-[52px] lg:leading-[1.1]">
-              Do áudio à cifra. Do link ao palco.
+              A sua cifra, gerada com o melhor da IA — para todos tocarem.
             </h1>
             <p className="mx-auto mt-6 max-w-[560px] text-base leading-relaxed text-cifra-muted motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-3 motion-safe:delay-200 motion-safe:duration-700 motion-safe:fill-mode-both motion-safe:ease-out lg:text-lg">
-              cifra.ai transforma faixas e capturas em cifras editáveis — com
-              detecção harmônica, revisão humana no loop e exportação para PDF,
-              texto ou o seu fluxo de ensaio.
+              Junte-se a uma comunidade de músicos que transformam faixas, links e
+              gravações em cifras editáveis. A IA sugere acordes e letra; você revisa,
+              partilha com a banda e leva tudo para o palco.
             </p>
             <LandingHeroActions />
           </div>
@@ -151,7 +152,7 @@ export function LandingPage({ user = null }: LandingPageProps) {
               Por que cifra.ai
             </p>
             <h2 className="mt-3 text-center font-serif text-3xl text-white motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-3 motion-safe:delay-75 motion-safe:duration-700 motion-safe:fill-mode-both sm:text-4xl">
-              Tudo o que você precisa para sair tocando
+              IA poderosa, feita para quem faz música
             </h2>
             <div className="mt-14 grid gap-6 md:grid-cols-3">
               <article className="group rounded-2xl border border-cifra-border bg-cifra-surface p-8 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-6 motion-safe:delay-100 motion-safe:duration-700 motion-safe:fill-mode-both motion-safe:ease-out transition-all duration-300 ease-out hover:-translate-y-1 hover:border-cifra-teal/25 hover:shadow-[0_16px_48px_-16px_rgba(15,210,193,0.18)] motion-reduce:transition-none motion-reduce:hover:translate-y-0">
@@ -159,11 +160,11 @@ export function LandingPage({ user = null }: LandingPageProps) {
                   <Music2 className="size-6" strokeWidth={1.75} />
                 </div>
                 <h3 className="mt-6 text-lg font-semibold text-white">
-                  Origens em um só lugar
+                  De qualquer origem
                 </h3>
                 <p className="mt-3 text-sm leading-relaxed text-cifra-muted">
-                  Importe de streaming, vídeo ou arquivo — menos troca de
-                  ferramentas, mais tempo com o instrumento na mão.
+                  Spotify, YouTube, TikTok, Instagram ou um ficheiro de áudio — cole o
+                  link ou envie a gravação e deixe a IA fazer o trabalho pesado.
                 </p>
               </article>
               <article className="group rounded-2xl border border-cifra-border bg-cifra-surface p-8 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-6 motion-safe:delay-200 motion-safe:duration-700 motion-safe:fill-mode-both motion-safe:ease-out transition-all duration-300 ease-out hover:-translate-y-1 hover:border-cifra-teal/25 hover:shadow-[0_16px_48px_-16px_rgba(15,210,193,0.18)] motion-reduce:transition-none motion-reduce:hover:translate-y-0">
@@ -171,11 +172,11 @@ export function LandingPage({ user = null }: LandingPageProps) {
                   <AudioWaveform className="size-6" strokeWidth={1.75} />
                 </div>
                 <h3 className="mt-6 text-lg font-semibold text-white">
-                  Harmonia estimada com IA
+                  Acordes e letra com IA
                 </h3>
                 <p className="mt-3 text-sm leading-relaxed text-cifra-muted">
-                  A IA sugere acordes e estrutura a partir do áudio; você revisa,
-                  ajusta tonalidade e marca seções antes de exportar.
+                  Detecção harmónica avançada, letra alinhada ao áudio e editor
+                  intuitivo para ajustar tonalidade, capo e secções antes de tocar.
                 </p>
               </article>
               <article className="group rounded-2xl border border-cifra-border bg-cifra-surface p-8 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-6 motion-safe:delay-300 motion-safe:duration-700 motion-safe:fill-mode-both motion-safe:ease-out transition-all duration-300 ease-out hover:-translate-y-1 hover:border-cifra-gold/35 hover:shadow-[0_16px_48px_-16px_rgba(240,180,41,0.12)] motion-reduce:transition-none motion-reduce:hover:translate-y-0">
@@ -183,11 +184,11 @@ export function LandingPage({ user = null }: LandingPageProps) {
                   <Sparkles className="size-6" strokeWidth={1.75} />
                 </div>
                 <h3 className="mt-6 text-lg font-semibold text-white">
-                  Exportação e biblioteca
+                  Biblioteca e exportação
                 </h3>
                 <p className="mt-3 text-sm leading-relaxed text-cifra-muted">
-                  Salve versões na biblioteca, compartilhe com a banda e leve a
-                  cifra para PDF, texto simples ou o seu fluxo de ensaio.
+                  Guarde versões na sua biblioteca, partilhe com colegas de banda e
+                  exporte para PDF ou texto — pronto para ensaio ou palco.
                 </p>
               </article>
             </div>
@@ -195,7 +196,7 @@ export function LandingPage({ user = null }: LandingPageProps) {
             <div className="mt-16 grid gap-4 sm:grid-cols-3">
               {[
                 { value: "50 MB", label: "Áudio por envio" },
-                { value: "3+", label: "Fontes de importação" },
+                { value: "4+", label: "Fontes de importação" },
                 { value: "PDF", label: "Exportação imediata" },
               ].map((s, i) => (
                 <div
@@ -217,25 +218,70 @@ export function LandingPage({ user = null }: LandingPageProps) {
           </div>
         </section>
 
+        <section
+          id="comunidade"
+          className="border-b border-cifra-border bg-cifra-surface/30 px-6 py-20 lg:px-8 lg:py-28"
+        >
+          <div className="mx-auto max-w-[960px] text-center">
+            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-cifra-teal/15 text-cifra-teal">
+              <Users className="size-7" strokeWidth={1.75} aria-hidden />
+            </div>
+            <h2 className="mt-6 font-serif text-3xl text-white sm:text-4xl">
+              Uma comunidade para quem vive de música
+            </h2>
+            <p className="mx-auto mt-4 max-w-[640px] text-base leading-relaxed text-cifra-muted">
+              Cantores, guitarristas, professores e bandas usam o cifra.ai para gerar
+              cifras mais rápido, colaborar em versões personalizadas e descobrir
+              repertório na biblioteca. Não precisa ser expert em teoria — a IA
+              acelera o caminho do ouvido à cifra pronta.
+            </p>
+            <div className="mt-12 grid gap-6 text-left sm:grid-cols-3">
+              {[
+                {
+                  title: "Para iniciantes",
+                  body: "Importe uma música que adora e receba acordes sugeridos em minutos.",
+                },
+                {
+                  title: "Para bandas",
+                  body: "Crie variações com capo, tonalidade e versões privadas para o seu set.",
+                },
+                {
+                  title: "Para professores",
+                  body: "Prepare material de aula com cifras editáveis e exportação em PDF.",
+                },
+              ].map((item) => (
+                <div
+                  key={item.title}
+                  className="rounded-2xl border border-cifra-border bg-cifra-surface p-6"
+                >
+                  <h3 className="text-sm font-semibold text-white">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-cifra-muted">{item.body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <section id="planos" className="px-6 py-20 lg:px-8 lg:py-28">
           <div className="mx-auto max-w-[1200px]">
             <h2 className="text-center font-serif text-3xl text-white motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-3 motion-safe:duration-700 motion-safe:fill-mode-both sm:text-4xl">
-              Escolha como levar o cifra.ai para o seu time
+              Planos para cada etapa da sua jornada musical
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-center text-cifra-muted motion-safe:animate-in motion-safe:fade-in motion-safe:delay-100 motion-safe:duration-600 motion-safe:fill-mode-both">
-              Planos flexíveis. Escale quando estiver pronto.
+              Comece grátis na comunidade. Evolua quando precisar de mais importações e recursos.
             </p>
             <div className="mt-14 grid gap-6 lg:grid-cols-3">
               <div className="flex flex-col rounded-2xl border border-cifra-border bg-cifra-surface p-8 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-6 motion-safe:delay-150 motion-safe:duration-700 motion-safe:fill-mode-both motion-safe:ease-out transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-cifra-muted/40 motion-reduce:transition-none motion-reduce:hover:translate-y-0">
-                <p className="text-sm font-medium text-cifra-muted">Free</p>
-                <p className="mt-2 font-serif text-4xl text-white">Grátis</p>
+                <p className="text-sm font-medium text-cifra-muted">Grátis</p>
+                <p className="mt-2 font-serif text-4xl text-white">R$ 0</p>
                 <ul className="mt-8 flex flex-1 flex-col gap-3 text-sm text-cifra-muted">
-                  <li>Busca básica e favoritos</li>
-                  <li>1 workspace</li>
-                  <li>Suporte comunidade</li>
+                  <li>Explorar e guardar favoritos</li>
+                  <li>Biblioteca pessoal</li>
+                  <li>Importação básica de áudio</li>
+                  <li>Suporte da comunidade</li>
                 </ul>
                 <LandingPlanFreeSignupLink className="mt-8 block rounded-lg border border-cifra-border py-3 text-center text-sm font-semibold text-cifra-text transition-all duration-200 ease-out hover:border-cifra-teal/30 hover:bg-cifra-surface-2 active:scale-[0.99] motion-reduce:active:scale-100">
-                  Começar grátis
+                  Entrar na comunidade
                 </LandingPlanFreeSignupLink>
               </div>
               <div className="flex flex-col rounded-2xl border border-cifra-border bg-cifra-surface p-8 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-6 motion-safe:delay-200 motion-safe:duration-700 motion-safe:fill-mode-both motion-safe:ease-out transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-cifra-teal/30 motion-reduce:transition-none motion-reduce:hover:translate-y-0">
@@ -249,9 +295,10 @@ export function LandingPage({ user = null }: LandingPageProps) {
                   </span>
                 </p>
                 <ul className="mt-8 flex flex-1 flex-col gap-3 text-sm text-cifra-muted">
-                  <li>Tudo do Free</li>
-                  <li>Relatórios agendados</li>
-                  <li>Integrações principais</li>
+                  <li>Tudo do plano Grátis</li>
+                  <li>Mais importações por mês</li>
+                  <li>Spotify e YouTube</li>
+                  <li>Exportação em PDF</li>
                 </ul>
                 <SubscribePlanButton
                   plan="starter"
@@ -272,15 +319,16 @@ export function LandingPage({ user = null }: LandingPageProps) {
                   </span>
                 </p>
                 <ul className="mt-8 flex flex-1 flex-col gap-3 text-sm text-cifra-muted">
-                  <li>API e webhooks</li>
-                  <li>SSO (SAML / OIDC)</li>
-                  <li>Suporte prioritário</li>
+                  <li>Tudo do Starter</li>
+                  <li>TikTok e Instagram Reels</li>
+                  <li>Detecção de acordes avançada</li>
+                  <li>Variações ilimitadas e suporte prioritário</li>
                 </ul>
                 <SubscribePlanButton
                   plan="pro"
                   className="mt-8 w-full rounded-lg bg-cifra-teal py-3 text-center text-sm font-semibold text-cifra-bg shadow-md shadow-cifra-teal/25 transition-all duration-200 ease-out hover:bg-cifra-teal-hover hover:shadow-lg hover:shadow-cifra-teal/35 active:scale-[0.99] motion-reduce:active:scale-100"
                 >
-                  Trial 14 dias
+                  Experimentar 14 dias grátis
                 </SubscribePlanButton>
               </div>
             </div>
@@ -293,36 +341,67 @@ export function LandingPage({ user = null }: LandingPageProps) {
         >
           <div className="mx-auto max-w-[720px]">
             <h2 className="text-center font-serif text-3xl text-white motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-600 motion-safe:fill-mode-both sm:text-4xl">
-              Respostas rápidas
+              Perguntas frequentes
             </h2>
             <div className="mt-10 space-y-3">
               <details className="group rounded-xl border border-cifra-border bg-cifra-surface-2 px-6 py-4 transition-colors duration-200 open:pb-5 hover:border-cifra-teal/25">
                 <summary className="cursor-pointer list-none text-left font-medium text-white transition-colors duration-200 hover:text-cifra-teal [&::-webkit-details-marker]:hidden">
                   <span className="flex items-center justify-between gap-4">
-                    Integra com meu stack atual?
+                    Como a IA gera a minha cifra?
                     <span className="text-cifra-muted transition-transform duration-200 group-open:rotate-180">
                       ▼
                     </span>
                   </span>
                 </summary>
                 <p className="mt-4 text-sm leading-relaxed text-cifra-muted">
-                  Sim. O front recomendado combina Next.js com Tailwind e
-                  componentes no estilo shadcn/ui; você pode montar telas no v0
-                  ou reutilizar tokens do seu design system.
+                  Envie um link ou ficheiro de áudio. A plataforma analisa a gravação,
+                  reconhece a música quando possível e sugere acordes, secções e letra.
+                  Depois pode editar tudo no editor antes de guardar ou exportar.
                 </p>
               </details>
               <details className="group rounded-xl border border-cifra-border bg-cifra-surface-2 px-6 py-4 transition-colors duration-200 open:pb-5 hover:border-cifra-teal/25">
                 <summary className="cursor-pointer list-none text-left font-medium text-white transition-colors duration-200 hover:text-cifra-teal [&::-webkit-details-marker]:hidden">
                   <span className="flex items-center justify-between gap-4">
-                    Posso testar antes de comprar?
+                    Preciso saber teoria musical?
                     <span className="text-cifra-muted transition-transform duration-200 group-open:rotate-180">
                       ▼
                     </span>
                   </span>
                 </summary>
                 <p className="mt-4 text-sm leading-relaxed text-cifra-muted">
-                  O plano Pro inclui trial de 14 dias com acesso à API e suporte
-                  para validar fluxos com o seu time antes de assinar.
+                  Não. A IA propõe os acordes a partir do áudio; você ouve, ajusta o
+                  que fizer sentido e aprende no processo. Músicos experientes também
+                  ganham tempo ao ter um rascunho sólido para refinar.
+                </p>
+              </details>
+              <details className="group rounded-xl border border-cifra-border bg-cifra-surface-2 px-6 py-4 transition-colors duration-200 open:pb-5 hover:border-cifra-teal/25">
+                <summary className="cursor-pointer list-none text-left font-medium text-white transition-colors duration-200 hover:text-cifra-teal [&::-webkit-details-marker]:hidden">
+                  <span className="flex items-center justify-between gap-4">
+                    Posso partilhar cifras com a minha banda?
+                    <span className="text-cifra-muted transition-transform duration-200 group-open:rotate-180">
+                      ▼
+                    </span>
+                  </span>
+                </summary>
+                <p className="mt-4 text-sm leading-relaxed text-cifra-muted">
+                  Sim. Guarde versões na biblioteca, crie variações com capo ou
+                  tonalidade diferentes e exporte em PDF para enviar aos colegas de
+                  banda ou alunos.
+                </p>
+              </details>
+              <details className="group rounded-xl border border-cifra-border bg-cifra-surface-2 px-6 py-4 transition-colors duration-200 open:pb-5 hover:border-cifra-teal/25">
+                <summary className="cursor-pointer list-none text-left font-medium text-white transition-colors duration-200 hover:text-cifra-teal [&::-webkit-details-marker]:hidden">
+                  <span className="flex items-center justify-between gap-4">
+                    Posso experimentar antes de assinar?
+                    <span className="text-cifra-muted transition-transform duration-200 group-open:rotate-180">
+                      ▼
+                    </span>
+                  </span>
+                </summary>
+                <p className="mt-4 text-sm leading-relaxed text-cifra-muted">
+                  O plano Grátis permite explorar a plataforma e gerar cifras com
+                  limites generosos. O plano Pro inclui 14 dias de teste para
+                  desbloquear importações avançadas e detecção mais precisa.
                 </p>
               </details>
             </div>
@@ -330,30 +409,30 @@ export function LandingPage({ user = null }: LandingPageProps) {
         </section>
 
         <section
-          id="demo"
+          id="comecar"
           className="border-t border-cifra-border bg-cifra-teal px-6 py-16 lg:px-8 lg:py-20"
         >
           <div className="mx-auto max-w-[960px] text-center motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-700 motion-safe:fill-mode-both motion-safe:ease-out">
             <h2 className="font-serif text-3xl text-cifra-bg sm:text-4xl">
-              Pronto para gerar sua próxima cifra?
+              Pronto para gerar a sua próxima cifra?
             </h2>
             <p className="mx-auto mt-4 max-w-lg text-cifra-bg/80 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:delay-150 motion-safe:duration-600 motion-safe:fill-mode-both">
-              Agende uma demo ou leve o resumo comercial para estúdio, escola ou
-              produto.
+              Junte-se à comunidade cifra.ai — grátis para começar, sem cartão de
+              crédito.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
-              <a
-                href="mailto:demo@example.com"
+              <Link
+                href="/cadastro"
                 className="inline-flex h-12 min-w-[160px] items-center justify-center rounded-lg bg-cifra-bg px-6 text-sm font-semibold text-cifra-teal shadow-md shadow-cifra-bg/20 transition-all duration-200 ease-out hover:opacity-95 hover:shadow-lg active:scale-[0.98] motion-reduce:active:scale-100"
               >
-                Agendar demo
-              </a>
-              <a
-                href="#"
+                Criar conta grátis
+              </Link>
+              <Link
+                href="/explorar"
                 className="inline-flex h-12 min-w-[160px] items-center justify-center rounded-lg border-2 border-cifra-bg px-6 text-sm font-semibold text-cifra-bg transition-all duration-200 ease-out hover:bg-cifra-bg/15 hover:shadow-[0_0_24px_-4px_rgba(8,8,16,0.35)] active:scale-[0.98] motion-reduce:active:scale-100"
               >
-                Baixar one-pager
-              </a>
+                Explorar cifras
+              </Link>
             </div>
           </div>
         </section>
@@ -377,23 +456,17 @@ export function LandingPage({ user = null }: LandingPageProps) {
             >
               Cadastro
             </Link>
-            <a
-              href="#"
+            <Link
+              href="/explorar"
               className="text-cifra-muted transition-colors duration-200 ease-out hover:text-cifra-text"
             >
-              Status
-            </a>
+              Explorar
+            </Link>
             <a
-              href="#"
+              href="mailto:ola@cifra.ai"
               className="text-cifra-muted transition-colors duration-200 ease-out hover:text-cifra-text"
             >
-              Documentação
-            </a>
-            <a
-              href="mailto:comercial@example.com"
-              className="text-cifra-muted transition-colors duration-200 ease-out hover:text-cifra-text"
-            >
-              Contato comercial
+              Fale connosco
             </a>
           </div>
         </div>

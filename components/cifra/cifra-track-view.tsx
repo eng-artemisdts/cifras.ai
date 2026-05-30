@@ -92,7 +92,7 @@ export async function CifraTrackView(props: CifraTrackViewProps) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-cifra-bg px-6 text-center">
         <p className="max-w-md text-sm text-cifra-muted">
-          Não foi possível contactar a Schubert API. Verifique a rede e as variáveis de ambiente, ou tente novamente
+          Não foi possível carregar esta cifra. Verifique a ligação à internet e tente novamente.
           mais tarde.
         </p>
         <Link href="/biblioteca/importar" className="text-sm font-semibold text-cifra-teal">

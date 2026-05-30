@@ -73,14 +73,14 @@ export function mergeVariationWithBaseMedia(
  * Rótulo curto da origem da letra (UI / sidebar).
  */
 export function schubertLyricsSourceLabel(src: SchubertLyricsSource | undefined): string {
-  return src === "MATCH" ? "letra alinhada (match)" : "letra IA";
+  return src === "MATCH" ? "letra sincronizada com a gravação" : "letra gerada automaticamente";
 }
 
 /**
  * Rótulo curto no estilo do editor (subtítulo / painel).
  */
 export function schubertLyricsSourceEditorLabel(src: SchubertLyricsSource | undefined): string {
-  return src === "MATCH" ? "letra match" : "letra IA";
+  return src === "MATCH" ? "letra sincronizada" : "letra gerada por IA";
 }
 
 /**

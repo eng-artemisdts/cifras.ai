@@ -339,11 +339,11 @@ export function IngestJobsProvider({ children }: { children: ReactNode }) {
           <DialogHeader className="px-5 pt-5">
             <DialogTitle>Cifra pronta</DialogTitle>
             <DialogDescription>
-              A ingestão de{" "}
+              A cifra de{" "}
               <span className="font-medium text-cifra-text">
                 {completionModal?.title ?? ""}
               </span>{" "}
-              terminou. Quer abrir o editor?
+              está pronta. Quer abrir o editor?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="border-t border-white/8 px-5 py-4 sm:justify-stretch">

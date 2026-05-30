@@ -104,7 +104,7 @@ export function CifraRightSidebar({
           <p className="text-[13px] font-semibold text-cifra-text">Sincronizado</p>
           <p className="text-[11px] leading-snug text-cifra-muted">
             {trackTitle
-              ? `Pré-visualização de «${trackTitle}» carregada da base Schubert.`
+              ? `Pré-visualização de «${trackTitle}» pronta para revisão.`
               : "Revisão salva na sua biblioteca."}
           </p>
           {isPrivate ? (

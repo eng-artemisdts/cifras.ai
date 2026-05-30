@@ -50,7 +50,7 @@ export function CifraEditMetaSidebar({
           {capo != null && Number.isFinite(capo) && capo > 0 ? String(capo) : "—"}
         </p>
         <p className="text-cifra-muted">
-          <span className="text-cifra-muted/80">Duração (meta):</span> {durLabel}
+          <span className="text-cifra-muted/80">Duração:</span> {durLabel}
         </p>
         <p className="font-mono text-[9px] text-cifra-muted">{lyricsVariantLabel}</p>
       </div>

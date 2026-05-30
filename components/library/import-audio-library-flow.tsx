@@ -118,7 +118,7 @@ export function ImportAudioLibraryFlow({
       )}
     >
       <AuthMarketingSidebar
-        contextLabel="cifra · lab"
+        contextLabel="cifra.ai"
         contextUppercase={false}
         titleLine1={isMetadata ? "Revisão" : "Detecção"}
         titleLine2={isMetadata ? "da cifra" : "de cifra"}

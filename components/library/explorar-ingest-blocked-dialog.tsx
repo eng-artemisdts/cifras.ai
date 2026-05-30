@@ -37,10 +37,10 @@ export function ExplorarIngestBlockedDialog() {
     >
       <DialogContent className="gap-0 p-0 sm:max-w-[420px]" showCloseButton>
         <DialogHeader className="px-5 pt-5">
-          <DialogTitle>Ingestão em curso</DialogTitle>
+          <DialogTitle>Cifra em preparação</DialogTitle>
           <DialogDescription>
             Já existe um pedido de criação de cifra em progresso. Aguarde a conclusão ou acompanhe
-            em Ingestões antes de iniciar outro.
+            em Cifras em progresso antes de iniciar outro.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="border-t border-white/8 px-5 py-4">
@@ -59,7 +59,7 @@ export function ExplorarIngestBlockedDialog() {
               href="/biblioteca/ingestoes"
               className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg bg-cifra-teal px-3 text-sm font-medium text-cifra-bg transition hover:bg-cifra-teal/90"
             >
-              Ir para ingestões
+              Ver em progresso
             </Link>
           </div>
         </DialogFooter>

@@ -35,7 +35,7 @@ function isMp3(file: File): boolean {
 export async function identifyTrackFromMp3(file: File): Promise<SchubertTrackIdentifyResponse> {
   if (!isMp3(file)) {
     throw new SchubertIdentifyError(
-      "A identificação Schubert aceita apenas ficheiros MP3.",
+      "A identificação aceita apenas ficheiros MP3.",
       400,
       null,
     );
@@ -89,14 +89,14 @@ export async function postTrackIngestWithMeta(
 ): Promise<SchubertTrackIngestResponse> {
   if (!isMp3(file)) {
     throw new SchubertIdentifyError(
-      "A ingestão Schubert aceita apenas ficheiros MP3.",
+      "O envio aceita apenas ficheiros MP3.",
       400,
       null,
     );
   }
   if (file.size > MAX_SCHUBERT_BYTES) {
     throw new SchubertIdentifyError(
-      "O ficheiro excede o limite de 50 MB para ingestão.",
+      "O ficheiro excede o limite de 50 MB para envio.",
       400,
       null,
     );
@@ -298,7 +298,7 @@ function resolveArtistName(track: Record<string, unknown>, song: SchubertRecogni
 
 function formatUpstreamErrorMessage(json: unknown, fallback: string): string {
   if (typeof json !== "object" || json === null) {
-    return fallback || "Falha na identificação";
+    return fallback || "Não foi possível processar o áudio";
   }
   const m = (json as { message?: unknown }).message;
   if (Array.isArray(m)) return m.map(String).join("; ");

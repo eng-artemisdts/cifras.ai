@@ -34,7 +34,7 @@ export function SignupAuthCard({ className }: SignupAuthCardProps) {
             Criar conta
           </h1>
           <p className="mt-1 text-xs leading-snug text-cifra-muted">
-            OAuth ou formulário completo.
+            Google, Apple ou e-mail e palavra-passe.
           </p>
         </div>
 
@@ -66,7 +66,7 @@ export function SignupAuthCard({ className }: SignupAuthCardProps) {
               className={inputClass}
             />
             <p className="text-[10px] leading-snug text-cifra-muted">
-              O nome definitivo pode ser pedido na página de cadastro da Auth0.
+              O nome definitivo pode ser confirmado no passo seguinte do cadastro.
             </p>
           </div>
           <div className="space-y-1.5">
@@ -82,7 +82,7 @@ export function SignupAuthCard({ className }: SignupAuthCardProps) {
               className={inputClass}
             />
             <p className="text-[10px] leading-snug text-cifra-muted">
-              Palavra-passe e confirmação são definidas na Auth0.
+              Palavra-passe e confirmação são definidas no passo seguinte.
             </p>
           </div>
 

@@ -585,8 +585,8 @@ export function CifraPocMount({
           selectedProvider === "spotify" && (!spotifyStatus.connected || !spotifyStatus.premium)
             ? "Conecte uma conta Spotify Premium para reprodução completa."
             : selectedProvider === "youtube" && !s3AudioUrl
-              ? "Áudio da faixa indisponível no storage. Reingira a música ou escolha Spotify."
-              : "Não foi possível carregar este player. A reprodução usa o áudio armazenado (S3).",
+              ? "Áudio da faixa indisponível. Importe a música novamente ou escolha Spotify."
+              : "Não foi possível carregar este player. Tente recarregar a página.",
         );
         const fallbackAdapter = createInternalAudioAdapter({
           audioEl: readyAudioEl,

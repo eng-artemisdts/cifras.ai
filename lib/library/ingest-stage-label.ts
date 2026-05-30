@@ -10,11 +10,11 @@ export function humanizeIngestStage(stage: string): string {
     resolveLyrics: "Letra…",
     resolveYoutube: "YouTube…",
     persistTrack: "A guardar…",
-    processIngest: "Pipeline de ingestão…",
+    processIngest: "A preparar a cifra…",
     completed: "Concluído",
     failed: "Falhou",
   };
-  return map[stage] ?? stage;
+  return map[stage] ?? "A processar…";
 }
 
 export function formatIngestProgressLabel(job: SchubertIngestJobResponse): string {
