@@ -3,7 +3,8 @@ import type { SchubertIngestJobResponse } from "@/lib/schubert-identify-types";
 export function humanizeIngestStage(stage: string): string {
   const map: Record<string, string> = {
     queued: "Na fila…",
-    downloadSpotifySource: "A obter áudio do Spotify…",
+    resolveSource: "A preparar origem…",
+    downloadSpotifySource: "A obter áudio…",
     uploadAudio: "A processar áudio…",
     recognizeSong: "A reconhecer música…",
     resolveChordsAndSections: "Acordes e secções…",
