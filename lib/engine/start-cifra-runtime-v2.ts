@@ -281,7 +281,8 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
   }
   function updateTransportUi() {
     const playing = playback.isPlaying() || virtualPlaying;
-    playBtn.textContent = playing ? "Pausa" : "Reproduzir";
+    playBtn.dataset.playing = playing ? "true" : "false";
+    playBtn.setAttribute("aria-label", playing ? "Pausar" : "Reproduzir");
   }
   function virtualStep(perfMs) {
     if (!virtualPlaying) return;

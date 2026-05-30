@@ -223,6 +223,18 @@ body {
     height: 12px;
   }
 
+  .cifra-play-btn__icon--pause {
+    display: none;
+  }
+
+  .cifra-play-btn[data-playing="true"] .cifra-play-btn__icon--play {
+    display: none;
+  }
+
+  .cifra-play-btn[data-playing="true"] .cifra-play-btn__icon--pause {
+    display: block;
+  }
+
   /** Pré-visualização da cifra: hover no símbolo com diagrama (attach-chord-diagram-hover-dom). */
   .cifra-chord-diagram-hover-target {
     cursor: pointer;

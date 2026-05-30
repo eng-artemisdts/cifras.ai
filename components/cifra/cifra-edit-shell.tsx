@@ -264,6 +264,7 @@ export function CifraEditShell(props: CifraEditShellProps) {
                 trackKey={previewTrackKey}
                 payload={previewPayload}
                 trackTitle={title}
+                trackArtist={subtitle}
               />
             </div>
           </div>

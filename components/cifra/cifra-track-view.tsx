@@ -19,7 +19,7 @@ import {
 } from "@/lib/beethoven-variations.server";
 import { getAuth0SessionCached } from "@/lib/auth0";
 import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-plan";
-import { publicMp3UrlForTrackId } from "@/lib/media/public-mp3-for-track";
+import { resolveTrackAudioUrl } from "@/lib/media/resolve-track-audio-url";
 import type { SchubertTrackJson } from "@/lib/schubert-api";
 import {
   fetchSchubertTrackByKey,
@@ -177,11 +177,12 @@ export async function CifraTrackView(props: CifraTrackViewProps) {
       : "";
 
   const fromSchubert = schubertTrackToDemoPayload(resolvedTrack as SchubertTrackJson);
+  const resolvedAudioUrl = resolveTrackAudioUrl(fromSchubert.meta, mp3Id || undefined);
   const payload = normalizeDemoPayload({
     ...fromSchubert,
     meta: {
       ...fromSchubert.meta,
-      ...(mp3Id ? { audioUrl: publicMp3UrlForTrackId(mp3Id) } : {}),
+      ...(resolvedAudioUrl ? { audioUrl: resolvedAudioUrl } : {}),
     },
   });
 

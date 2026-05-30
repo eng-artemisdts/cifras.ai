@@ -22,7 +22,7 @@ import { appLoginHref } from "@/lib/auth0-routes";
 import { isAuth0Configured } from "@/lib/auth0-env";
 import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-plan";
 import type { SchubertLyricsSource, SchubertTrackJson } from "@/lib/schubert-api";
-import { publicMp3UrlForTrackId } from "@/lib/media/public-mp3-for-track";
+import { resolveTrackAudioUrl } from "@/lib/media/resolve-track-audio-url";
 import {
   fetchSchubertTrackByKey,
   fetchSchubertTrackBySlug,
@@ -176,11 +176,12 @@ export async function CifraEditView(props: CifraEditViewProps) {
       : "";
 
   const fromSchubert = schubertTrackToDemoPayload(resolvedTrack as SchubertTrackJson);
+  const resolvedAudioUrl = resolveTrackAudioUrl(fromSchubert.meta, mp3Id || undefined);
   const initialPayload = normalizeDemoPayload({
     ...fromSchubert,
     meta: {
       ...fromSchubert.meta,
-      ...(mp3Id ? { audioUrl: publicMp3UrlForTrackId(mp3Id) } : {}),
+      ...(resolvedAudioUrl ? { audioUrl: resolvedAudioUrl } : {}),
     },
   });
 

@@ -55,6 +55,17 @@ export function mergeVariationWithBaseMedia(
   if (youtubeUrl) merged.youtubeUrl = youtubeUrl;
   const coverImageUrl = pickNonEmptyString(v.coverImageUrl, base.coverImageUrl);
   if (coverImageUrl) merged.coverImageUrl = coverImageUrl;
+  const audioUrl = pickNonEmptyString(
+    typeof v.meta?.audioUrl === "string" ? v.meta.audioUrl : undefined,
+    typeof base.meta?.audioUrl === "string" ? base.meta.audioUrl : undefined,
+  );
+  if (base.meta || v.meta || audioUrl) {
+    merged.meta = {
+      ...(base.meta && typeof base.meta === "object" ? base.meta : {}),
+      ...(v.meta && typeof v.meta === "object" ? v.meta : {}),
+      ...(audioUrl ? { audioUrl } : {}),
+    };
+  }
   return merged;
 }
 
