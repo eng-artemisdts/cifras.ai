@@ -53,7 +53,7 @@ const metaDefault: StreamingLinkMetaColumn[] = [
   },
   {
     title: "Detecção Pro mais precisa",
-    body: "Assinantes Pro usam pipelines de IA com modelos e ajustes extras — acordes mais estáveis em arranjos densos e menos retrabalho manual antes de exportar a cifra.",
+    body: "Assinantes Pro beneficiam de detecção de acordes mais precisa — acordes mais estáveis em arranjos densos e menos retrabalho manual antes de exportar a cifra.",
   },
   {
     title: "Privacidade",

@@ -8,7 +8,7 @@ export const defaultAuthSidebarFeatures: AuthSidebarFeature[] = [
   },
   {
     title: "E-mail e senha",
-    description: "Ideal quando o SSO ainda não está ligado.",
+    description: "Ideal quando prefere entrar com e-mail e palavra-passe.",
     accent: "muted",
   },
   {
@@ -41,8 +41,8 @@ export const signupAuthShellNav: AuthShellNavItem[] = [
 
 export const signupAuthSidebarFeatures: AuthSidebarFeature[] = [
   {
-    title: "Convites e papéis",
-    description: "Administrador, editor e leitor com permissões claras.",
+    title: "Comunidade de músicos",
+    description: "Gere cifras, guarde na biblioteca e partilhe com a banda.",
     accent: "teal",
   },
   {
@@ -51,8 +51,8 @@ export const signupAuthSidebarFeatures: AuthSidebarFeature[] = [
     accent: "muted",
   },
   {
-    title: "OAuth ou formulário",
-    description: "Escolha o caminho mais rápido para o seu time.",
+    title: "Entrada rápida",
+    description: "Google, Apple ou e-mail — escolha o caminho mais cómodo.",
     accent: "muted",
   },
 ];

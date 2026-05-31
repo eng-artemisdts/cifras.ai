@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Assinatura",
-  description: "Plano e faturação Stripe no cifra.ai.",
+  description: "Plano e faturação no cifra.ai.",
 };
 
 const PLAN_LABEL: Record<BillingPlan, { title: string; blurb: string }> = {
@@ -34,7 +34,7 @@ const PLAN_LABEL: Record<BillingPlan, { title: string; blurb: string }> = {
   },
   pro: {
     title: "Pro",
-    blurb: "API, SSO e suporte prioritário para equipas mais exigentes.",
+    blurb: "Importações avançadas, variações ilimitadas e suporte prioritário.",
   },
 };
 
@@ -59,8 +59,7 @@ export default async function AssinaturaPage({ searchParams }: AssinaturaPagePro
         <div className="max-w-md rounded-2xl border border-cifra-border bg-cifra-surface px-8 py-10 text-center">
           <Shield className="mx-auto size-10 text-cifra-muted" strokeWidth={1.25} aria-hidden />
           <p className="mt-4 text-sm text-cifra-muted">
-            Auth0 não está configurado neste ambiente. Defina as variáveis de ambiente para testar
-            assinaturas.
+            O serviço de contas não está disponível neste ambiente.
           </p>
         </div>
       </div>
@@ -146,21 +145,19 @@ export default async function AssinaturaPage({ searchParams }: AssinaturaPagePro
           </div>
           <p className="mt-4 max-w-xl text-base leading-relaxed text-cifra-muted">
             {isAuth0ManagementConfigured()
-              ? "O plano e a faturação mostrados aqui vêm diretamente do Auth0 (atualizado pelo Stripe após o pagamento). Os tokens da sessão podem demorar a alinhar — faça logout e login se outras áreas da app ainda mostrarem o plano antigo."
-              : "Configure a Management API Auth0 para ver o plano atualizado logo após o pagamento, sem depender só do token da sessão."}
+              ? "O seu plano e dados de faturação são actualizados automaticamente após cada pagamento. Se outras áreas da app ainda mostrarem o plano antigo, termine a sessão e entre de novo."
+              : "Após o pagamento, o plano pode demorar alguns segundos a actualizar. Actualize a página se necessário."}
           </p>
           {checkoutSuccess && !maybePendingWebhook ? (
             <p className="mt-4 max-w-xl rounded-xl border border-cifra-teal/30 bg-cifra-teal/10 px-4 py-3 text-sm text-cifra-text">
-              Pagamento concluído na Stripe. Se o plano abaixo já está correto, está tudo sincronizado.
+              Pagamento concluído. Se o plano abaixo já está correcto, está tudo sincronizado.
             </p>
           ) : null}
           {maybePendingWebhook ? (
             <p className="mt-4 max-w-xl rounded-xl border border-cifra-gold/35 bg-cifra-gold/10 px-4 py-3 text-sm text-cifra-text">
               Ainda não vemos a subscrição na conta. Aguarde alguns segundos e{" "}
-              <strong className="text-white">atualize a página</strong>. Confirme no Stripe que o
-              webhook <code className="rounded bg-cifra-bg/60 px-1 font-mono text-xs">checkout.session.completed</code>{" "}
-              foi entregue e que a app M2M Auth0 tem <code className="rounded bg-cifra-bg/60 px-1 font-mono text-xs">read:users</code> e{" "}
-              <code className="rounded bg-cifra-bg/60 px-1 font-mono text-xs">update:users</code>.
+              <strong className="text-white">actualize a página</strong>. Se o problema
+              persistir, contacte o suporte.
             </p>
           ) : null}
         </header>
@@ -207,9 +204,9 @@ export default async function AssinaturaPage({ searchParams }: AssinaturaPagePro
         <aside className="mt-8 motion-safe:animate-in motion-safe:fade-in motion-safe:delay-200 motion-safe:duration-600 motion-safe:fill-mode-both flex gap-4 rounded-2xl border border-cifra-border/80 bg-cifra-surface-2/50 px-4 py-4 sm:px-5">
           <RefreshCw className="mt-0.5 size-5 shrink-0 text-cifra-gold/90" strokeWidth={1.75} aria-hidden />
           <p className="text-sm leading-relaxed text-cifra-muted">
-            <span className="font-medium text-cifra-text">Sincronização:</span> o Stripe envia
-            eventos ao servidor, que grava no Auth0. Esta página lê esse estado pela Management API
-            quando configurada. Para APIs que usam o JWT antigo, termine a sessão e entre de novo.
+            <span className="font-medium text-cifra-text">Sincronização:</span> após o pagamento,
+            o plano é actualizado automaticamente. Se vir informação desactualizada noutras
+            páginas, termine a sessão e entre de novo.
           </p>
         </aside>
 
@@ -217,8 +214,7 @@ export default async function AssinaturaPage({ searchParams }: AssinaturaPagePro
           <div className="mt-10 motion-safe:animate-in motion-safe:fade-in motion-safe:delay-200 motion-safe:duration-700 motion-safe:fill-mode-both rounded-2xl border border-cifra-border bg-cifra-surface-2/40 p-6 sm:p-8">
             <h2 className="font-serif text-xl text-white sm:text-2xl">Subir de plano</h2>
             <p className="mt-2 max-w-lg text-sm text-cifra-muted">
-              Checkout seguro pela Stripe. O Pro inclui trial de 14 dias quando disponível na sua
-              configuração.
+              Pagamento seguro. O plano Pro inclui 14 dias de teste quando disponível.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-stretch">
               {plan === "free" ? (

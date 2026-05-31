@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import LightRays from "@/components/LightRays";
 import type { BillingPlan } from "@/lib/billing/plan-types";
 import type { LibraryNavItem, RecentAccessItem, RecommendationTile } from "@/lib/library/types";

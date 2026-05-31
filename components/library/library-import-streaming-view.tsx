@@ -57,7 +57,7 @@ export function LibraryImportStreamingView({
       )}
     >
       <AuthMarketingSidebar
-        contextLabel="cifra · lab"
+        contextLabel="cifra.ai"
         contextUppercase={false}
         showBrandCaption={false}
         titleLine1="Importar"

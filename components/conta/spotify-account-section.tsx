@@ -140,9 +140,8 @@ export function SpotifyAccountSection({
 
       {!managementConfigured ? (
         <p className="mt-6 rounded-xl border border-cifra-gold/35 bg-cifra-gold/10 px-4 py-3 text-sm text-cifra-text">
-          A Management API do Auth0 não está configurada neste ambiente. A ligação ao Spotify depende de
-          gravação em <code className="rounded bg-cifra-bg/60 px-1 font-mono text-xs">app_metadata</code>{" "}
-          — configure as credenciais M2M como na área de assinatura.
+          A ligação ao Spotify ainda não está disponível neste ambiente. Tente novamente mais tarde
+          ou contacte o suporte.
         </p>
       ) : null}
 

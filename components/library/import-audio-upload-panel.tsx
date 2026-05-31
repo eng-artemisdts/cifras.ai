@@ -389,12 +389,12 @@ export function ImportAudioUploadPanel({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <AudioLines className="size-4 shrink-0 text-cifra-teal" strokeWidth={1.75} aria-hidden />
-          <h2 className="text-xs font-semibold leading-none text-cifra-text">Ingestão de áudio</h2>
+          <h2 className="text-xs font-semibold leading-none text-cifra-text">Enviar áudio</h2>
         </div>
         <div className="text-right">
           <p className="font-mono text-[10px] leading-tight text-cifra-teal">{ingestLabel}</p>
           <p className="mt-0.5 max-w-[min(100%,280px)] text-right font-mono text-[9px] leading-snug text-cifra-muted">
-            Identificação Schubert: apenas MP3 · máx. 10 MB
+            MP3 · máx. 50 MB
           </p>
         </div>
       </div>

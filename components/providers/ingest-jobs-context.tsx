@@ -105,13 +105,19 @@ type CompletionModalState = {
 
 type IngestJobsContextValue = {
   jobs: TrackedIngestJob[];
+  /**
+   * Devolve `true` se já existe ingestão activa e navega para Explorar com modal.
+   * Chamar **antes** de `POST` ingest para não criar jobs duplicados no servidor.
+   */
+  blockNewIngestIfBusy: () => boolean;
+  /** `false` se já existir ingestão activa — redirecciona para `/explorar?ingest-blocked=1`. */
   registerIngestJob: (input: {
     jobId: string;
     title: string;
     artist: string;
     source: IngestJobSource;
     coverUrl?: string | null;
-  }) => void;
+  }) => boolean;
   dismissJob: (jobId: string) => void;
   clearCompletedFromList: () => void;
 };
@@ -173,15 +179,33 @@ export function IngestJobsProvider({ children }: { children: ReactNode }) {
     persist(jobs);
   }, [jobs, hydrated]);
 
+  const navigateToIngestBlockedExplorar = useCallback(() => {
+    if (typeof window !== "undefined" && window.location.pathname.startsWith("/explorar")) {
+      router.replace("/explorar?ingest-blocked=1");
+    } else {
+      router.push("/explorar?ingest-blocked=1");
+    }
+  }, [router]);
+
+  const blockNewIngestIfBusy = useCallback((): boolean => {
+    const list = jobsRef.current;
+    const busy = list.some((j) => j.status === "queued" || j.status === "running");
+    if (!busy) return false;
+    navigateToIngestBlockedExplorar();
+    return true;
+  }, [navigateToIngestBlockedExplorar]);
+
   const registerIngestJob = useCallback((input: {
     jobId: string;
     title: string;
     artist: string;
     source: IngestJobSource;
     coverUrl?: string | null;
-  }) => {
+  }): boolean => {
     const id = input.jobId.trim();
-    if (!id) return;
+    if (!id) return false;
+    if (blockNewIngestIfBusy()) return false;
+
     const now = Date.now();
     setJobs((prev) => {
       const without = prev.filter((j) => j.jobId !== id);
@@ -201,7 +225,8 @@ export function IngestJobsProvider({ children }: { children: ReactNode }) {
       };
       return [...without, next].slice(-MAX_JOBS);
     });
-  }, []);
+    return true;
+  }, [blockNewIngestIfBusy]);
 
   const dismissJob = useCallback((jobId: string) => {
     setJobs((prev) => prev.filter((j) => j.jobId !== jobId));
@@ -293,11 +318,12 @@ export function IngestJobsProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       jobs,
+      blockNewIngestIfBusy,
       registerIngestJob,
       dismissJob,
       clearCompletedFromList,
     }),
-    [jobs, registerIngestJob, dismissJob, clearCompletedFromList],
+    [jobs, blockNewIngestIfBusy, registerIngestJob, dismissJob, clearCompletedFromList],
   );
 
   return (
@@ -313,11 +339,11 @@ export function IngestJobsProvider({ children }: { children: ReactNode }) {
           <DialogHeader className="px-5 pt-5">
             <DialogTitle>Cifra pronta</DialogTitle>
             <DialogDescription>
-              A ingestão de{" "}
+              A cifra de{" "}
               <span className="font-medium text-cifra-text">
                 {completionModal?.title ?? ""}
               </span>{" "}
-              terminou. Quer abrir o editor?
+              está pronta. Quer abrir o editor?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="border-t border-white/8 px-5 py-4 sm:justify-stretch">

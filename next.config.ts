@@ -1,7 +1,19 @@
 import type { NextConfig } from "next";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { withSentryConfig } from "@sentry/nextjs";
 
+/** Caminho absoluto — `import.meta.dirname` sozinho falha quando o workspace é o monorepo pai. */
+const projectRoot = path.dirname(fileURLToPath(import.meta.url));
+
 const nextConfig: NextConfig = {
+  turbopack: {
+    root: projectRoot,
+    resolveAlias: {
+      tailwindcss: path.join(projectRoot, "node_modules/tailwindcss"),
+      "@tailwindcss/postcss": path.join(projectRoot, "node_modules/@tailwindcss/postcss"),
+    },
+  },
   allowedDevOrigins: ["127.0.0.1"],
   async redirects() {
     return [

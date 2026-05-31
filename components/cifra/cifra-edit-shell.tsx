@@ -24,7 +24,7 @@ const editMarketing = {
   ...bibliotecaCifraSheetMarketingSidebar,
   titleLine2: "edição",
   introText:
-    "Ajuste a letra ao duplo clique e arraste os acordes para as palavras certas. Pré-visualize com o mesmo leitor da cifra e grave na Schubert.",
+    "Ajuste a letra ao duplo clique e arraste os acordes para as palavras certas. Pré-visualize com o mesmo leitor da cifra e guarde na sua biblioteca.",
 };
 
 export type CifraEditShellProps = {
@@ -144,7 +144,7 @@ export function CifraEditShell(props: CifraEditShellProps) {
   };
 
   const lyricsVariantLabel =
-    lyricsSource === "MATCH" ? "Letra match" : "Letra IA";
+    lyricsSource === "MATCH" ? "Letra sincronizada" : "Letra gerada por IA";
 
   return (
     <div className="flex min-h-dvh flex-col bg-cifra-bg text-cifra-text lg:flex-row lg:items-stretch">
@@ -264,6 +264,7 @@ export function CifraEditShell(props: CifraEditShellProps) {
                 trackKey={previewTrackKey}
                 payload={previewPayload}
                 trackTitle={title}
+                trackArtist={subtitle}
               />
             </div>
           </div>
