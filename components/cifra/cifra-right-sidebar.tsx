@@ -104,7 +104,7 @@ export function CifraRightSidebar({
           <p className="text-[13px] font-semibold text-cifra-text">Sincronizado</p>
           <p className="text-[11px] leading-snug text-cifra-muted">
             {trackTitle
-              ? `Pré-visualização de «${trackTitle}» carregada da base Schubert.`
+              ? `Pré-visualização de «${trackTitle}» pronta para revisão.`
               : "Revisão salva na sua biblioteca."}
           </p>
           {isPrivate ? (
@@ -324,7 +324,6 @@ export function CifraRightSidebar({
             <input
               ref={showFloatingChordRef}
               type="checkbox"
-              defaultChecked
               className="mt-0.5 size-3.5 shrink-0 accent-cifra-teal"
             />
             <span className="min-w-0">
@@ -380,7 +379,7 @@ export function CifraRightSidebar({
             Salvar na sua biblioteca
           </button>
           <Link
-            href="/biblioteca/importar/arquivo"
+            href="/biblioteca/importar"
             className="flex items-center justify-center gap-2 rounded-[10px] border border-cifra-border px-4 py-3 text-xs font-semibold text-cifra-text transition-colors hover:border-cifra-teal/35 hover:bg-white/3"
           >
             <Sparkles className="size-4 shrink-0 text-cifra-teal" strokeWidth={2} aria-hidden />

@@ -63,7 +63,7 @@ export function LoginAuthCard({ className, returnTo }: LoginAuthCardProps) {
               className="w-full rounded-[10px] border border-white/[0.07] bg-cifra-surface-2 px-3.5 py-3 text-[15px] text-cifra-text placeholder:text-[#6a6a88] outline-none ring-cifra-teal/30 focus:border-cifra-teal focus:ring-2"
             />
             <p className="text-[11px] leading-snug text-cifra-muted">
-              A palavra-passe é pedida na página segura da Auth0.
+              A palavra-passe é pedida na página de login segura.
             </p>
           </div>
           <div className="flex justify-end">

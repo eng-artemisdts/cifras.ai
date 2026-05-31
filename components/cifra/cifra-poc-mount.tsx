@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { Pause, Play } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
@@ -14,19 +15,60 @@ import { buildPreviewChordAnchors } from "@/lib/cifra/preview-chord-anchors";
 import {
   createInternalAudioAdapter,
   createSpotifyAdapter,
-  createYoutubeMediaElementAdapter,
   extractYoutubeVideoId,
   type PlaybackProvider,
 } from "@/lib/engine/playback-adapters";
+import {
+  resolveTrackAudioUrl,
+  youtubeThumbnailUrl,
+} from "@/lib/media/resolve-track-audio-url";
 import { startCifraRuntimeV2 } from "@/lib/engine/start-cifra-runtime-v2";
 import { cn } from "@/lib/utils";
 import { transposeTuneLabel } from "@/lib/cifra/chord-transpose";
 import type { ChordDiagramHoverOptions } from "@/lib/cifra/chord-diagram/attach-chord-diagram-hover-dom";
 
-const ReactPlayer = dynamic(() => import("react-player"), { ssr: false });
-
 const rightSidebarLayoutClassName =
   "mt-0 w-full border-t border-white/6 bg-cifra-surface lg:mt-0 lg:w-[300px] lg:shrink-0 lg:border-l lg:border-t-0";
+
+const STREAMING_PLAYER_HEIGHT_CLASS = "h-[152px]";
+
+function PlaybackProviderTabs({
+  tabs,
+  availableProviders,
+  selectedProvider,
+  onSelect,
+}: {
+  tabs: PlaybackProvider[];
+  availableProviders: PlaybackProvider[];
+  selectedProvider: PlaybackProvider;
+  onSelect: (provider: PlaybackProvider) => void;
+}) {
+  if (tabs.length === 0) return null;
+  return (
+    <div className="flex shrink-0 items-center gap-0.5 rounded-full bg-black/40 p-0.5">
+      {tabs.map((provider) => {
+        const enabled = availableProviders.includes(provider);
+        const active = selectedProvider === provider;
+        const label = provider === "youtube" ? "YouTube" : "Spotify";
+        return (
+          <button
+            key={provider}
+            type="button"
+            disabled={!enabled}
+            onClick={() => onSelect(provider)}
+            className={cn(
+              "rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] transition",
+              active ? "bg-white text-[#121212]" : "text-[#b3b3b3] hover:text-white",
+              !enabled && "cursor-not-allowed opacity-35",
+            )}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function CifraRightSidebarLoadPlaceholder() {
   return (
@@ -67,6 +109,8 @@ export type CifraPocMountProps = {
   payload: MusicAiDemoPayload;
   /** Título da faixa para copy no painel direito (frame `2Zui4`). */
   trackTitle?: string;
+  /** Artista (ex.: subtítulo da página da cifra). */
+  trackArtist?: string;
   /** Ex.: selector de versão da cifra (Radix/shadcn) no painel lateral. */
   variationSidebarAccessory?: ReactNode;
   billingPlan?: BillingPlan | null;
@@ -82,6 +126,7 @@ export function CifraPocMount({
   libraryTrackKey,
   payload,
   trackTitle,
+  trackArtist,
   variationSidebarAccessory,
   billingPlan,
   className,
@@ -143,12 +188,12 @@ export function CifraPocMount({
   }, []);
   const toggleMobileSidebar = useCallback((nextOpen: boolean) => {
     const playBtnEl = playBtnRef.current;
-    const wasPlaying = playBtnEl?.textContent?.toLowerCase().includes("pausa") ?? false;
+    const wasPlaying = playBtnEl?.dataset.playing === "true";
     setIsMobileSidebarOpen(nextOpen);
     if (!wasPlaying) return;
     window.setTimeout(() => {
       const currentPlayBtn = playBtnRef.current;
-      const isStillPlaying = currentPlayBtn?.textContent?.toLowerCase().includes("pausa") ?? false;
+      const isStillPlaying = currentPlayBtn?.dataset.playing === "true";
       if (!isStillPlaying) currentPlayBtn?.click();
     }, 0);
   }, []);
@@ -221,7 +266,6 @@ export function CifraPocMount({
   const scrollModeAutomaticRef = useRef<HTMLInputElement>(null);
   const scrollModeSmartRef = useRef<HTMLInputElement>(null);
   const spotifyEmbedIframeRef = useRef<HTMLIFrameElement>(null);
-  const youtubeMediaRef = useRef<HTMLVideoElement | null>(null);
   const runtimeTransposeLiveRef = useRef(runtimeTransposeSemitones);
   runtimeTransposeLiveRef.current = runtimeTransposeSemitones;
   const runtimeTransposeRefreshRef = useRef<(() => void) | null>(null);
@@ -311,16 +355,21 @@ export function CifraPocMount({
     return extractYoutubeVideoId(raw);
   }, [payload.meta?.youtubeVideoId, payload.meta?.youtubeUrl]);
 
+  const s3AudioUrl = useMemo(
+    () => resolveTrackAudioUrl(payload.meta, libraryTrackKey ?? payload.meta?.trackId),
+    [payload.meta, libraryTrackKey],
+  );
+
   const availableProviders = useMemo<PlaybackProvider[]>(() => {
-    const providers: PlaybackProvider[] = ["internal"];
+    const providers: PlaybackProvider[] = [];
     if (youtubeVideoId) providers.push("youtube");
     if (spotifyTrackId) providers.push("spotify");
     return providers;
   }, [spotifyTrackId, youtubeVideoId]);
 
   const defaultProvider = useMemo<PlaybackProvider>(() => {
-    if (availableProviders.includes("spotify")) return "spotify";
     if (availableProviders.includes("youtube")) return "youtube";
+    if (availableProviders.includes("spotify")) return "spotify";
     return "internal";
   }, [availableProviders]);
   const [providerChoice, setProviderChoice] = useState<{ trackKey: string; provider: PlaybackProvider } | null>(
@@ -330,7 +379,6 @@ export function CifraPocMount({
     providerChoice && providerChoice.trackKey === trackKey && availableProviders.includes(providerChoice.provider)
       ? providerChoice.provider
       : defaultProvider;
-  const hydratedProvider: PlaybackProvider = isClientMounted ? selectedProvider : "internal";
 
   const selectPlaybackProvider = useCallback(
     (provider: PlaybackProvider) => {
@@ -349,12 +397,8 @@ export function CifraPocMount({
   }, [pathname, trackKey]);
   const spotifyReadyForPlayback =
     Boolean(spotifyTrackId) && !spotifyStatus.loading && spotifyStatus.connected && spotifyStatus.premium;
-  /** Com Spotify Premium ativo, não mostramos o modo interno na UI (evita barra duplicada). */
+  /** Com Spotify Premium ativo, o transporte fica minimal (embed controla reprodução). */
   const hideInternalInTransportUi = selectedProvider === "spotify" && spotifyReadyForPlayback;
-  const transportProviderTabs = useMemo(() => {
-    if (!hideInternalInTransportUi) return availableProviders;
-    return availableProviders.filter((p) => p !== "internal");
-  }, [availableProviders, hideInternalInTransportUi]);
   const hideTransportChrome = hideInternalInTransportUi;
   const returnToForSpotifyConnect = useMemo(() => {
     const qs = searchParams?.toString() ?? "";
@@ -499,9 +543,10 @@ export function CifraPocMount({
               ...(spotifyDurationHintSec != null ? { durationHintSec: spotifyDurationHintSec } : {}),
               getIframeElement: () => spotifyEmbedIframeRef.current,
             })
-            : selectedProvider === "youtube" && youtubeVideoId
-              ? createYoutubeMediaElementAdapter({ getMediaElement: () => youtubeMediaRef.current })
-              : createInternalAudioAdapter({ audioEl: readyAudioEl, audioUrl: payload.meta?.audioUrl });
+            : createInternalAudioAdapter({
+              audioEl: readyAudioEl,
+              audioUrl: s3AudioUrl || undefined,
+            });
 
         if (cancelled) return;
         setProviderNotice("");
@@ -539,9 +584,14 @@ export function CifraPocMount({
         setProviderNotice(
           selectedProvider === "spotify" && (!spotifyStatus.connected || !spotifyStatus.premium)
             ? "Conecte uma conta Spotify Premium para reprodução completa."
-            : "Não foi possível carregar este player. Voltámos para o player interno.",
+            : selectedProvider === "youtube" && !s3AudioUrl
+              ? "Áudio da faixa indisponível. Importe a música novamente ou escolha Spotify."
+              : "Não foi possível carregar este player. Tente recarregar a página.",
         );
-        const fallbackAdapter = createInternalAudioAdapter({ audioEl: readyAudioEl, audioUrl: payload.meta?.audioUrl });
+        const fallbackAdapter = createInternalAudioAdapter({
+          audioEl: readyAudioEl,
+          audioUrl: s3AudioUrl || undefined,
+        });
         destroy = startCifraRuntimeV2({
           payloadInput: payloadForRuntime as unknown as Record<string, unknown>,
           chordDiagramScopeKey: trackKey,
@@ -589,7 +639,7 @@ export function CifraPocMount({
     spotifyStatus.connected,
     spotifyStatus.premium,
     youtubeVideoId,
-    payload.meta?.audioUrl,
+    s3AudioUrl,
     spotifyDurationHintSec,
   ]);
 
@@ -598,158 +648,57 @@ export function CifraPocMount({
       ? payload.meta.name.trim()
       : trackTitle;
   const effectiveDisplayTune = transposeTuneLabel(effectiveOriginalTune, transposeSemitones) || effectiveOriginalTune;
-
+  const hasStreamingPlayer = isClientMounted && Boolean(spotifyTrackId || youtubeVideoId);
 
   return (
     <div className={cn("flex min-h-0 w-full min-w-0 flex-1 flex-col gap-2.5 sm:gap-3", className)}>
       <audio ref={audioRef} className="hidden" preload="metadata" />
-      {hideTransportChrome ? (
-        <>
-          <div className="flex shrink-0 flex-wrap items-center gap-2 px-0 py-1">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-cifra-muted">
-              Fonte
-            </span>
-            <div className="flex shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/5 p-1">
-              {transportProviderTabs.map((provider) => {
-                const enabled = availableProviders.includes(provider);
-                const active = selectedProvider === provider;
-                const label =
-                  provider === "internal" ? "Interno" : provider === "youtube" ? "YouTube" : "Spotify";
-                return (
-                  <button
-                    key={provider}
-                    type="button"
-                    disabled={!enabled}
-                    onClick={() => selectPlaybackProvider(provider)}
-                    className={cn(
-                      "rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] transition",
-                      active ? "bg-cifra-teal text-cifra-bg" : "text-cifra-muted hover:text-cifra-text",
-                      !enabled && "cursor-not-allowed opacity-35",
-                    )}
+      {hasStreamingPlayer ? (
+        <div className="overflow-hidden rounded-xl border border-white/10 bg-[#181818] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+          {availableProviders.length > 0 ? (
+            <div className="flex items-center justify-between border-b border-white/6 px-3 py-2 sm:px-4">
+              <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#b3b3b3]">
+                Fonte
+              </span>
+              <PlaybackProviderTabs
+                tabs={availableProviders}
+                availableProviders={availableProviders}
+                selectedProvider={selectedProvider}
+                onSelect={selectPlaybackProvider}
+              />
+            </div>
+          ) : null}
+          <div className={STREAMING_PLAYER_HEIGHT_CLASS}>
+            {selectedProvider === "spotify" && spotifyTrackId ? (
+              spotifyStatus.loading ? (
+                <div className="flex h-full items-center gap-4 px-4">
+                  <div className="size-[100px] shrink-0 animate-pulse rounded-md bg-white/10" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="h-3 w-[70%] max-w-[220px] animate-pulse rounded bg-white/10" />
+                    <div className="h-3 w-[45%] animate-pulse rounded bg-white/10" />
+                  </div>
+                </div>
+              ) : !spotifyStatus.connected || !spotifyStatus.premium ? (
+                <div className="flex h-full flex-col justify-center gap-2.5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white">
+                      {!spotifyStatus.connected ? "Ligue o Spotify novamente" : "Spotify Premium necessário"}
+                    </p>
+                    <p className="mt-1 text-xs leading-relaxed text-[#b3b3b3]">
+                      {!spotifyStatus.connected
+                        ? "A sessão com o Spotify não está ativa ou expirou. Volte a autenticar-se para ouvir a faixa completa e manter a cifra sincronizada com o áudio."
+                        : "A conta Spotify ligada não tem plano Premium. Use uma conta Premium ou escolha outra fonte de áudio."}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/api/spotify/connect?returnTo=${encodeURIComponent(returnToForSpotifyConnect)}`}
+                    className="shrink-0 self-start rounded-full bg-[#1db954] px-3.5 py-2 text-[11px] font-semibold text-[#121212] transition hover:brightness-110 sm:self-center"
+                    onClick={() => trackAnalyticsEvent(GA_EVENTS.SPOTIFY_CONNECT_CLICK)}
                   >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div className="sr-only" aria-hidden>
-            <div id="cifra-transport" tabIndex={-1}>
-              <button ref={playBtnRef} type="button">
-                Reproduzir
-              </button>
-              <input ref={seekRef} type="range" min={0} max={1000} defaultValue={0} />
-              <p ref={timeLabelRef}>0:00 / 0:00</p>
-              <p ref={sectionRef}>—</p>
-              <p ref={chordRef}>—</p>
-            </div>
-          </div>
-        </>
-      ) : (
-        <div
-          id="cifra-transport"
-          tabIndex={-1}
-          className="cifra-transport-panel flex shrink-0 flex-wrap items-center gap-3 rounded-2xl border border-white/8 bg-[#0c0c16] px-4 py-3 sm:gap-4 sm:px-5 sm:py-3.5"
-        >
-          <div className="flex shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/5 p-1">
-            {transportProviderTabs.map((provider) => {
-              const enabled = availableProviders.includes(provider);
-              const active = selectedProvider === provider;
-              const label = provider === "internal" ? "Interno" : provider === "youtube" ? "YouTube" : "Spotify";
-              return (
-                <button
-                  key={provider}
-                  type="button"
-                  disabled={!enabled}
-                  onClick={() => selectPlaybackProvider(provider)}
-                  className={cn(
-                    "rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] transition",
-                    active ? "bg-cifra-teal text-cifra-bg" : "text-cifra-muted hover:text-cifra-text",
-                    !enabled && "cursor-not-allowed opacity-35",
-                  )}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-          <button
-            ref={playBtnRef}
-            type="button"
-            className="shrink-0 rounded-full bg-cifra-teal px-4 py-2 text-xs font-semibold text-cifra-bg shadow-[0_0_0_1px_rgba(15,210,193,0.25)] transition-[opacity,transform] hover:bg-cifra-teal-hover disabled:pointer-events-none disabled:opacity-35"
-          >
-            Reproduzir
-          </button>
-          <input
-            ref={seekRef}
-            type="range"
-            min={0}
-            max={1000}
-            defaultValue={0}
-            className="cifra-range h-3 min-w-[140px] flex-1"
-          />
-          <p
-            ref={timeLabelRef}
-            className="shrink-0 font-mono text-[11px] tabular-nums tracking-tight text-[#a8a8c0]"
-          >
-            0:00 / 0:00
-          </p>
-          <div className="flex min-w-0 shrink-0 items-center justify-end gap-2.5 sm:ml-auto">
-            <div
-              ref={chordDiagramRef}
-              className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-md border border-white/10 bg-black/20 p-0.5 sm:h-[56px] sm:w-[56px]"
-              aria-hidden
-            />
-            <p
-              ref={sectionRef}
-              className="max-w-[min(100%,200px)] truncate text-right text-[11px] font-medium text-cifra-text"
-            >
-              —
-            </p>
-            <p ref={chordRef} className="font-mono text-sm font-semibold tabular-nums text-cifra-teal">
-              —
-            </p>
-          </div>
-        </div>
-      )}
-      {providerNotice ? (
-        <p className="rounded-lg border border-cifra-teal/25 bg-cifra-teal/10 px-3 py-2 text-[11px] text-cifra-teal">
-          {providerNotice}
-        </p>
-      ) : null}
-      <div className="space-y-2 rounded-lg border border-white/6 bg-[#0d0d18] p-2">
-        {isClientMounted && spotifyTrackId && selectedProvider === "spotify" ? (
-          <div className="overflow-hidden rounded-lg border border-white/10 bg-black/25">
-            {spotifyStatus.loading ? (
-              <div className="flex h-[152px] items-center gap-3 px-4">
-                <div className="size-[100px] shrink-0 animate-pulse rounded-md bg-white/10" />
-                <div className="min-w-0 flex-1 space-y-2">
-                  <div className="h-3 w-[70%] max-w-[220px] animate-pulse rounded bg-white/10" />
-                  <div className="h-3 w-[45%] animate-pulse rounded bg-white/10" />
+                    {!spotifyStatus.connected ? "Entrar no Spotify" : "Trocar de conta"}
+                  </Link>
                 </div>
-              </div>
-            ) : !spotifyStatus.connected || !spotifyStatus.premium ? (
-              <div className="flex min-h-[152px] flex-col justify-centser gap-2.5 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-cifra-text">
-                    {!spotifyStatus.connected ? "Ligue o Spotify novamente" : "Spotify Premium necessário"}
-                  </p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-cifra-muted">
-                    {!spotifyStatus.connected
-                      ? "A sessão com o Spotify não está ativa ou expirou. Volte a autenticar-se para ouvir a faixa completa e manter a cifra sincronizada com o áudio."
-                      : "A conta Spotify ligada não tem plano Premium. Use uma conta Premium ou escolha outra fonte de áudio."}
-                  </p>
-                </div>
-                <Link
-                  href={`/api/spotify/connect?returnTo=${encodeURIComponent(returnToForSpotifyConnect)}`}
-                  className="shrink-0 self-start rounded-full bg-cifra-teal px-3.5 py-2 text-[11px] font-semibold text-cifra-bg shadow-[0_0_0_1px_rgba(15,210,193,0.25)] transition-opacity hover:opacity-95 sm:self-center"
-                  onClick={() => trackAnalyticsEvent(GA_EVENTS.SPOTIFY_CONNECT_CLICK)}
-                >
-                  {!spotifyStatus.connected ? "Entrar no Spotify" : "Trocar de conta"}
-                </Link>
-              </div>
-            ) : (
-              <div className="overflow-hidden rounded-lg bg-black/20 p-2">
+              ) : (
                 <iframe
                   ref={spotifyEmbedIframeRef}
                   title={spotifyOembed?.title ?? titleFromPayload ?? "Spotify player"}
@@ -758,30 +707,102 @@ export function CifraPocMount({
                   height="152"
                   allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
                   loading="lazy"
-                  className="block w-full rounded-md border-0"
+                  className="block h-full w-full border-0"
                 />
+              )
+            ) : selectedProvider === "youtube" && youtubeVideoId ? (
+              <div className="flex h-full items-center gap-4 px-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={youtubeThumbnailUrl(youtubeVideoId)}
+                  alt=""
+                  className="size-[100px] shrink-0 rounded-md object-cover shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-white">{titleFromPayload ?? "Faixa"}</p>
+                  {trackArtist?.trim() ? (
+                    <p className="mt-0.5 truncate text-xs text-[#b3b3b3]">{trackArtist.trim()}</p>
+                  ) : null}
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-[#b3b3b3]">
+                    {s3AudioUrl
+                      ? "Reprodução sincronizada com o áudio da faixa."
+                      : "Áudio ainda não disponível — reingira a música."}
+                  </p>
+                  <a
+                    href={`https://www.youtube.com/watch?v=${encodeURIComponent(youtubeVideoId)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex text-[11px] font-medium text-cifra-teal transition hover:text-cifra-teal-hover hover:underline"
+                  >
+                    Abrir no YouTube
+                  </a>
+                </div>
               </div>
-            )}
+            ) : null}
           </div>
-        ) : null}
-        {isClientMounted && youtubeVideoId ? (
-          <div
-            className={cn(
-              "h-[200px] w-full overflow-hidden rounded-lg border border-white/10 bg-black/20",
-              hydratedProvider === "youtube" ? "block" : "hidden",
-            )}
+        </div>
+      ) : null}
+      <div
+        id="cifra-transport"
+        tabIndex={-1}
+        className={cn(
+          "cifra-transport-panel shrink-0 rounded-xl border border-white/10 bg-[#181818] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
+          hideTransportChrome && "sr-only",
+        )}
+      >
+        <div className="flex items-center gap-3 sm:gap-4">
+          <button
+            ref={playBtnRef}
+            type="button"
+            data-playing="false"
+            aria-label="Reproduzir"
+            className="cifra-play-btn flex size-10 shrink-0 items-center justify-center rounded-full bg-white text-[#121212] transition hover:scale-[1.03] disabled:pointer-events-none disabled:opacity-35"
           >
-            <ReactPlayer
-              ref={youtubeMediaRef}
-              src={`https://www.youtube.com/watch?v=${encodeURIComponent(youtubeVideoId)}`}
-              controls
-              width="100%"
-              height="100%"
-              style={{ maxHeight: "200px" }}
+            <Play className="cifra-play-btn__icon cifra-play-btn__icon--play ml-0.5 size-[18px] fill-current stroke-none" aria-hidden />
+            <Pause className="cifra-play-btn__icon cifra-play-btn__icon--pause size-[18px] fill-current stroke-none" aria-hidden />
+            <span className="sr-only">Reproduzir</span>
+          </button>
+          <div className="min-w-0 flex-1">
+            <input
+              ref={seekRef}
+              type="range"
+              min={0}
+              max={1000}
+              defaultValue={0}
+              className="cifra-range h-3 w-full"
             />
+            <div className="mt-1.5 flex items-center justify-between gap-2">
+              <p
+                ref={timeLabelRef}
+                className="shrink-0 font-mono text-[10px] tabular-nums tracking-tight text-[#b3b3b3]"
+              >
+                0:00 / 0:00
+              </p>
+              <div className="flex min-w-0 items-center justify-end gap-2">
+                <div
+                  ref={chordDiagramRef}
+                  className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-md border border-white/10 bg-black/25 p-0.5 sm:flex"
+                  aria-hidden
+                />
+                <p
+                  ref={sectionRef}
+                  className="max-w-[min(100%,140px)] truncate text-[10px] font-medium text-[#e8e8f0]"
+                >
+                  —
+                </p>
+                <p ref={chordRef} className="font-mono text-xs font-semibold tabular-nums text-cifra-teal">
+                  —
+                </p>
+              </div>
+            </div>
           </div>
-        ) : null}
+        </div>
       </div>
+      {providerNotice ? (
+        <p className="rounded-lg border border-cifra-teal/25 bg-cifra-teal/10 px-3 py-2 text-[11px] text-cifra-teal">
+          {providerNotice}
+        </p>
+      ) : null}
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-white/6 bg-[#12121f] lg:flex-row lg:items-stretch">
         <div

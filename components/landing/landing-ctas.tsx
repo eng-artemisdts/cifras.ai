@@ -29,13 +29,13 @@ export function LandingGuestNav({ navLinks }: GuestNavProps) {
         >
           Entrar
         </Link>
-        <a
-          href="#demo"
+        <Link
+          href="/explorar"
           className="rounded-lg border border-cifra-border px-4 py-2 text-sm font-medium text-cifra-text transition-all duration-200 ease-out hover:border-cifra-teal/40 hover:text-cifra-teal active:scale-[0.98] motion-reduce:active:scale-100"
-          onClick={() => landingCta("header_demo")}
+          onClick={() => landingCta("header_explore")}
         >
-          Ver demo
-        </a>
+          Explorar
+        </Link>
         <Link
           href="/cadastro"
           className="rounded-lg bg-cifra-teal px-4 py-2 text-sm font-semibold text-cifra-bg shadow-sm shadow-cifra-teal/20 transition-all duration-200 ease-out hover:bg-cifra-teal-hover hover:shadow-md hover:shadow-cifra-teal/25 active:scale-[0.98] motion-reduce:hover:shadow-sm motion-reduce:active:scale-100"
@@ -70,13 +70,13 @@ export function LandingGuestNav({ navLinks }: GuestNavProps) {
           >
             Entrar
           </Link>
-          <a
-            href="#demo"
+          <Link
+            href="/explorar"
             className="block rounded-lg px-3 py-2 text-sm text-cifra-text transition-colors duration-150 hover:bg-cifra-surface"
-            onClick={() => landingCta("header_demo_mobile")}
+            onClick={() => landingCta("header_explore_mobile")}
           >
-            Ver demo
-          </a>
+            Explorar
+          </Link>
           <Link
             href="/cadastro"
             className="mt-1 block rounded-lg bg-cifra-teal px-3 py-2 text-center text-sm font-semibold text-cifra-bg transition-all duration-200 hover:bg-cifra-teal-hover active:scale-[0.98]"
@@ -103,7 +103,7 @@ export function LandingHeroActions() {
         }}
       >
         <label htmlFor="email-hero" className="sr-only">
-          E-mail corporativo
+          E-mail
         </label>
         <input
           id="email-hero"
@@ -117,15 +117,15 @@ export function LandingHeroActions() {
           type="submit"
           className="h-12 shrink-0 rounded-lg bg-cifra-teal px-6 text-sm font-semibold text-cifra-bg shadow-md shadow-cifra-teal/20 transition-all duration-200 ease-out hover:bg-cifra-teal-hover hover:shadow-lg hover:shadow-cifra-teal/30 active:scale-[0.98] motion-reduce:active:scale-100"
         >
-          Pedir acesso antecipado
+          Entrar na comunidade
         </button>
       </form>
       <a
-        href="mailto:vendas@example.com"
+        href="mailto:ola@cifra.ai"
         className="mt-4 inline-block text-sm font-medium text-cifra-teal underline-offset-4 transition-colors duration-200 hover:text-cifra-teal-hover hover:underline"
-        onClick={() => landingCta("hero_sales_mail")}
+        onClick={() => landingCta("hero_contact_mail")}
       >
-        Falar com vendas
+        Tem dúvidas? Escreva-nos
       </a>
       <p className="mt-6 text-sm text-cifra-muted motion-safe:animate-in motion-safe:fade-in motion-safe:delay-500 motion-safe:duration-500 motion-safe:fill-mode-both">
         Prefere acesso direto?{" "}

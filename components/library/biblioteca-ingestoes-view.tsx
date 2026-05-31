@@ -90,15 +90,15 @@ export function BibliotecaIngestoesView({
       )}
     >
       <AuthMarketingSidebar
-        contextLabel="cifra · lab"
+        contextLabel="cifra.ai"
         contextUppercase={false}
-        titleLine1="Ingestões"
-        titleLine2="em segundo plano"
-        titleLine3="Acompanhe o progresso sem bloquear o resto do site."
-        introText="Os pedidos continuam na fila enquanto navega. Quando uma cifra ficar pronta, pode abrir o editor a partir do aviso ou desta lista."
+        titleLine1="Cifras"
+        titleLine2="em progresso"
+        titleLine3="Acompanhe a preparação sem bloquear o resto do site."
+        introText="Os pedidos continuam a ser processados enquanto navega. Quando uma cifra ficar pronta, pode abrir o editor a partir do aviso ou desta lista."
         features={[
-          { title: "Polling leve", description: "Actualização automática do estado." },
-          { title: "Modal opcional", description: "Abrir edição quando terminar." },
+          { title: "Actualização automática", description: "O estado refresca-se sozinho." },
+          { title: "Aviso quando pronto", description: "Abrir edição assim que terminar." },
         ]}
         className="hidden min-h-0 shrink-0 lg:flex lg:min-h-dvh"
       />
@@ -109,9 +109,9 @@ export function BibliotecaIngestoesView({
         <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-4 px-5 py-4 md:px-8 md:py-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h1 className="text-lg font-semibold tracking-tight text-cifra-text">Ingestões</h1>
+              <h1 className="text-lg font-semibold tracking-tight text-cifra-text">Cifras em progresso</h1>
               <p className="mt-1 max-w-xl text-[12px] leading-snug text-cifra-muted">
-                Processos de criação de cifra a partir de áudio ou Spotify. A página actualiza-se
+                Pedidos de criação de cifra a partir de áudio ou Spotify. Esta página actualiza-se
                 automaticamente.
               </p>
             </div>
@@ -130,7 +130,7 @@ export function BibliotecaIngestoesView({
             <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/12 bg-cifra-surface/40 px-6 py-16 text-center">
               <Music2 className="size-10 text-cifra-muted/80" strokeWidth={1.25} aria-hidden />
               <p className="max-w-sm text-[13px] text-cifra-muted">
-                Nenhuma ingestão activa. Importe música pelo Spotify ou por ficheiro — o progresso
+                Nenhum pedido em curso. Importe música pelo Spotify ou por ficheiro — o progresso
                 aparecerá aqui.
               </p>
               <Link

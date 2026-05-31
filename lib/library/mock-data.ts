@@ -11,7 +11,7 @@ const libraryNavBase: LibraryNavItem[] = [
   { href: "/explorar", label: "Explorar" },
   { href: "/biblioteca", label: "Biblioteca" },
   { href: "/biblioteca/importar", label: "Importar música" },
-  { href: "/biblioteca/ingestoes", label: "Ingestões" },
+  { href: "/biblioteca/ingestoes", label: "Em progresso" },
 ];
 
 function libraryNavItemIsCurrent(item: LibraryNavItem, activePath: string): boolean {

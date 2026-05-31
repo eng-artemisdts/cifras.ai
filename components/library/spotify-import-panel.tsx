@@ -168,7 +168,7 @@ export function SpotifyImportPanel({
   className,
 }: SpotifyImportPanelProps) {
   const { user } = useUser();
-  const { registerIngestJob } = useIngestJobs();
+  const { registerIngestJob, blockNewIngestIfBusy } = useIngestJobs();
   const router = useRouter();
   const pathname = usePathname();
   const returnToConnect = `${pathname || "/biblioteca/importar/spotify"}`;
@@ -343,6 +343,7 @@ export function SpotifyImportPanel({
       setSpotifyIngestError(null);
       setSpotifyIngestBusy(true);
       try {
+        if (blockNewIngestIfBusy()) return;
         const ingestResp = await postSpotifySourceIngest({ trackId: spotifyTrackId, meta: song });
 
         if (ingestResp.status === "completed" && ingestResp.track && typeof ingestResp.track === "object") {
@@ -367,10 +368,10 @@ export function SpotifyImportPanel({
 
         const jobId = typeof ingestResp.jobId === "string" ? ingestResp.jobId.trim() : "";
         if (!jobId) {
-          throw new Error("O servidor não devolveu um jobId de ingestão.");
+          throw new Error("Não foi possível iniciar a preparação da cifra.");
         }
 
-        registerIngestJob({
+        const registered = registerIngestJob({
           jobId,
           title: song.title,
           artist: song.artist,
@@ -380,6 +381,7 @@ export function SpotifyImportPanel({
               ? song.cover_image_url.trim()
               : null,
         });
+        if (!registered) return;
         router.push("/biblioteca/ingestoes");
       } catch (e) {
         const msg =
@@ -387,13 +389,13 @@ export function SpotifyImportPanel({
             ? e.message
             : e instanceof Error
               ? e.message
-              : "Não foi possível concluir a ingestão.";
+              : "Não foi possível preparar a cifra.";
         setSpotifyIngestError(msg);
       } finally {
         setSpotifyIngestBusy(false);
       }
     },
-    [registerIngestJob, router],
+    [blockNewIngestIfBusy, registerIngestJob, router],
   );
 
   const onConfirmSpotifyIngest = useCallback(async () => {
@@ -485,7 +487,7 @@ export function SpotifyImportPanel({
 
   const browseHint = useMemo(
     () =>
-      "Escolha uma playlist e uma faixa. Se ainda não existir cifra, a plataforma obtém o áudio e corre a IA — acompanhe em «Ingestões» sem bloquear esta página.",
+      "Escolha uma playlist e uma faixa. Se ainda não existir cifra, a plataforma obtém o áudio e gera os acordes com IA — acompanhe em «Em progresso» sem bloquear esta página.",
     [],
   );
 
@@ -497,7 +499,7 @@ export function SpotifyImportPanel({
           role="status"
         >
           <Loader2 className="size-4 shrink-0 animate-spin text-cifra-teal" aria-hidden />
-          A enviar pedido de ingestão…
+          A preparar a sua cifra…
         </div>
       ) : null}
       {spotifyIngestError ? (
@@ -696,7 +698,7 @@ export function SpotifyImportPanel({
                           {process.env.NODE_ENV === "development" && tracksErrorDetails ? (
                             <details className="rounded-md border border-white/10 bg-[#12121f] px-2.5 py-2">
                               <summary className="cursor-pointer text-[10px] font-semibold text-cifra-muted">
-                                Mostrar detalhes técnicos
+                                Mostrar detalhes
                               </summary>
                               <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-[10px] leading-relaxed text-cifra-muted">
                                 {tracksErrorDetails}
@@ -744,7 +746,7 @@ export function SpotifyImportPanel({
                                   <span className="block truncate text-[10px] text-cifra-muted">{tr.artistLine}</span>
                                   {tr.importable === false ? (
                                     <span className="block truncate text-[10px] text-cifra-muted/80">
-                                      Item indisponível para importação via API.
+                                      Item indisponível para importação.
                                     </span>
                                   ) : null}
                                 </span>

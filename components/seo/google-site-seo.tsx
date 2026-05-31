@@ -20,6 +20,13 @@ const DEFAULT_TITLE = "Cifras e acordes com IA";
 const DEFAULT_DESCRIPTION =
   "cifra.ai ajuda músicos e equipes a extrair, revisar e exportar cifras a partir de áudio e links — com uma interface moderna e fluxos pensados para o palco e para o produto.";
 
+/**
+ * Ícones e imagens de partilha vêm de `app/icon.svg`, `app/favicon.ico`,
+ * `app/apple-icon.png`, `app/opengraph-image.png` e `app/twitter-image.png`
+ * (convenção do Next.js). Não duplicar em `icons` / `openGraph.images` aqui —
+ * duplicatas quebram keys no `<head>` e falham o build.
+ */
+
 /** Metadados alinhados às práticas do Google (títulos, descrição, OG/Twitter, robots, canonical base). */
 export function buildRootMetadata(overrides?: Metadata): Metadata {
   const siteUrl = getSiteUrl();
@@ -72,13 +79,11 @@ export function buildRootMetadata(overrides?: Metadata): Metadata {
       siteName: SITE_NAME,
       title: `${SITE_NAME} · ${DEFAULT_TITLE}`,
       description: DEFAULT_DESCRIPTION,
-      images: [{ url: "/logo.svg", width: 828, height: 220, alt: SITE_NAME }],
     },
     twitter: {
       card: "summary_large_image",
       title: `${SITE_NAME} · ${DEFAULT_TITLE}`,
       description: DEFAULT_DESCRIPTION,
-      images: ["/logo.svg"],
     },
     category: "music",
   };
@@ -106,7 +111,7 @@ export function GoogleSiteSeo() {
         "@id": `${siteUrl}#organization`,
         name: SITE_NAME,
         url: siteUrl,
-        logo: `${siteUrl}/logo.svg`,
+        logo: `${siteUrl}/apple-icon.png`,
       },
     ],
   };

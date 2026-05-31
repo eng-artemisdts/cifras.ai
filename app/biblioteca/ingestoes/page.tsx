@@ -6,7 +6,7 @@ import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-
 import { libraryNavForPath } from "@/lib/library/mock-data";
 
 export const metadata: Metadata = {
-  title: "Ingestões · Biblioteca · cifra.ai",
+  title: "Cifras em progresso · Biblioteca · cifra.ai",
   description: "Acompanhe importações e geração de cifras em segundo plano.",
 };
 

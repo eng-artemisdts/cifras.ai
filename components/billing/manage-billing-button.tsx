@@ -36,7 +36,7 @@ export function ManageBillingButton({ className }: ManageBillingButtonProps) {
       onClick={() => void onClick()}
       className={cn(className, pending && "pointer-events-none opacity-70")}
     >
-      {pending ? "A abrir…" : "Gerir faturação (Stripe)"}
+      {pending ? "A abrir…" : "Gerir faturação"}
     </button>
   );
 }

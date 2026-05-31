@@ -29,7 +29,7 @@ export default async function PerfilPage({ searchParams }: PerfilPageProps) {
         <div className="max-w-md rounded-2xl border border-cifra-border bg-cifra-surface px-8 py-10 text-center">
           <Shield className="mx-auto size-10 text-cifra-muted" strokeWidth={1.25} aria-hidden />
           <p className="mt-4 text-sm text-cifra-muted">
-            Auth0 não está configurado neste ambiente. Defina as variáveis de ambiente para aceder ao perfil.
+            O serviço de contas não está disponível neste ambiente.
           </p>
         </div>
       </div>
@@ -113,10 +113,10 @@ export default async function PerfilPage({ searchParams }: PerfilPageProps) {
               <div className="min-w-0">
                 <h2 className="font-serif text-xl text-white sm:text-2xl">Conta cifra.ai</h2>
                 <p className="mt-1 text-sm text-cifra-muted">
-                  Nome e e-mail vêm do seu fornecedor de login (Auth0). Para alterar palavra-passe ou e-mail,
-                  use o fluxo do respetivo fornecedor ou{" "}
+                  Nome e e-mail vêm da sua conta de login. Para alterar palavra-passe ou e-mail,
+                  use{" "}
                   <Link href="/auth/profile" className="text-cifra-teal underline-offset-2 hover:underline">
-                    página de perfil Auth0
+                    definições da conta
                   </Link>
                   .
                 </p>

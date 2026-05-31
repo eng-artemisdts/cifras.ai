@@ -146,6 +146,141 @@ export function createYoutubeMediaElementAdapter(opts: YoutubeMediaAdapterOption
   };
 }
 
+type YoutubeIframeAdapterOptions = {
+  videoId: string;
+  getIframeElement: () => HTMLIFrameElement | null;
+};
+
+declare global {
+  interface Window {
+    YT?: {
+      Player: new (
+        el: string | HTMLElement,
+        config: {
+          events?: {
+            onReady?: () => void;
+            onStateChange?: (event: { data: number }) => void;
+            onError?: (event: { data: number }) => void;
+          };
+        },
+      ) => {
+        playVideo: () => void;
+        pauseVideo: () => void;
+        seekTo: (seconds: number, allowSeekAhead?: boolean) => void;
+        getCurrentTime: () => number;
+        getDuration: () => number;
+        getPlayerState: () => number;
+        destroy: () => void;
+      };
+    };
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+
+function ensureYoutubeIframeApi(): Promise<NonNullable<Window["YT"]>> {
+  if (typeof window === "undefined") return Promise.reject(new Error("window_unavailable"));
+  if (window.YT?.Player) return Promise.resolve(window.YT);
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>('script[src="https://www.youtube.com/iframe_api"]');
+    if (!existing) {
+      const script = document.createElement("script");
+      script.src = "https://www.youtube.com/iframe_api";
+      script.async = true;
+      script.onerror = () => reject(new Error("youtube_iframe_api_load_failed"));
+      document.head.appendChild(script);
+    }
+    const previous = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      previous?.();
+      if (!window.YT?.Player) {
+        reject(new Error("youtube_iframe_api_unavailable"));
+        return;
+      }
+      resolve(window.YT);
+    };
+  });
+}
+
+/** YouTube via IFrame API (mais resiliente que custom element de player). */
+export function createYoutubeIframeAdapter(opts: YoutubeIframeAdapterOptions): PlaybackAdapter {
+  const { getIframeElement } = opts;
+  let player: {
+    playVideo: () => void;
+    pauseVideo: () => void;
+    seekTo: (seconds: number, allowSeekAhead?: boolean) => void;
+    getCurrentTime: () => number;
+    getDuration: () => number;
+    getPlayerState: () => number;
+    destroy: () => void;
+  } | null = null;
+  let isPlaying = false;
+
+  return {
+    provider: "youtube",
+    async ready() {
+      const iframe = getIframeElement();
+      if (!iframe) throw new Error("youtube_iframe_missing");
+      const yt = await ensureYoutubeIframeApi();
+      await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const finishOk = () => {
+          if (settled) return;
+          settled = true;
+          resolve();
+        };
+        const finishErr = (err: Error) => {
+          if (settled) return;
+          settled = true;
+          reject(err);
+        };
+        player = new yt.Player(iframe, {
+          events: {
+            onReady: () => {
+              finishOk();
+            },
+            onStateChange: (event) => {
+              // 1 = playing; 2 = paused; 0 = ended.
+              isPlaying = event.data === 1;
+            },
+            onError: (event) => {
+              finishErr(new Error(`youtube_player_error_${String(event.data)}`));
+            },
+          },
+        });
+        window.setTimeout(() => finishErr(new Error("youtube_player_timeout")), 12_000);
+      });
+    },
+    async play() {
+      player?.playVideo();
+      isPlaying = true;
+    },
+    async pause() {
+      player?.pauseVideo();
+      isPlaying = false;
+    },
+    async seek(seconds: number) {
+      if (!Number.isFinite(seconds)) return;
+      player?.seekTo(Math.max(0, seconds), true);
+    },
+    getCurrentTime() {
+      const t = player?.getCurrentTime();
+      return Number.isFinite(t) ? Number(t) : 0;
+    },
+    getDuration() {
+      const d = player?.getDuration();
+      return Number.isFinite(d) && Number(d) > 0 ? Number(d) : 0;
+    },
+    isPlaying() {
+      return isPlaying;
+    },
+    destroy() {
+      player?.destroy();
+      player = null;
+      isPlaying = false;
+    },
+  };
+}
+
 type SpotifyWebPlayerState = {
   paused: boolean;
   position: number;

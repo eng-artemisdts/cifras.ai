@@ -19,7 +19,7 @@ import {
 } from "@/lib/beethoven-variations.server";
 import { getAuth0SessionCached } from "@/lib/auth0";
 import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-plan";
-import { publicMp3UrlForTrackId } from "@/lib/media/public-mp3-for-track";
+import { resolveTrackAudioUrl } from "@/lib/media/resolve-track-audio-url";
 import type { SchubertTrackJson } from "@/lib/schubert-api";
 import {
   fetchSchubertTrackByKey,
@@ -92,10 +92,10 @@ export async function CifraTrackView(props: CifraTrackViewProps) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-cifra-bg px-6 text-center">
         <p className="max-w-md text-sm text-cifra-muted">
-          Não foi possível contactar a Schubert API. Verifique a rede e as variáveis de ambiente, ou tente novamente
+          Não foi possível carregar esta cifra. Verifique a ligação à internet e tente novamente.
           mais tarde.
         </p>
-        <Link href="/biblioteca/importar/arquivo" className="text-sm font-semibold text-cifra-teal">
+        <Link href="/biblioteca/importar" className="text-sm font-semibold text-cifra-teal">
           Voltar à importação
         </Link>
       </div>
@@ -177,11 +177,12 @@ export async function CifraTrackView(props: CifraTrackViewProps) {
       : "";
 
   const fromSchubert = schubertTrackToDemoPayload(resolvedTrack as SchubertTrackJson);
+  const resolvedAudioUrl = resolveTrackAudioUrl(fromSchubert.meta, mp3Id || undefined);
   const payload = normalizeDemoPayload({
     ...fromSchubert,
     meta: {
       ...fromSchubert.meta,
-      ...(mp3Id ? { audioUrl: publicMp3UrlForTrackId(mp3Id) } : {}),
+      ...(resolvedAudioUrl ? { audioUrl: resolvedAudioUrl } : {}),
     },
   });
 

@@ -28,7 +28,7 @@ export default async function CadastroPage() {
         titleLine1: "Criar",
         titleLine2: "sua conta",
         introText:
-          "Convide o time, aceite os termos e comece com OAuth ou formulário completo.",
+          "Junte-se à comunidade, aceite os termos e comece a gerar cifras com IA.",
         features: signupAuthSidebarFeatures,
       }}
     >

@@ -2,6 +2,11 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Garante scan das classes quando o cwd é o monorepo pai (workspace Cursor). */
+@source "../components/**/*.{js,ts,jsx,tsx}";
+@source "../lib/**/*.{js,ts,jsx,tsx}";
+@source "./**/*.{js,ts,jsx,tsx,mdx}";
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
@@ -216,6 +221,18 @@ body {
   input[type="range"].cifra-range--sm::-moz-range-thumb {
     width: 12px;
     height: 12px;
+  }
+
+  .cifra-play-btn__icon--pause {
+    display: none;
+  }
+
+  .cifra-play-btn[data-playing="true"] .cifra-play-btn__icon--play {
+    display: none;
+  }
+
+  .cifra-play-btn[data-playing="true"] .cifra-play-btn__icon--pause {
+    display: block;
   }
 
   /** Pré-visualização da cifra: hover no símbolo com diagrama (attach-chord-diagram-hover-dom). */
