@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { getRequestOriginFromHeaders } from "@/lib/app-base-url";
 import {
   logoutHrefWithReturnTo,
   responseIndicatesSessionExpired,
@@ -50,7 +51,12 @@ export async function fetchBeethovenFromServer(path: string, init?: RequestInit)
   }
   const res = await fetch(url, { ...init, headers: nextHeaders });
   if (await responseIndicatesSessionExpired(res)) {
-    redirect(logoutHrefWithReturnTo(currentRequestPathFromHeaders(h)));
+    redirect(
+      logoutHrefWithReturnTo(
+        currentRequestPathFromHeaders(h),
+        getRequestOriginFromHeaders(h),
+      ),
+    );
   }
   return res;
 }

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { sanitizeAuthReturnTo, AUTH0_LOGOUT_PATH, appLoginHref } from "@/lib/auth0-routes";
+import {
+  sanitizeAuthReturnTo,
+  AUTH0_LOGOUT_PATH,
+  absoluteAppLoginHref,
+} from "@/lib/auth0-routes";
 
 /**
  * Código devolvido pelos proxies (Beethoven/Schubert) quando o `getAccessToken` falha por
@@ -52,15 +56,14 @@ export function sessionExpiredResponse(message?: string): NextResponse {
   );
 }
 
-/** URL para o `/auth/logout` do SDK, com `returnTo` sanitizado para a página de entrada. */
-export function logoutHrefWithReturnTo(returnTo?: string | null): string {
+/**
+ * URL para o `/auth/logout` do SDK. O `returnTo` tem de ser absoluto — o SDK envia-o como
+ * `post_logout_redirect_uri` ao OIDC logout do Auth0.
+ */
+export function logoutHrefWithReturnTo(returnTo?: string | null, origin?: string): string {
   const safeReturn = sanitizeAuthReturnTo(returnTo);
   const params = new URLSearchParams();
-  /**
-   * `returnTo` do `/auth/logout` é interpretado pelo SDK como destino pós-Auth0; passamos a
-   * página de entrada da app com o `returnTo` original para o utilizador retomar onde estava.
-   */
-  params.set("returnTo", appLoginHref(safeReturn));
+  params.set("returnTo", absoluteAppLoginHref(safeReturn, origin));
   return `${AUTH0_LOGOUT_PATH}?${params.toString()}`;
 }
 

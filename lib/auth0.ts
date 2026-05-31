@@ -19,7 +19,10 @@ export function getAuth0(): Auth0Client {
     const scope =
       process.env.AUTH0_SCOPE?.trim() ||
       "openid profile email offline_access";
+    const appBaseUrl =
+      process.env.APP_BASE_URL?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim();
     client = new Auth0Client({
+      ...(appBaseUrl ? { appBaseUrl } : {}),
       signInReturnToPath: "/explorar",
       ...(audience
         ? {
