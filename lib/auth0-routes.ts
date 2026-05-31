@@ -1,3 +1,5 @@
+import { resolveAppOrigin } from "@/lib/app-base-url";
+
 const AUTH0_LOGIN = "/auth/login";
 
 /** Página de entrada da app (não Universal Login). */
@@ -53,4 +55,15 @@ export function appLoginHref(returnTo?: string): string {
   const safe = sanitizeAuthReturnTo(returnTo);
   if (!safe) return APP_LOGIN_PATH;
   return `${APP_LOGIN_PATH}?${new URLSearchParams({ returnTo: safe }).toString()}`;
+}
+
+/**
+ * URL absoluta da página de login da app. O Auth0 exige `post_logout_redirect_uri` absoluto
+ * (registado em Allowed Logout URLs); paths relativos causam a página de erro do tenant.
+ */
+export function absoluteAppLoginHref(returnTo?: string, origin?: string): string {
+  const path = appLoginHref(returnTo);
+  const base = origin ?? resolveAppOrigin();
+  if (!base) return path;
+  return new URL(path, base).toString();
 }
