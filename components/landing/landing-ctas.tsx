@@ -20,8 +20,8 @@ type GuestNavProps = {
 /** Header marketing: Entrar, demo e cadastro (métricas de funil). */
 export function LandingGuestNav({ navLinks }: GuestNavProps) {
   return (
-    <>
-      <div className="hidden items-center justify-self-end gap-2 sm:flex sm:gap-3">
+    <div className="flex min-w-0 shrink-0 items-center justify-end gap-2 sm:gap-3">
+      <div className="hidden items-center gap-2 sm:flex sm:gap-3">
         <Link
           href="/login"
           className="rounded-lg border border-cifra-border px-4 py-2 text-sm font-medium text-cifra-text transition-all duration-200 ease-out hover:border-cifra-teal/40 hover:text-cifra-teal active:scale-[0.98] motion-reduce:active:scale-100"
@@ -45,7 +45,7 @@ export function LandingGuestNav({ navLinks }: GuestNavProps) {
         </Link>
       </div>
 
-      <details className="group relative justify-self-end sm:hidden">
+      <details className="group relative sm:hidden">
         <summary className="list-none [&::-webkit-details-marker]:hidden">
           <span className="flex size-10 cursor-pointer items-center justify-center rounded-lg border border-cifra-border text-cifra-text transition-colors duration-200 hover:border-cifra-teal/35 hover:bg-cifra-surface">
             <Menu className="size-5 group-open:hidden" />
@@ -86,40 +86,30 @@ export function LandingGuestNav({ navLinks }: GuestNavProps) {
           </Link>
         </div>
       </details>
-    </>
+    </div>
   );
 }
 
-/** Formulário hero + links (mantém copy no servidor na `LandingPage`). */
+/** CTAs abaixo do vídeo de demonstração no hero. */
 export function LandingHeroActions() {
   return (
     <>
-      <form
-        className="mx-auto mt-10 flex max-w-xl flex-col gap-3 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-5 motion-safe:delay-300 motion-safe:duration-700 motion-safe:fill-mode-both motion-safe:ease-out sm:flex-row sm:items-stretch"
-        action="#"
-        onSubmit={(e) => {
-          e.preventDefault();
-          trackAnalyticsEvent(GA_EVENTS.LANDING_EARLY_ACCESS_SUBMIT);
-        }}
-      >
-        <label htmlFor="email-hero" className="sr-only">
-          E-mail
-        </label>
-        <input
-          id="email-hero"
-          name="email"
-          type="email"
-          required
-          placeholder="seu@email.com"
-          className="h-12 flex-1 rounded-lg border border-cifra-border bg-cifra-surface px-4 text-sm text-cifra-text placeholder:text-cifra-muted outline-none ring-cifra-teal/40 transition-[border-color,box-shadow] duration-200 focus:border-cifra-teal focus:ring-2"
-        />
-        <button
-          type="submit"
-          className="h-12 shrink-0 rounded-lg bg-cifra-teal px-6 text-sm font-semibold text-cifra-bg shadow-md shadow-cifra-teal/20 transition-all duration-200 ease-out hover:bg-cifra-teal-hover hover:shadow-lg hover:shadow-cifra-teal/30 active:scale-[0.98] motion-reduce:active:scale-100"
+      <div className="mt-8 flex flex-col items-stretch justify-center gap-3 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:delay-500 motion-safe:duration-600 motion-safe:fill-mode-both sm:flex-row sm:items-center sm:justify-center sm:gap-4">
+        <Link
+          href="/cadastro"
+          className="inline-flex h-12 items-center justify-center rounded-lg bg-cifra-teal px-8 text-sm font-semibold text-cifra-bg shadow-md shadow-cifra-teal/20 transition-all duration-200 ease-out hover:bg-cifra-teal-hover hover:shadow-lg hover:shadow-cifra-teal/30 active:scale-[0.98] motion-reduce:active:scale-100"
+          onClick={() => landingCta("hero_signup_primary")}
         >
-          Entrar na comunidade
-        </button>
-      </form>
+          Criar conta grátis
+        </Link>
+        <Link
+          href="/explorar"
+          className="inline-flex h-12 items-center justify-center rounded-lg border border-cifra-border px-8 text-sm font-semibold text-cifra-text transition-all duration-200 ease-out hover:border-cifra-teal/40 hover:text-cifra-teal active:scale-[0.98] motion-reduce:active:scale-100"
+          onClick={() => landingCta("hero_explore_primary")}
+        >
+          Explorar cifras
+        </Link>
+      </div>
       <a
         href="mailto:ola@cifra.ai"
         className="mt-4 inline-block text-sm font-medium text-cifra-teal underline-offset-4 transition-colors duration-200 hover:text-cifra-teal-hover hover:underline"
@@ -127,7 +117,7 @@ export function LandingHeroActions() {
       >
         Tem dúvidas? Escreva-nos
       </a>
-      <p className="mt-6 text-sm text-cifra-muted motion-safe:animate-in motion-safe:fade-in motion-safe:delay-500 motion-safe:duration-500 motion-safe:fill-mode-both">
+      <p className="mt-5 text-sm text-cifra-muted motion-safe:animate-in motion-safe:fade-in motion-safe:delay-[550ms] motion-safe:duration-500 motion-safe:fill-mode-both">
         Prefere acesso direto?{" "}
         <Link
           href="/cadastro"
