@@ -11,6 +11,7 @@ import {
   LandingHeroActions,
   LandingPlanFreeSignupLink,
 } from "@/components/landing/landing-ctas";
+import { LandingHeroDemo } from "@/components/landing/landing-hero-demo";
 import { ArtemisFooterBrand } from "@/components/layout/artemis-footer-brand";
 
 const navLinks = [
@@ -29,27 +30,27 @@ export function LandingPage({ user = null }: LandingPageProps) {
   return (
     <div className="flex min-h-dvh flex-col bg-cifra-bg text-cifra-text">
       <header className="sticky top-0 z-50 border-b border-cifra-border bg-cifra-bg/80 backdrop-blur-md motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-2 motion-safe:duration-500 motion-safe:fill-mode-both">
-        <div className="mx-auto grid h-[72px] w-full max-w-[1200px] grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 lg:px-8">
+        <div className="mx-auto flex h-[72px] w-full min-w-0 max-w-[1200px] items-center justify-between gap-3 px-4 sm:gap-4 sm:px-6 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:justify-normal lg:px-8">
           <Link
             href="/"
-            className="flex w-fit items-center gap-2.5 transition-opacity duration-200 hover:opacity-90 motion-reduce:transition-none"
+            className="flex min-w-0 max-w-[calc(100%-3rem)] items-center gap-2 transition-opacity duration-200 hover:opacity-90 motion-reduce:transition-none sm:max-w-none sm:gap-2.5"
           >
             <Image
               src="/logo.svg"
               alt="cifra.ai"
               width={228}
               height={60}
-              className="h-6 w-auto shrink-0 object-contain sm:h-6"
+              className="h-5 w-auto max-w-full shrink object-contain object-left sm:h-6"
               style={{ width: "auto" }}
               priority
               unoptimized
             />
-            <span className="inline-flex h-5 self-center items-center rounded-md border border-cifra-teal/45 bg-cifra-teal/12 px-2 font-mono text-[9px] font-bold leading-none tracking-widest text-cifra-teal">
+            <span className="inline-flex h-5 shrink-0 items-center self-center rounded-md border border-cifra-teal/45 bg-cifra-teal/12 px-1.5 font-mono text-[8px] font-bold leading-none tracking-widest text-cifra-teal sm:px-2 sm:text-[9px]">
               BETA
             </span>
           </Link>
 
-          <nav className="hidden items-center justify-center gap-10 md:flex">
+          <nav className="hidden min-w-0 items-center justify-center gap-10 md:flex">
             {navLinks.map((l) => (
               <a
                 key={l.href}
@@ -62,7 +63,7 @@ export function LandingPage({ user = null }: LandingPageProps) {
           </nav>
 
           {user ? (
-            <div className="flex items-center justify-self-end gap-2">
+            <div className="flex shrink-0 items-center justify-end gap-2 md:justify-self-end">
               <Auth0UserMenu user={user} />
               <details className="group relative sm:hidden">
                 <summary className="list-none [&::-webkit-details-marker]:hidden">
@@ -115,7 +116,7 @@ export function LandingPage({ user = null }: LandingPageProps) {
                 "radial-gradient(ellipse 80% 60% at 50% -20%, var(--cifra-glow) 0%, transparent 55%), radial-gradient(ellipse 50% 40% at 100% 0%, rgba(28, 31, 62, 0.5) 0%, transparent 50%)",
             }}
           />
-          <div className="relative z-10 mx-auto max-w-[720px] text-center">
+          <div className="relative z-10 mx-auto max-w-[880px] text-center">
             <div className="flex justify-center motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-700 motion-safe:fill-mode-both motion-safe:ease-out">
               <Image
                 src="/logo.svg"
@@ -139,6 +140,7 @@ export function LandingPage({ user = null }: LandingPageProps) {
               gravações em cifras editáveis. A IA sugere acordes e letra; você revisa,
               partilha com a banda e leva tudo para o palco.
             </p>
+            <LandingHeroDemo className="mt-10 max-w-[720px]" />
             <LandingHeroActions />
           </div>
         </section>
