@@ -1,4 +1,5 @@
 import { cifraEditHref, cifraHref, resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-routes";
+import { normalizeStreamingImportUrl } from "@/lib/library/streaming-url-validation";
 import type { SchubertTrackJson } from "@/lib/schubert-api";
 import { fetchSchubertFromBrowser } from "@/lib/schubert-api";
 import type {
@@ -177,6 +178,52 @@ export async function postSpotifySourceIngest(input: {
   if (song.cover_image_url?.trim()) payload.coverImageUrl = song.cover_image_url.trim();
 
   const res = await fetchSchubertFromBrowser("tracks/ingest/spotify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const raw = await res.text();
+  let json: unknown = null;
+  if (raw) {
+    try {
+      json = JSON.parse(raw) as unknown;
+    } catch {
+      json = { raw };
+    }
+  }
+
+  if (!res.ok) {
+    const msg = formatUpstreamErrorMessage(json, res.statusText);
+    throw new SchubertIdentifyError(msg, res.status, json);
+  }
+
+  return json as SchubertTrackIngestResponse;
+}
+
+/**
+ * Inicia ingestão a partir de um link público (`POST /tracks/ingest/url`).
+ * Suporta YouTube, Spotify, TikTok e Instagram no servidor (yt-dlp + pipeline de cifra).
+ */
+export async function postUrlSourceIngest(input: {
+  sourceUrl: string;
+  title?: string;
+  artist?: string;
+  album?: string;
+  coverImageUrl?: string;
+}): Promise<SchubertTrackIngestResponse> {
+  const sourceUrl = normalizeStreamingImportUrl(input.sourceUrl);
+  if (!sourceUrl) {
+    throw new SchubertIdentifyError("O link de origem é obrigatório.", 400, null);
+  }
+
+  const payload: Record<string, string> = { sourceUrl };
+  if (input.title?.trim()) payload.title = input.title.trim();
+  if (input.artist?.trim()) payload.artist = input.artist.trim();
+  if (input.album?.trim()) payload.album = input.album.trim();
+  if (input.coverImageUrl?.trim()) payload.coverImageUrl = input.coverImageUrl.trim();
+
+  const res = await fetchSchubertFromBrowser("tracks/ingest/url", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

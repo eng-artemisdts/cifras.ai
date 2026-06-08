@@ -36,8 +36,8 @@ export type RecognizedMusicConfirmDialogProps = {
   songTitle: string;
   artistName: string;
   coverImageUrl?: string | null;
-  /** Texto do corpo: detecção por áudio (predefinição) vs faixa escolhida no Spotify. */
-  copyVariant?: "audio" | "spotify";
+  /** Texto do corpo: detecção por áudio, faixa Spotify ou link de streaming. */
+  copyVariant?: "audio" | "spotify" | "url";
   /**
    * URL para abrir a cifra (`/cifras/...` ou legado `?trackId=`).
    * Quando ausente, usa-se `onMontarComIaSemHref` (ex.: ingestão antes do catálogo principal).
@@ -158,6 +158,17 @@ export function RecognizedMusicConfirmDialog({
                         Não há cifra no catálogo para esta faixa. Ao confirmar, obtemos o áudio oficial de pré-visualização
                         da Spotify (quando disponível) e iniciamos a montagem da cifra com IA — pode acompanhar o progresso
                         no ecrã seguinte.
+                      </span>
+                    </>
+                  ) : copyVariant === "url" ? (
+                    <>
+                      <span className="block">
+                        Confirme se este vídeo corresponde à música que pretende analisar. O conteúdo precisa estar público
+                        e acessível sem login especial.
+                      </span>
+                      <span className="block">
+                        Ao confirmar, extraímos o áudio do link e iniciamos a montagem da cifra com IA — pode acompanhar o
+                        progresso em «Em progresso» sem bloquear esta página.
                       </span>
                     </>
                   ) : (
