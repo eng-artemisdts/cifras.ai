@@ -68,9 +68,9 @@ export function logoutHrefWithReturnTo(returnTo?: string | null, origin?: string
 }
 
 /**
- * Detecta resposta dos proxies indicando que a sessão Auth0 expirou ou está ausente. Aceita 401
- * com header dedicado, body com `code: "session_expired"`, ou o `error: "not_authenticated"`
- * que o `withApiAuthRequired` do SDK Auth0 devolve quando não há sessão activa.
+ * Detecta resposta dos proxies indicando que a sessão Auth0 **expirou** (refresh falhou).
+ * Não trata `not_authenticated` — isso significa visitante anónimo ou rota sem sessão, e não
+ * deve disparar logout OIDC (especialmente em páginas públicas).
  *
  * Usa `clone()` para não consumir o stream original do `Response`.
  */
@@ -83,8 +83,6 @@ export async function responseIndicatesSessionExpired(res: Response): Promise<bo
     const data = (await res.clone().json()) as { code?: unknown; error?: unknown };
     if (data?.code === SESSION_EXPIRED_ERROR_CODE) return true;
     if (data?.error === SESSION_EXPIRED_ERROR_CODE) return true;
-    /** Resposta padrão do `withApiAuthRequired` quando o utilizador não tem sessão. */
-    if (data?.error === "not_authenticated") return true;
     return false;
   } catch {
     return false;
