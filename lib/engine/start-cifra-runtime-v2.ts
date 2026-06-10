@@ -453,6 +453,9 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
       floatingChordDiagramEl.style.display = showCurrentChordDiagram ? "flex" : "none";
       if (!showCurrentChordDiagram) clearChordElement(floatingChordDiagramEl);
     }
+    if (showCurrentChordDiagram && lastRenderedChordLabel) {
+      renderChordDiagramForLabel(lastRenderedChordLabel);
+    }
   }
   function initCurrentChordDiagramToggle() {
     const raw = lsGet(LS_SHOW_CURRENT_CHORD_DIAGRAM);

@@ -781,7 +781,7 @@ export function CifraPocMount({
               <div className="flex min-w-0 items-center justify-end gap-2">
                 <div
                   ref={chordDiagramRef}
-                  className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-md border border-white/10 bg-black/25 p-0.5 sm:flex"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-white/10 bg-black/25 p-0.5 sm:h-10 sm:w-10"
                   aria-hidden
                 />
                 <p

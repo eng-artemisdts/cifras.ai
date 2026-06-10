@@ -44,6 +44,8 @@ export function attachChordDiagramHoverDom(
   let currentVariation = 0;
   let hideTimer: number | null = null;
   let persistTimer: number | null = null;
+  /** Evita que o `click` sintético após toque feche o popup logo após abrir (iOS/Android). */
+  let suppressClickUntilMs = 0;
   let ro: ResizeObserver | null = null;
   let onScroll: (() => void) | null = null;
   let onResize: (() => void) | null = null;
@@ -307,7 +309,29 @@ export function attachChordDiagramHoverDom(
     scheduleHide();
   };
 
+  const openPinnedPopup = () => {
+    cancelHide();
+    if (!popup) {
+      currentVariation = readPreferredIndex();
+      buildPopupShell();
+      applyPinnedUi(true);
+      position();
+      return;
+    }
+    applyPinnedUi(true);
+    position();
+  };
+
+  const onPointerDown = (ev: PointerEvent) => {
+    if (ev.pointerType !== "touch" && ev.pointerType !== "pen") return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    suppressClickUntilMs = performance.now() + 450;
+    openPinnedPopup();
+  };
+
   const onChordClick = (ev: MouseEvent) => {
+    if (performance.now() < suppressClickUntilMs) return;
     ev.preventDefault();
     ev.stopPropagation();
     cancelHide();
@@ -335,12 +359,14 @@ export function attachChordDiagramHoverDom(
 
   symbolEl.addEventListener("mouseenter", onEnter);
   symbolEl.addEventListener("mouseleave", onLeave);
+  symbolEl.addEventListener("pointerdown", onPointerDown);
   symbolEl.addEventListener("click", onChordClick);
   symbolEl.addEventListener("keydown", onChordKey);
 
   return () => {
     symbolEl.removeEventListener("mouseenter", onEnter);
     symbolEl.removeEventListener("mouseleave", onLeave);
+    symbolEl.removeEventListener("pointerdown", onPointerDown);
     symbolEl.removeEventListener("click", onChordClick);
     symbolEl.removeEventListener("keydown", onChordKey);
     symbolEl.classList.remove(HOVER_TARGET_CLASS);
