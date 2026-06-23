@@ -14,7 +14,9 @@ import {
   fetchAuth0UserBillingSnapshot,
   isAuth0ManagementConfigured,
 } from "@/lib/billing/auth0-management";
+import { reconcileAuth0BillingFromStripe } from "@/lib/billing/stripe-auth0-reconcile";
 import type { BillingPlan } from "@/lib/billing/plan-types";
+import { isStripeBillingConfigured } from "@/lib/billing/stripe-server";
 import { billingPlanFromSessionUser, stripeCustomerIdFromSessionUser } from "@/lib/entitlements";
 import { cn } from "@/lib/utils";
 
@@ -73,6 +75,20 @@ export default async function AssinaturaPage({ searchParams }: AssinaturaPagePro
     redirect(auth0LoginHref({ returnTo: "/conta/assinatura" }));
   }
 
+  if (
+    session.user.sub &&
+    isAuth0ManagementConfigured() &&
+    isStripeBillingConfigured()
+  ) {
+    try {
+      await reconcileAuth0BillingFromStripe(session.user.sub, {
+        email: typeof session.user.email === "string" ? session.user.email : undefined,
+      });
+    } catch (e) {
+      console.error("[assinatura] reconcile Stripe", e);
+    }
+  }
+
   const sp = searchParams ? await searchParams : {};
   const checkoutRaw =
     typeof sp.checkout === "string" ? sp.checkout : Array.isArray(sp.checkout) ? sp.checkout[0] : undefined;
@@ -94,9 +110,9 @@ export default async function AssinaturaPage({ searchParams }: AssinaturaPagePro
   const planInfo = PLAN_LABEL[plan];
   const liveFromAuth0 = Boolean(
     snapshot &&
-      (snapshot.plan !== undefined ||
-        Boolean(snapshot.stripe_customer_id) ||
-        snapshot.subscription_status != null),
+    (snapshot.plan !== undefined ||
+      Boolean(snapshot.stripe_customer_id) ||
+      snapshot.subscription_status != null),
   );
   const showLocalBillingSync =
     isLocalBillingDevToolsEnabled() && isAuth0ManagementConfigured();

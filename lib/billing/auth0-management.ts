@@ -30,7 +30,7 @@ function auth0Domain(): string {
 function isMgmtConfigured(): boolean {
   return Boolean(
     process.env.AUTH0_MANAGEMENT_CLIENT_ID?.trim() &&
-      process.env.AUTH0_MANAGEMENT_CLIENT_SECRET?.trim(),
+    process.env.AUTH0_MANAGEMENT_CLIENT_SECRET?.trim(),
   );
 }
 
@@ -193,6 +193,49 @@ export async function patchAuth0UserAppMetadataGeneric(
  * Não depende do JWT da sessão (útil logo após o Checkout).
  * Requer `read:users` na app M2M.
  */
+type Auth0UserByEmailRow = {
+  user_id: string;
+  app_metadata?: Record<string, unknown>;
+};
+
+/**
+ * Localiza utilizador Auth0 pelo email (Management API `users-by-email`).
+ * Com vários resultados, prefere quem já tem o mesmo `stripe_customer_id`.
+ */
+export async function findAuth0UserIdByEmail(
+  email: string,
+  options?: { stripeCustomerId?: string | null },
+): Promise<string | undefined> {
+  if (!isMgmtConfigured()) return undefined;
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return undefined;
+
+  const domain = auth0Domain();
+  const token = await getManagementToken();
+  const res = await fetch(
+    `https://${domain}/api/v2/users-by-email?email=${encodeURIComponent(normalized)}`,
+    {
+      headers: { authorization: `Bearer ${token}` },
+      cache: "no-store",
+    },
+  );
+  if (!res.ok) return undefined;
+
+  const users = (await res.json()) as Auth0UserByEmailRow[];
+  if (users.length === 0) return undefined;
+  if (users.length === 1) return users[0].user_id;
+
+  const stripeCustomerId = options?.stripeCustomerId?.trim();
+  if (stripeCustomerId) {
+    const match = users.find(
+      (u) => u.app_metadata?.stripe_customer_id === stripeCustomerId,
+    );
+    if (match) return match.user_id;
+  }
+
+  return users[0].user_id;
+}
+
 export async function fetchAuth0UserBillingSnapshot(
   auth0UserId: string,
 ): Promise<Auth0BillingSnapshot | null> {

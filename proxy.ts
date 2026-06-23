@@ -43,12 +43,12 @@ export async function proxy(request: Request) {
 }
 
 /**
- * Excluir `api/schubert`: o Auth0 `middleware()` no boundary do proxy faz clone/buffer do body com limite baixo.
- * Uploads multipart grandes (> ~16 KiB) chegam truncados ao Route Handler → Nest/Multer reporta
- * «Multipart: Unexpected end of form». O BFF `/api/schubert/*` faz sessão + JWT na própria rota.
+ * Excluir rotas que precisam do body intacto ou que autenticam na própria rota:
+ * - `api/schubert`: uploads multipart grandes (> ~16 KiB) truncados pelo buffer do middleware.
+ * - `api/billing/webhook`: Stripe valida a assinatura sobre o body bruto; buffer corrompe `whsec`.
  */
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|api/schubert|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|api/schubert|api/billing/webhook|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

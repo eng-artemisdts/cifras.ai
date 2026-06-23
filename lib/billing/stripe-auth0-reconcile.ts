@@ -2,6 +2,7 @@ import type Stripe from "stripe";
 
 import {
   fetchAuth0UserBillingSnapshot,
+  findAuth0UserIdByEmail,
   patchAuth0UserAppMetadata,
 } from "@/lib/billing/auth0-management";
 import type { BillingPlan } from "@/lib/billing/plan-types";
@@ -100,6 +101,58 @@ export async function getPrimaryStripeSubscription(
   const first = subs.data[0];
   if (!first) return null;
   return stripe.subscriptions.retrieve(first.id, { expand: ["items.data.price"] });
+}
+
+/**
+ * Resolve o Auth0 user id a partir de metadata Stripe, `client_reference_id` ou email do customer.
+ * Usado por webhooks quando a subscrição foi criada/alterada no Dashboard sem metadata.
+ */
+export async function resolveAuth0SubForStripeBilling(
+  stripe: Stripe,
+  hints: {
+    subscription?: Stripe.Subscription;
+    session?: Stripe.Checkout.Session;
+    customerId?: string;
+  },
+): Promise<string | undefined> {
+  const { subscription, session, customerId: hintCustomerId } = hints;
+
+  if (session) {
+    const fromSession =
+      session.metadata?.auth0_sub?.trim() || session.client_reference_id?.trim();
+    if (fromSession) return fromSession;
+  }
+
+  if (subscription) {
+    const fromSub = subscription.metadata?.auth0_sub?.trim();
+    if (fromSub) return fromSub;
+  }
+
+  const customerId =
+    hintCustomerId?.trim() ||
+    (subscription
+      ? typeof subscription.customer === "string"
+        ? subscription.customer
+        : subscription.customer?.id
+      : undefined) ||
+    (session
+      ? typeof session.customer === "string"
+        ? session.customer
+        : session.customer?.id
+      : undefined);
+
+  if (!customerId) return undefined;
+
+  const customer = await stripe.customers.retrieve(customerId);
+  if ("deleted" in customer && customer.deleted) return undefined;
+
+  const fromCustomer = customer.metadata?.auth0_sub?.trim();
+  if (fromCustomer) return fromCustomer;
+
+  const email = customer.email?.trim();
+  if (!email) return undefined;
+
+  return findAuth0UserIdByEmail(email, { stripeCustomerId: customerId });
 }
 
 /** Garante `auth0_sub` no customer e na subscrição (para webhooks futuros). */
