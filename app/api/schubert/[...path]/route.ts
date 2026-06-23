@@ -2,14 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 
 import { isAccessTokenLikelyJwt } from "@/lib/access-token-shape";
-import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-plan";
+import { resolveBillingEntitlementsForSessionUser } from "@/lib/billing/resolve-billing-plan";
 import { getAuth0 } from "@/lib/auth0";
 import { isAuth0Configured } from "@/lib/auth0-env";
 import {
   isAuth0SessionExpiredError,
   sessionExpiredResponse,
 } from "@/lib/auth0-session-expired";
-import { permissionsFromSessionUser } from "@/lib/entitlements";
 
 /**
  * O `withApiAuthRequired` do SDK chama `getSession()` sem argumentos (usa só `cookies()`).
@@ -264,8 +263,8 @@ async function runAuthed(req: Request, ctx: RouteCtx) {
   }
 
   const auth0Sub = typeof session.user.sub === "string" ? session.user.sub : "";
-  const billingPlan = await resolveBillingPlanForSessionUser(session.user);
-  const appPermissions = permissionsFromSessionUser(session.user);
+  const { plan: billingPlan, permissions: appPermissions } =
+    await resolveBillingEntitlementsForSessionUser(session.user);
 
   return proxyToSchubert(req, ctx, {
     auth0Sub,

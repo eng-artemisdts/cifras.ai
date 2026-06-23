@@ -5,9 +5,11 @@ import { ArrowLeft, CreditCard, RefreshCw, Shield, Sparkles } from "lucide-react
 
 import { SubscribePlanButton } from "@/components/billing/subscribe-plan-button";
 import { ManageBillingButton } from "@/components/billing/manage-billing-button";
+import { SyncPlanButton } from "@/components/billing/sync-plan-button";
 import { getAuth0SessionCached } from "@/lib/auth0";
 import { auth0LoginHref } from "@/lib/auth0-routes";
 import { isAuth0Configured } from "@/lib/auth0-env";
+import { isLocalBillingDevToolsEnabled } from "@/lib/billing/local-dev-tools";
 import {
   fetchAuth0UserBillingSnapshot,
   isAuth0ManagementConfigured,
@@ -96,6 +98,8 @@ export default async function AssinaturaPage({ searchParams }: AssinaturaPagePro
         Boolean(snapshot.stripe_customer_id) ||
         snapshot.subscription_status != null),
   );
+  const showLocalBillingSync =
+    isLocalBillingDevToolsEnabled() && isAuth0ManagementConfigured();
   const maybePendingWebhook =
     checkoutSuccess &&
     plan === "free" &&
@@ -190,6 +194,9 @@ export default async function AssinaturaPage({ searchParams }: AssinaturaPagePro
             </div>
 
             <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-cifra-border/80 pt-6">
+              {showLocalBillingSync ? (
+                <SyncPlanButton className="inline-flex items-center justify-center rounded-xl border border-cifra-border bg-cifra-surface-2 px-5 py-2.5 text-sm font-semibold text-cifra-text transition hover:border-cifra-teal/40 hover:text-cifra-teal" />
+              ) : null}
               {hasStripeCustomer ? (
                 <ManageBillingButton className="inline-flex items-center justify-center rounded-xl border border-cifra-teal/45 bg-cifra-teal/10 px-5 py-2.5 text-sm font-semibold text-cifra-teal transition hover:border-cifra-teal hover:bg-cifra-teal/18" />
               ) : (
@@ -204,9 +211,11 @@ export default async function AssinaturaPage({ searchParams }: AssinaturaPagePro
         <aside className="mt-8 motion-safe:animate-in motion-safe:fade-in motion-safe:delay-200 motion-safe:duration-600 motion-safe:fill-mode-both flex gap-4 rounded-2xl border border-cifra-border/80 bg-cifra-surface-2/50 px-4 py-4 sm:px-5">
           <RefreshCw className="mt-0.5 size-5 shrink-0 text-cifra-gold/90" strokeWidth={1.75} aria-hidden />
           <p className="text-sm leading-relaxed text-cifra-muted">
-            <span className="font-medium text-cifra-text">Sincronização:</span> após o pagamento,
-            o plano é actualizado automaticamente. Se vir informação desactualizada noutras
-            páginas, termine a sessão e entre de novo.
+            <span className="font-medium text-cifra-text">Sincronização:</span>{" "}
+            {showLocalBillingSync
+              ? "use «Sincronizar com Stripe» (só em dev local) se alterou o plano na Stripe. "
+              : "após o pagamento, o plano é actualizado automaticamente. "}
+            Se vir informação desactualizada noutras páginas, termine sessão e entre de novo.
           </p>
         </aside>
 

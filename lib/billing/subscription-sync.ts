@@ -12,6 +12,16 @@ function priceIdToPlan(priceId: string | undefined): BillingPlan {
   return "free";
 }
 
+/** Em webhooks, `items.data[].price` costuma ser string (`price_xxx`); no retrieve expandido é objeto. */
+export function stripeSubscriptionPriceId(sub: Stripe.Subscription): string | undefined {
+  const price = sub.items.data[0]?.price;
+  if (typeof price === "string") return price;
+  if (price && typeof price === "object" && typeof price.id === "string") {
+    return price.id;
+  }
+  return undefined;
+}
+
 /** Mapeia subscrição Stripe para plano e estado persistido no Auth0. */
 export function billingStateFromStripeSubscription(
   sub: Stripe.Subscription,
@@ -22,7 +32,7 @@ export function billingStateFromStripeSubscription(
   stripe_customer_id: string;
 } {
   const status = sub.status;
-  const priceId = sub.items.data[0]?.price?.id;
+  const priceId = stripeSubscriptionPriceId(sub);
   const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
   if (!customerId) {
     throw new Error("Subscription sem customer id.");

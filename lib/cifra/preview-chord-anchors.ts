@@ -30,6 +30,53 @@ function normalizeSectionsForLookup(
     .sort((a, b) => a.start - b.start);
 }
 
+function chordOverlapsSlot(chord: MusicAiChordEvent, slot: LyricWordSlot): boolean {
+  return Number(chord.end) > Number(slot.start) && Number(chord.start) < Number(slot.end);
+}
+
+/**
+ * Acorde que começa numa secção e termina na seguinte: ancora na última palavra sobreposta
+ * da secção de início (prioriza exibir na secção anterior).
+ */
+function preferStartSectionAnchorSlot(
+  chord: MusicAiChordEvent,
+  naturalSlotId: string,
+  slots: LyricWordSlot[],
+  slotById: Map<string, LyricWordSlot>,
+  sections: NormalizedSection[],
+): string | null {
+  const chordSecIdx = sectionIndexAtTime(Number(chord.start), sections);
+  if (chordSecIdx < 0) return naturalSlotId;
+
+  const natural = slotById.get(naturalSlotId);
+  if (!natural) return null;
+
+  const naturalSecIdx = sectionIndexAtTime(
+    (Number(natural.start) + Number(natural.end)) / 2,
+    sections,
+  );
+  if (naturalSecIdx === chordSecIdx) return naturalSlotId;
+
+  const startSec = sections[chordSecIdx];
+  if (!startSec) return null;
+  const chordEnd = Number(chord.end);
+  const spansIntoNext =
+    Number.isFinite(chordEnd) &&
+    chordEnd > startSec.end - 1e-3 &&
+    naturalSecIdx === chordSecIdx + 1;
+  if (!spansIntoNext) return null;
+
+  const ordered = sortSlotsLyricOrder(slots);
+  let best: LyricWordSlot | null = null;
+  for (const s of ordered) {
+    const mid = (Number(s.start) + Number(s.end)) / 2;
+    if (mid < startSec.start || mid >= startSec.end) continue;
+    if (!chordOverlapsSlot(chord, s)) continue;
+    best = s;
+  }
+  return best?.id ?? null;
+}
+
 /** Retorna o índice de secção que contém `t` (ou a mais próxima por sobreposição/distância). */
 function sectionIndexAtTime(t: number, sections: NormalizedSection[]): number {
   if (!sections.length) return -1;
@@ -55,9 +102,8 @@ function sectionIndexAtTime(t: number, sections: NormalizedSection[]): number {
  * Calcula âncoras com o mesmo modelo que o editor (`chordAnchorSlotIds`), para a pré-visualização
  * não divergir da grelha (sem heurísticas duplicadas em `cifra-view`).
  *
- * Quando `sections` são fornecidas, acordes cujo `start` cai numa secção diferente da palavra
- * âncora são **descartados** (regra do editor: o acorde aparece só na secção onde começa, sem
- * transpassar para a seguinte).
+ * Quando `sections` são fornecidas, acordes que transpassam uma fronteira de secção aparecem só
+ * na secção onde o `start` cai (secção anterior), nunca na seguinte.
  */
 export function buildPreviewChordAnchors(
   lyrics: MusicAiLyricSegment[] | undefined,
@@ -77,19 +123,21 @@ export function buildPreviewChordAnchors(
 
   const chordAnchorsBySlotId: Record<string, number[]> = {};
   for (let ci = 0; ci < chordList.length; ci++) {
-    const sid = anchorPerChord[ci];
-    if (sid == null) continue;
+    const naturalSid = anchorPerChord[ci];
+    if (naturalSid == null) continue;
+    let sid = naturalSid;
     if (hasSections) {
       const chord = chordList[ci];
-      const slot = slotById.get(sid);
-      if (chord && slot) {
-        const chordSecIdx = sectionIndexAtTime(Number(chord.start), normalizedSections);
-        const slotSecIdx = sectionIndexAtTime(
-          (Number(slot.start) + Number(slot.end)) / 2,
+      if (chord) {
+        const resolved = preferStartSectionAnchorSlot(
+          chord,
+          naturalSid,
+          slots,
+          slotById,
           normalizedSections,
         );
-        /** Regra: o acorde só aparece na palavra se ambos estão na mesma secção. */
-        if (chordSecIdx !== slotSecIdx) continue;
+        if (resolved == null) continue;
+        sid = resolved;
       }
     }
     if (!chordAnchorsBySlotId[sid]) chordAnchorsBySlotId[sid] = [];

@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 
+import {
+  ensureStripeBillingMetadata,
+  syncAuth0FromStripeSubscription,
+} from "@/lib/billing/stripe-auth0-reconcile";
 import { patchAuth0UserAppMetadata } from "@/lib/billing/auth0-management";
-import { billingStateFromStripeSubscription } from "@/lib/billing/subscription-sync";
 import { getStripe, isStripeBillingConfigured } from "@/lib/billing/stripe-server";
 
 export const runtime = "nodejs";
@@ -21,21 +24,42 @@ async function resolveAuth0SubFromSubscription(
   return c || undefined;
 }
 
+async function resolveAuth0SubFromCheckoutSession(
+  stripe: Stripe,
+  session: Stripe.Checkout.Session,
+): Promise<string | undefined> {
+  const fromSession =
+    session.metadata?.auth0_sub?.trim() || session.client_reference_id?.trim();
+  if (fromSession) return fromSession;
+  const customerId =
+    typeof session.customer === "string" ? session.customer : session.customer?.id;
+  if (!customerId) return undefined;
+  const customer = await stripe.customers.retrieve(customerId);
+  if ("deleted" in customer && customer.deleted) return undefined;
+  return customer.metadata?.auth0_sub?.trim() || undefined;
+}
+
 async function handleSubscriptionSynced(stripe: Stripe, sub: Stripe.Subscription) {
   const auth0Sub = await resolveAuth0SubFromSubscription(stripe, sub);
-  if (!auth0Sub) return;
-  const state = billingStateFromStripeSubscription(sub);
-  await patchAuth0UserAppMetadata(auth0Sub, {
-    plan: state.plan,
-    stripe_customer_id: state.stripe_customer_id,
-    stripe_subscription_id: state.stripe_subscription_id,
-    subscription_status: state.subscription_status,
-  });
+  if (!auth0Sub) {
+    console.warn(
+      "[stripe webhook] auth0_sub em falta; ignorando sync da subscrição",
+      sub.id,
+    );
+    return;
+  }
+  await syncAuth0FromStripeSubscription(stripe, sub, auth0Sub);
 }
 
 async function handleSubscriptionDeleted(stripe: Stripe, sub: Stripe.Subscription) {
   const auth0Sub = await resolveAuth0SubFromSubscription(stripe, sub);
-  if (!auth0Sub) return;
+  if (!auth0Sub) {
+    console.warn(
+      "[stripe webhook] auth0_sub em falta; ignorando cancelamento da subscrição",
+      sub.id,
+    );
+    return;
+  }
   const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
   await patchAuth0UserAppMetadata(auth0Sub, {
     plan: "free",
@@ -73,22 +97,32 @@ export async function POST(req: Request) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         if (session.mode !== "subscription") break;
-        const auth0Sub =
-          session.metadata?.auth0_sub?.trim() || session.client_reference_id?.trim();
+        const auth0Sub = await resolveAuth0SubFromCheckoutSession(stripe, session);
         const subId = session.subscription;
-        if (!auth0Sub || typeof subId !== "string") break;
+        if (!auth0Sub || typeof subId !== "string") {
+          console.warn("[stripe webhook] checkout sem auth0_sub ou subscription id", session.id);
+          break;
+        }
         const sub = await stripe.subscriptions.retrieve(subId, { expand: ["items.data.price"] });
-        const state = billingStateFromStripeSubscription(sub);
-        await patchAuth0UserAppMetadata(auth0Sub, state);
-        if (typeof session.customer === "string") {
-          await stripe.customers.update(session.customer, {
-            metadata: { auth0_sub: auth0Sub },
+        await syncAuth0FromStripeSubscription(stripe, sub, auth0Sub);
+        const customerId =
+          typeof session.customer === "string" ? session.customer : session.customer?.id;
+        if (customerId) {
+          await ensureStripeBillingMetadata(stripe, {
+            auth0Sub,
+            customerId,
+            subscriptionId: sub.id,
           });
         }
         break;
       }
+      case "customer.subscription.created":
       case "customer.subscription.updated": {
-        await handleSubscriptionSynced(stripe, event.data.object as Stripe.Subscription);
+        const raw = event.data.object as Stripe.Subscription;
+        const sub = await stripe.subscriptions.retrieve(raw.id, {
+          expand: ["items.data.price"],
+        });
+        await handleSubscriptionSynced(stripe, sub);
         break;
       }
       case "customer.subscription.deleted": {

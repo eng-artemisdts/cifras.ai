@@ -12,6 +12,8 @@ import { formatClock } from './time-format';
 import {
   isInstrumentalSectionLabel,
   musicAiSectionEnvelopeForTime,
+  sectionDisplayLabelKey,
+  vocalSectionDisplayEnvelopeForTime,
   vocalSectionHeaderForLyricTime
 } from './section-layout';
 import {
@@ -35,8 +37,16 @@ const CHORD_SNAP_AFTER_SECTION_START_SEC = 0.06;
 const CHORD_SNAP_PICKUP_END_EPS_SEC = 0.12;
 /** Só anacruse se o fim da palavra está a no máximo isto **antes** de S (evita confundir desvio Whisper/Music.AI com pickup). */
 const CHORD_SNAP_MAX_LEAD_BEFORE_SECTION_SEC = 4;
-/** Alinhar `sections.json` (Intro.end vs Verso.start) com pequenos desvios de tempo. */
-const SECTION_BOUNDARY_DEDUPE_EPS_SEC = 0.15;
+/** Atualiza o intervalo temporal no cabeçalho de uma secção já criada (rótulos repetidos). */
+function refreshSectionShellTimeRange(wrap, sec, fmt) {
+  if (!wrap || !sec) return;
+  wrap.setAttribute('data-section-start', String(sec.start));
+  wrap.setAttribute('data-section-end', String(sec.end));
+  const timeEl = wrap.querySelector('[data-section-time]');
+  if (timeEl) {
+    timeEl.textContent = `${fmt(sec.start)} — ${fmt(sec.end)}`;
+  }
+}
 /**
  * Último acorde visível da grelha instrumental desde `fromIdx`.
  *
@@ -460,22 +470,20 @@ export function mountCifraView(params) {
         arr.sort((a, b) => Number(normalizedChords[a]?.start) - Number(normalizedChords[b]?.start));
       });
     }
-    /** @type {number|null} */
-    let vocalShellKey = null;
-    /** @type {HTMLElement|null} */
-    let vocalShellInner = null;
+    /**
+     * Shells vocais por rótulo — secções repetidas (ex.: 2.º Refrão) reutilizam o mesmo bloco
+     * ou continuam sem cabeçalho duplicado, preservando a ordem cronológica da letra.
+     *
+     * @type {Map<string, { wrap: HTMLElement, inner: HTMLElement, displaySec: import('./musicai-types.ts').MusicAiSection }>}
+     */
+    const vocalShellByLabel = new Map();
+    /** @type {string|null} */
+    let currentLyricSectionLabelKey = null;
     /** Último acorde vocal visível para dedupe no começo da linha seguinte. */
     let carryLyricChordLabel = /** @type {string|null} */ (null);
     /**
-     * Após bloco instrumental, se a letra seguinte é noutra secção: não repetir na 1.ª linha vocal o último
-     * acorde que já apareceu no fim da secção anterior (ex.: G na fronteira Intro → Verse).
-     *
-     * @type {{ label: string, boundarySecStart: number, chordIdx: number|null } | null}
-     */
-    let pendingSectionBoundaryChordDedupe = null;
-    /**
-     * Dedupe do 1.º acorde vocal imediatamente após um bloco instrumental (mesma secção ou não).
-     * @type {{ label: string, chordIdx: number|null } | null}
+     * Dedupe do 1.º acorde vocal imediatamente após um bloco instrumental (mesma secção).
+     * @type {{ label: string, chordIdx: number|null, sectionLabelKey: string|null } | null}
      */
     let pendingInstrumentalToLyricCarry = null;
     /**
@@ -563,17 +571,22 @@ export function mountCifraView(params) {
           if (lastVisibleMerged && String(lastVisibleMerged.label).trim() !== '') {
             pendingInstrumentalToLyricCarry = {
               label: lastVisibleMerged.label,
-              chordIdx: lastVisibleMerged.chordIdx
+              chordIdx: lastVisibleMerged.chordIdx,
+              sectionLabelKey: sectionDisplayLabelKey(secLike0.label)
             };
           }
-          vocalShellKey = secLike0.start;
-          vocalShellInner = shell.inner;
+          const mergeLabelKey = sectionDisplayLabelKey(secLike0.label);
+          vocalShellByLabel.set(mergeLabelKey, {
+            wrap: shell.wrap,
+            inner: shell.inner,
+            displaySec: { ...secLike0 }
+          });
+          currentLyricSectionLabelKey = mergeLabelKey;
           evIdx = nextIdx - 1;
           continue;
         }
 
-        vocalShellKey = null;
-        vocalShellInner = null;
+        currentLyricSectionLabelKey = null;
 
         for (let g = 0; g < instGroup.length; g++) {
           const iv = instGroup[g];
@@ -639,13 +652,9 @@ export function mountCifraView(params) {
             if (lastVisible && String(lastVisible.label).trim() !== '') {
               pendingInstrumentalToLyricCarry = {
                 label: lastVisible.label,
-                chordIdx: lastVisible.chordIdx
-              };
-              pendingSectionBoundaryChordDedupe = {
-                label: lastVisible.label,
-                /** Coincide com `sec.start` da 1.ª linha vocal (ex.: Verso); `env0.end` falha com hiato Intro/Verso. */
-                boundarySecStart: Number(lyricEnv.start),
-                chordIdx: lastVisible.chordIdx
+                chordIdx: lastVisible.chordIdx,
+                sectionLabelKey:
+                  lyricEnv != null ? sectionDisplayLabelKey(lyricEnv.label) : null
               };
             }
           }
@@ -660,55 +669,49 @@ export function mountCifraView(params) {
 
       const fw = lineWords[0];
       /** Cabeçalhos de parte só com `showSectionBars`; snap de acorde usa secções sempre que existirem no payload. */
-      const sec =
+      const secHeader =
         sectionsSorted.length && fw.start != null && Number.isFinite(fw.start)
           ? vocalSectionHeaderForLyricTime(fw.start, sectionsSorted)
           : null;
+      const sec =
+        sectionsSorted.length && fw.start != null && Number.isFinite(fw.start)
+          ? vocalSectionDisplayEnvelopeForTime(fw.start, sectionsSorted)
+          : secHeader;
+      const secLabelKey = sec ? sectionDisplayLabelKey(sec.label) : null;
+      const sectionChangedFromPrevRow =
+        secLabelKey != null &&
+        currentLyricSectionLabelKey != null &&
+        secLabelKey !== currentLyricSectionLabelKey;
 
-      if (sec && sec.start !== vocalShellKey) {
+      if (sectionChangedFromPrevRow) {
         carryLyricChordLabel = null;
         prevLyricRowLastVisibleChord = null;
       }
 
-      let crossRowCarryFromPrev = prevLyricRowLastVisibleChord;
+      let crossRowCarryFromPrev = sectionChangedFromPrevRow ? null : prevLyricRowLastVisibleChord;
 
       const row = document.createElement('div');
       row.className = 'cifra-line flex flex-wrap items-end gap-x-3 gap-y-4';
 
       let rowPrevChordLabel = carryLyricChordLabel;
       let exactPrevRenderedLabel = /** @type {string|null} */ (null);
-      if (
-        pendingSectionBoundaryChordDedupe &&
-        sec &&
-        Number.isFinite(sec.start) &&
-        Math.abs(sec.start - pendingSectionBoundaryChordDedupe.boundarySecStart) <= SECTION_BOUNDARY_DEDUPE_EPS_SEC &&
-        fw.start != null &&
-        Number.isFinite(fw.start) &&
-        fw.start >= sec.start - SECTION_BOUNDARY_DEDUPE_EPS_SEC
-      ) {
-        exactPrevRenderedLabel = pendingSectionBoundaryChordDedupe.label;
-        if (
-          pendingSectionBoundaryChordDedupe.chordIdx != null &&
-          Number.isFinite(pendingSectionBoundaryChordDedupe.chordIdx)
-        ) {
-          crossRowCarryFromPrev = {
-            wrap: /** @type {HTMLElement} */ (null),
-            chordIdx: Number(pendingSectionBoundaryChordDedupe.chordIdx)
-          };
-        }
-      }
-      if (pendingInstrumentalToLyricCarry) {
-        if (showAllChordPositions && exactPrevRenderedLabel == null) {
-          exactPrevRenderedLabel = pendingInstrumentalToLyricCarry.label;
-        }
-        if (
-          pendingInstrumentalToLyricCarry.chordIdx != null &&
-          Number.isFinite(pendingInstrumentalToLyricCarry.chordIdx)
-        ) {
-          crossRowCarryFromPrev = {
-            wrap: /** @type {HTMLElement} */ (null),
-            chordIdx: Number(pendingInstrumentalToLyricCarry.chordIdx)
-          };
+      if (pendingInstrumentalToLyricCarry && !sectionChangedFromPrevRow) {
+        const carrySecKey = pendingInstrumentalToLyricCarry.sectionLabelKey;
+        const sameSectionAsLyric =
+          carrySecKey == null || secLabelKey == null || carrySecKey === secLabelKey;
+        if (sameSectionAsLyric) {
+          if (showAllChordPositions) {
+            exactPrevRenderedLabel = pendingInstrumentalToLyricCarry.label;
+          }
+          if (
+            pendingInstrumentalToLyricCarry.chordIdx != null &&
+            Number.isFinite(pendingInstrumentalToLyricCarry.chordIdx)
+          ) {
+            crossRowCarryFromPrev = {
+              wrap: /** @type {HTMLElement} */ (null),
+              chordIdx: Number(pendingInstrumentalToLyricCarry.chordIdx)
+            };
+          }
         }
       }
       lineWords.forEach((tw, idx) => {
@@ -721,25 +724,25 @@ export function mountCifraView(params) {
         }
 
         const leadBeforeSec =
-          sec && Number.isFinite(sec.start) && tw.end != null && Number.isFinite(tw.end)
-            ? sec.start - tw.end
+          secHeader && Number.isFinite(secHeader.start) && tw.end != null && Number.isFinite(tw.end)
+            ? secHeader.start - tw.end
             : Infinity;
         const isPickupSyllable =
           Boolean(
-            sec &&
-            !isInstrumentalSectionLabel(sec.label) &&
-            Number.isFinite(sec.start) &&
+            secHeader &&
+            !isInstrumentalSectionLabel(secHeader.label) &&
+            Number.isFinite(secHeader.start) &&
             tw.start != null &&
             Number.isFinite(tw.start) &&
-            tw.start < sec.start &&
+            tw.start < secHeader.start &&
             tw.end != null &&
             Number.isFinite(tw.end) &&
-            tw.end <= sec.start + CHORD_SNAP_PICKUP_END_EPS_SEC &&
+            tw.end <= secHeader.start + CHORD_SNAP_PICKUP_END_EPS_SEC &&
             leadBeforeSec >= -CHORD_SNAP_PICKUP_END_EPS_SEC &&
             leadBeforeSec <= CHORD_SNAP_MAX_LEAD_BEFORE_SECTION_SEC
           );
         if (isPickupSyllable) {
-          chordLookupT = sec.start + CHORD_SNAP_AFTER_SECTION_START_SEC;
+          chordLookupT = secHeader.start + CHORD_SNAP_AFTER_SECTION_START_SEC;
         }
 
         /**
@@ -748,7 +751,8 @@ export function mountCifraView(params) {
          * acordes sustentados (ex.: G# da intro até "Everywhere") devem continuar visíveis.
          */
         const applySectionOnsetFilter = false;
-        const sectionStartForChords = sec && Number.isFinite(sec.start) ? Number(sec.start) : NaN;
+        const sectionStartForChords =
+          secHeader && Number.isFinite(secHeader.start) ? Number(secHeader.start) : NaN;
 
         let label = getChordLabelAtAudioTime(chordLookupT);
         /** @type {{ label: string, a0: number, a1: number }[]} */
@@ -947,6 +951,7 @@ export function mountCifraView(params) {
         }
 
         const crossLineSameEventDup =
+          !sectionChangedFromPrevRow &&
           idx === 0 &&
           crossRowCarryFromPrev != null &&
           segs.length > 0 &&
@@ -1040,31 +1045,29 @@ export function mountCifraView(params) {
       });
 
       carryLyricChordLabel = rowPrevChordLabel;
-
-      if (
-        pendingSectionBoundaryChordDedupe &&
-        sec &&
-        Number.isFinite(sec.start) &&
-        Math.abs(sec.start - pendingSectionBoundaryChordDedupe.boundarySecStart) <= SECTION_BOUNDARY_DEDUPE_EPS_SEC &&
-        fw.start != null &&
-        Number.isFinite(fw.start) &&
-        fw.start >= sec.start - SECTION_BOUNDARY_DEDUPE_EPS_SEC
-      ) {
-        pendingSectionBoundaryChordDedupe = null;
-      }
       pendingInstrumentalToLyricCarry = null;
 
-      if (sectionsSorted.length && sec && sec.start != null && Number.isFinite(sec.start)) {
-        if (sec.start !== vocalShellKey) {
+      if (sectionsSorted.length && sec && secLabelKey) {
+        const isRepeatAfterOtherSection =
+          vocalShellByLabel.has(secLabelKey) && currentLyricSectionLabelKey !== secLabelKey;
+        let shellEntry = vocalShellByLabel.get(secLabelKey);
+        if (!shellEntry) {
           const shell = createSectionShell(sec, showSectionBars, formatClock);
           container.appendChild(shell.wrap);
-          vocalShellInner = shell.inner;
-          vocalShellKey = sec.start;
+          shellEntry = { wrap: shell.wrap, inner: shell.inner, displaySec: { ...sec } };
+          vocalShellByLabel.set(secLabelKey, shellEntry);
+        } else {
+          shellEntry.displaySec = { ...sec };
+          refreshSectionShellTimeRange(shellEntry.wrap, sec, formatClock);
         }
-        vocalShellInner.appendChild(row);
+        if (isRepeatAfterOtherSection) {
+          container.appendChild(row);
+        } else {
+          shellEntry.inner.appendChild(row);
+        }
+        currentLyricSectionLabelKey = secLabelKey;
       } else {
-        vocalShellKey = null;
-        vocalShellInner = null;
+        currentLyricSectionLabelKey = null;
         container.appendChild(row);
       }
     }
@@ -1103,6 +1106,7 @@ function createSectionShell(sec, showHeader, fmt) {
 
     const t2 = document.createElement('div');
     t2.className = 'mt-0.5 font-mono text-[10px] text-auris-muted tabular-nums';
+    t2.setAttribute('data-section-time', 'true');
     t2.textContent = `${fmt(sec.start)} — ${fmt(sec.end)}`;
 
     inner.appendChild(t1);

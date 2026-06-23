@@ -87,7 +87,9 @@ async function patchAuth0UserAppMetadataRecord(
   auth0UserId: string,
   patch: Record<string, unknown>,
 ): Promise<void> {
-  if (!isMgmtConfigured()) return;
+  if (!isMgmtConfigured()) {
+    throw new Error("auth0_management_not_configured");
+  }
   const domain = auth0Domain();
   const token = await getManagementToken();
   const existing = await getAuth0UserDocument(auth0UserId);
