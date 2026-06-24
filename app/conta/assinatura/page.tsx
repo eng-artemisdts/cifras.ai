@@ -14,7 +14,7 @@ import {
   fetchAuth0UserBillingSnapshot,
   isAuth0ManagementConfigured,
 } from "@/lib/billing/auth0-management";
-import { reconcileAuth0BillingFromStripe } from "@/lib/billing/stripe-auth0-reconcile";
+import { reconcileAuth0BillingFromStripeWithRetry } from "@/lib/billing/stripe-auth0-reconcile";
 import type { BillingPlan } from "@/lib/billing/plan-types";
 import { isStripeBillingConfigured } from "@/lib/billing/stripe-server";
 import { billingPlanFromSessionUser, stripeCustomerIdFromSessionUser } from "@/lib/entitlements";
@@ -75,24 +75,34 @@ export default async function AssinaturaPage({ searchParams }: AssinaturaPagePro
     redirect(auth0LoginHref({ returnTo: "/conta/assinatura" }));
   }
 
+  const sp = searchParams ? await searchParams : {};
+  const checkoutRaw =
+    typeof sp.checkout === "string" ? sp.checkout : Array.isArray(sp.checkout) ? sp.checkout[0] : undefined;
+  const checkoutSuccess = checkoutRaw === "success";
+
   if (
     session.user.sub &&
     isAuth0ManagementConfigured() &&
     isStripeBillingConfigured()
   ) {
     try {
-      await reconcileAuth0BillingFromStripe(session.user.sub, {
-        email: typeof session.user.email === "string" ? session.user.email : undefined,
-      });
+      const email = typeof session.user.email === "string" ? session.user.email : undefined;
+      if (checkoutSuccess) {
+        await reconcileAuth0BillingFromStripeWithRetry(session.user.sub, {
+          email,
+          maxAttempts: 5,
+          delayMs: 1500,
+        });
+      } else {
+        await reconcileAuth0BillingFromStripeWithRetry(session.user.sub, {
+          email,
+          maxAttempts: 1,
+        });
+      }
     } catch (e) {
       console.error("[assinatura] reconcile Stripe", e);
     }
   }
-
-  const sp = searchParams ? await searchParams : {};
-  const checkoutRaw =
-    typeof sp.checkout === "string" ? sp.checkout : Array.isArray(sp.checkout) ? sp.checkout[0] : undefined;
-  const checkoutSuccess = checkoutRaw === "success";
 
   const snapshot =
     session.user.sub && isAuth0ManagementConfigured()

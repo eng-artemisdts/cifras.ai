@@ -199,12 +199,12 @@ export async function reconcileAuth0BillingFromStripe(
   });
 
   if (!customer) {
-    await patchAuth0UserAppMetadata(auth0Sub, {
-      plan: "free",
-      subscription_status: null,
-      stripe_subscription_id: null,
-    });
-    return { ok: true, plan: "free", reason: "no_stripe_customer" };
+    const existing = await fetchAuth0UserBillingSnapshot(auth0Sub);
+    return {
+      ok: true,
+      plan: existing?.plan ?? "free",
+      reason: "no_stripe_customer",
+    };
   }
 
   await ensureStripeBillingMetadata(stripe, {
@@ -245,6 +245,39 @@ export async function reconcileAuth0BillingFromStripe(
     stripe_subscription_id: state.stripe_subscription_id,
     subscription_status: state.subscription_status,
   };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Reconcilia com novas tentativas quando a Stripe ainda não indexou customer/subscrição
+ * (comum logo após `checkout.session.completed`).
+ */
+export async function reconcileAuth0BillingFromStripeWithRetry(
+  auth0Sub: string,
+  options?: {
+    email?: string | null;
+    knownCustomerId?: string | null;
+    maxAttempts?: number;
+    delayMs?: number;
+  },
+): Promise<BillingReconcileResult> {
+  const maxAttempts = options?.maxAttempts ?? 5;
+  const delayMs = options?.delayMs ?? 1500;
+  const { maxAttempts: _ma, delayMs: _dm, ...reconcileOptions } = options ?? {};
+
+  let last = await reconcileAuth0BillingFromStripe(auth0Sub, reconcileOptions);
+  for (let attempt = 1; attempt < maxAttempts; attempt++) {
+    const paid = last.plan === "starter" || last.plan === "pro";
+    const pending =
+      last.reason === "no_stripe_customer" || last.reason === "no_subscription";
+    if (paid || !pending) break;
+    await sleep(delayMs);
+    last = await reconcileAuth0BillingFromStripe(auth0Sub, reconcileOptions);
+  }
+  return last;
 }
 
 /** Sincroniza Auth0 a partir de uma subscrição Stripe (webhook). */

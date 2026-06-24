@@ -60,7 +60,11 @@ export async function POST(req: Request) {
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(body, sig, secret);
-  } catch {
+  } catch (e) {
+    console.warn(
+      "[stripe webhook] assinatura inválida — confirme STRIPE_WEBHOOK_SECRET e que `stripe listen` usa a mesma conta que STRIPE_SECRET_KEY (`--api-key sk_test_...`)",
+      e instanceof Error ? e.message : e,
+    );
     return NextResponse.json({ error: "invalid_signature" }, { status: 400 });
   }
 
