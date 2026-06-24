@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 
 import { RecognizedMusicConfirmDialog } from "@/components/library/recognized-music-confirm-dialog";
+import { useImportQuota } from "@/components/providers/import-quota-context";
 import { useIngestJobs } from "@/components/providers/ingest-jobs-context";
 import { cifraEditHref, resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-routes";
 import type { StreamingLinkImportPanelConfig } from "@/lib/library/streaming-link-import-config";
@@ -56,6 +57,7 @@ function defaultPreviewForProvider(slug: StreamingLinkImportPanelConfig["slug"])
 export function ImportStreamingLinkPanel({ config, proEntitled = false, className }: ImportStreamingLinkPanelProps) {
   const router = useRouter();
   const { registerIngestJob, blockNewIngestIfBusy } = useIngestJobs();
+  const { canImport, refreshQuota } = useImportQuota();
 
   const [url, setUrl] = useState("");
   const [linkBusy, setLinkBusy] = useState(false);
@@ -68,6 +70,7 @@ export function ImportStreamingLinkPanel({ config, proEntitled = false, classNam
   const [pendingUrlIngest, setPendingUrlIngest] = useState<PendingUrlIngest | null>(null);
 
   const proGateActive = Boolean(config.requiresPro && !proEntitled);
+  const quotaBlocked = !canImport;
 
   const handleRecognitionDialogOpenChange = useCallback((open: boolean) => {
     setRecognitionConfirmOpen(open);
@@ -83,6 +86,10 @@ export function ImportStreamingLinkPanel({ config, proEntitled = false, classNam
       setUrlIngestBusy(true);
       try {
         if (blockNewIngestIfBusy()) return;
+        if (!canImport) {
+          setUrlIngestError("Atingiu o limite semanal de importações do seu plano.");
+          return;
+        }
 
         const ingestResp = await postUrlSourceIngest({
           sourceUrl: pending.sourceUrl,
@@ -95,6 +102,7 @@ export function ImportStreamingLinkPanel({ config, proEntitled = false, classNam
           const resolvedTrack = ingestResp.track as SchubertTrackJson;
           const pair = resolveCifraSlugPairFromTrack(resolvedTrack);
           if (pair) {
+            void refreshQuota();
             router.push(cifraEditHref(pair.artistSlug, pair.songSlug));
             return;
           }
@@ -103,10 +111,12 @@ export function ImportStreamingLinkPanel({ config, proEntitled = false, classNam
               ? resolvedTrack.trackId.trim()
               : "";
           if (tid) {
+            void refreshQuota();
             router.push(`/cifras/edit?trackId=${encodeURIComponent(tid)}`);
             return;
           }
           const q = encodeURIComponent(`${pending.title} ${pending.artist}`.trim());
+          void refreshQuota();
           router.push(`/biblioteca?q=${q}`);
           return;
         }
@@ -124,6 +134,7 @@ export function ImportStreamingLinkPanel({ config, proEntitled = false, classNam
           coverUrl: pending.coverUrl,
         });
         if (!registered) return;
+        void refreshQuota();
         router.push("/biblioteca/ingestoes");
       } catch (e) {
         const msg =
@@ -137,7 +148,7 @@ export function ImportStreamingLinkPanel({ config, proEntitled = false, classNam
         setUrlIngestBusy(false);
       }
     },
-    [blockNewIngestIfBusy, registerIngestJob, router],
+    [blockNewIngestIfBusy, canImport, refreshQuota, registerIngestJob, router],
   );
 
   const onConfirmUrlIngest = useCallback(async () => {
@@ -322,7 +333,7 @@ export function ImportStreamingLinkPanel({ config, proEntitled = false, classNam
               <button
                 type="button"
                 onClick={() => void onContinue()}
-                disabled={proGateActive || !url.trim() || linkBusy || urlIngestBusy}
+                disabled={proGateActive || !url.trim() || linkBusy || urlIngestBusy || !canImport}
                 className="rounded-lg bg-cifra-teal px-4 py-2 text-[11px] font-semibold text-cifra-bg transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {linkBusy ? "A ler link…" : "Continuar"}

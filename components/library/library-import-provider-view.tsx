@@ -5,6 +5,7 @@ import type { LibraryNavItem } from "@/lib/library/types";
 import { cn } from "@/lib/utils";
 
 import { ImportStreamingLinkPanel } from "./import-streaming-link-panel";
+import { ImportQuotaBanner } from "./import-quota-banner";
 import { SpotifyImportPanel } from "./spotify-import-panel";
 import { LibraryPageFooter } from "./library-page-footer";
 import { LibraryTopNav, type LibraryTopNavUser } from "./library-top-nav";
@@ -52,6 +53,9 @@ export function LibraryImportProviderView({
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-h-dvh lg:border-l lg:border-white/7">
         <LibraryTopNav items={navItems} user={user} billingPlan={billingPlan ?? undefined} />
+        <div className="mx-auto w-full max-w-4xl shrink-0 px-5 pt-2 md:px-8">
+          <ImportQuotaBanner billingPlan={billingPlan} />
+        </div>
         {panel.slug === "spotify" ? (
           <SpotifyImportPanel
             config={panel}

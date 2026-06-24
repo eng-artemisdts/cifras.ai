@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 
 import { ImportAudioUploadPanel, type QueuedFile } from "./import-audio-upload-panel";
 import { ImportMetadataStep } from "./import-metadata-step";
+import { ImportQuotaBanner } from "./import-quota-banner";
 import { LibraryPageFooter } from "./library-page-footer";
 import { LibraryTopNav, type LibraryTopNavUser } from "./library-top-nav";
 
@@ -130,6 +131,9 @@ export function ImportAudioLibraryFlow({
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-h-dvh lg:border-l lg:border-white/7">
         <LibraryTopNav items={navItems} user={user} billingPlan={billingPlan ?? undefined} />
+        <div className="mx-auto w-full max-w-3xl shrink-0 px-5 pt-2 md:px-10">
+          <ImportQuotaBanner billingPlan={billingPlan} />
+        </div>
         {metadataContext ? (
           <ImportMetadataStep
             key={metadataStepKey}

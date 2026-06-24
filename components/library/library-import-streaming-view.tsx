@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 
 import { LibraryPageFooter } from "./library-page-footer";
 import { LibraryTopNav, type LibraryTopNavUser } from "./library-top-nav";
+import { ImportQuotaBanner } from "./import-quota-banner";
 import { StreamingImportRightPanel } from "./streaming-import-right-panel";
 
 export type LibraryImportStreamingViewProps = {
@@ -70,6 +71,9 @@ export function LibraryImportStreamingView({
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-h-dvh lg:border-l lg:border-white/7">
         <LibraryTopNav items={navItems} user={user} billingPlan={billingPlan} />
+        <div className="mx-auto w-full max-w-2xl shrink-0 px-5 pt-2 md:px-8">
+          <ImportQuotaBanner billingPlan={billingPlan} />
+        </div>
         <StreamingImportRightPanel
           proStreamingUnlocked={proStreamingUnlocked}
           className="mx-auto min-h-0 w-full max-w-2xl flex-1 overflow-auto px-5 py-1 md:px-8 md:pb-3 md:pt-1"

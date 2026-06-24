@@ -347,7 +347,18 @@ function formatUpstreamErrorMessage(json: unknown, fallback: string): string {
   if (typeof json !== "object" || json === null) {
     return fallback || "Não foi possível processar o áudio";
   }
-  const m = (json as { message?: unknown }).message;
+  const root = json as Record<string, unknown>;
+  const nested =
+    root.message && typeof root.message === "object" && !Array.isArray(root.message)
+      ? (root.message as Record<string, unknown>)
+      : null;
+  const code = nested?.code ?? root.code;
+  if (code === "import_quota_exceeded") {
+    const msg = nested?.message ?? root.message;
+    if (typeof msg === "string" && msg.trim()) return msg;
+    return "Atingiu o limite semanal de importações do seu plano.";
+  }
+  const m = root.message;
   if (Array.isArray(m)) return m.map(String).join("; ");
   if (typeof m === "string" && m.trim()) return m;
   return fallback || "Falha na identificação";
