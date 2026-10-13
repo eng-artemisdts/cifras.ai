@@ -221,11 +221,75 @@ function createInstrumentalChordStrip(
  * @param {(el: HTMLElement, label: string) => void} [wireChordDiagram]
  * @returns {HTMLElement}
  */
+/**
+ * Depois do layout: afasta acordes que se sobreporiam (acorde largo sobre sílaba curta seguido
+ * de outro acorde). Só acrescenta espaço onde é preciso, como numa cifra impressa.
+ *
+ * @param {HTMLElement} container
+ */
+export function spaceOverlappingChords(container) {
+  const GAP_PX = 6;
+  for (const row of container.querySelectorAll('.cifra-line:not([data-instrumental-strip])')) {
+    for (const el of row.querySelectorAll('[data-chord-space]')) {
+      el.style.marginLeft = '';
+      el.style.paddingLeft = '';
+      el.style.backgroundImage = '';
+      el.removeAttribute('data-chord-space');
+    }
+    // A última sílaba de cada palavra reserva a largura do seu acorde: a quebra de linha
+    // passa a considerá-lo e o acorde nunca sai pela margem direita.
+    for (const piece of row.querySelectorAll('.cifra-syllable:last-child')) {
+      piece.style.minWidth = '';
+      const chordRow = piece.firstElementChild;
+      const w = chordRow ? chordRow.scrollWidth : 0;
+      if (w > piece.getBoundingClientRect().width) piece.style.minWidth = `${w}px`;
+    }
+    let prevRight = -Infinity;
+    let prevTop = NaN;
+    for (const sym of row.querySelectorAll('.cifra-chord__symbol')) {
+      if (!sym.textContent || !sym.textContent.replace(/\u00a0/g, '').trim()) continue;
+      const r = sym.getBoundingClientRect();
+      if (!r.width) continue;
+      if (Math.abs(r.top - prevTop) > 4) prevRight = -Infinity; // nova linha visual (quebra)
+      const overlap = prevRight + GAP_PX - r.left;
+      if (overlap > 0) {
+        const host = sym.closest('.cifra-syllable, .cifra-chord--track:not(.cifra-syllable *)') || sym;
+        const midWord =
+          host.classList.contains('cifra-syllable') &&
+          !!host.previousElementSibling &&
+          host.previousElementSibling.classList.contains('cifra-syllable');
+        if (midWord) {
+          // Dentro da palavra o espaço leva um hífen, como na cifra impressa ("se-me-ar").
+          const pad = (parseFloat(host.style.paddingLeft || '0') || 0) + overlap;
+          const dash = Math.min(8, Math.max(3, pad - 6));
+          host.style.paddingLeft = `${pad}px`;
+          host.style.backgroundImage = 'linear-gradient(currentColor, currentColor)';
+          host.style.backgroundRepeat = 'no-repeat';
+          host.style.backgroundSize = `${dash}px 1px`;
+          host.style.backgroundPosition = `${(pad - dash) / 2}px calc(100% - 0.5em)`;
+        } else {
+          const cur = parseFloat(host.style.marginLeft || '0') || 0;
+          host.style.marginLeft = `${cur + overlap}px`;
+        }
+        host.setAttribute('data-chord-space', '1');
+        const r2 = sym.getBoundingClientRect();
+        prevRight = r2.right;
+        prevTop = r2.top;
+      } else {
+        prevRight = r.right;
+        prevTop = r.top;
+      }
+    }
+  }
+}
+
 function createSyllablePiece(text, shown, off, wireChordDiagram) {
   const piece = document.createElement('span');
   piece.className = 'cifra-syllable inline-flex flex-col items-start gap-1';
   const chordRow = document.createElement('span');
-  chordRow.className = 'inline-flex min-h-[1.125rem] items-end gap-1.5';
+  // Largura zero: o acorde fica por cima do texto sem partir a palavra; colisões entre acordes
+  // são resolvidas depois do layout (`spaceOverlappingChords`).
+  chordRow.className = 'inline-flex min-h-[1.125rem] w-0 items-end gap-1.5 overflow-visible whitespace-nowrap';
   if (!shown.length) {
     const sym = document.createElement('span');
     sym.className = 'cifra-chord__symbol inline-flex items-end font-mono text-xs sm:text-sm';
@@ -556,8 +620,34 @@ export function mountCifraView(params) {
     }
   }
 
-  build();
-  return { spans, stripCells, clear, rebuild: build };
+  const relayout = () => {
+    try {
+      spaceOverlappingChords(container);
+    } catch {
+      // layout indisponível (ex.: SSR/testes)
+    }
+  };
+  let relayoutRaf = 0;
+  const onResize = () => {
+    if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(relayoutRaf);
+    relayoutRaf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame(relayout) : 0;
+  };
+  const buildAndLayout = () => {
+    build();
+    relayout();
+    if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(relayout).catch(() => {});
+    }
+  };
+  if (typeof window !== 'undefined') window.addEventListener('resize', onResize);
+  const teardown = () => {
+    if (typeof window !== 'undefined') window.removeEventListener('resize', onResize);
+    if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(relayoutRaf);
+    clear();
+  };
+
+  buildAndLayout();
+  return { spans, stripCells, clear: teardown, rebuild: buildAndLayout };
 }
 
 /**
