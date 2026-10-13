@@ -1,6 +1,8 @@
 "use client";
 
 import { sectionDisplayName } from "@/lib/cifra/section-labels";
+import { placeChordsOnWords } from "@/lib/cifra/chord-placement";
+import { buildBeatMap, estimateBeatSec, snapTimeToBeat } from "@/lib/cifra/beat-grid";
 import { ChevronDown, Eye, Plus } from "lucide-react";
 import {
   Fragment,
@@ -47,7 +49,6 @@ import {
   applyWordSlotMoveToTarget,
   buildWordSlots,
   chordDisplayLabel,
-  chordAnchorSlotIds,
   chordIndicesAttachedToSlot,
   clusterSlotsByLyricSegment,
   insertChordAtTime,
@@ -707,7 +708,38 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
 
     const { chordOnlyInstrumentalBlocks, vocalTimedLines, cifraRenderPlan } = cifraLayout;
 
-    const chordAnchors = useMemo(() => chordAnchorSlotIds(slots, chords), [slots, chords]);
+    /** Grade de tempos (da Music.ai) para encaixar acordes movidos/criados nos tempos da música. */
+    const beatMap = useMemo(() => buildBeatMap(chords), [chords]);
+    /**
+     * Mesmo posicionamento do leitor: sílaba (ou depois da palavra) de cada acorde, e acordes
+     * de trechos sem voz para as faixas instrumentais. O que se edita é o que se lê.
+     */
+    const chordPlacement = useMemo(
+      () =>
+        placeChordsOnWords(
+          slots.map((sl) => ({ key: sl.id, lineKey: sl.segmentIndex, text: sl.text, start: sl.start, end: sl.end })),
+          chords,
+          {
+            chordTimeOffsetSec,
+            beatSec: estimateBeatSec(chords),
+            isInstrumentalTime: (t) => chordOnlyInstrumentalBlocks.some((b) => t >= b.start - 1e-3 && t < b.end),
+          },
+        ),
+      [slots, chords, chordTimeOffsetSec, chordOnlyInstrumentalBlocks],
+    );
+    const placedBySlot = useMemo(
+      () => new Map(chordPlacement.words.map((w) => [w.key, w])),
+      [chordPlacement],
+    );
+    const instrumentalChordSet = useMemo(
+      () => new Set(chordPlacement.instrumentalChordIdxs),
+      [chordPlacement],
+    );
+    const chordAnchors = useMemo(() => {
+      const anchors: (string | null)[] = chords.map(() => null);
+      for (const w of chordPlacement.words) for (const pl of w.placements) anchors[pl.chordIdx] = w.key;
+      return anchors;
+    }, [chords, chordPlacement]);
 
     const referenceDurationSec = initial.meta?.duration_seconds;
     const contentTimelineEnd = useMemo(
@@ -766,13 +798,33 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
 
     const commitAddChord = useCallback(
       (symbol: string, start: number, end: number) => {
-        const { chords: next, index } = insertChordAtTime(chords, symbol, start, end);
+        const { chords: next, index } = insertChordAtTime(chords, symbol, snapTimeToBeat(start, beatMap), end);
         setChords(next);
         setAddChordContext(null);
         setActiveChordIndex(index);
       },
-      [chords],
+      [chords, beatMap],
     );
+
+    /** Alt+← / Alt+→: move o acorde selecionado um tempo (encaixado na grade). */
+    useEffect(() => {
+      const onKey = (e: KeyboardEvent) => {
+        if (!e.altKey || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+        if (activeChordIndex == null || editingId != null) return;
+        const target = e.target as HTMLElement | null;
+        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+        const c = chords[activeChordIndex];
+        if (!c) return;
+        e.preventDefault();
+        const dir = e.key === "ArrowRight" ? 1 : -1;
+        const next = beatMap
+          ? beatMap.timeAt(Math.round(beatMap.beatAt(c.start)) + dir)
+          : c.start + dir * 0.25;
+        setChords(moveChordToTime(chords, activeChordIndex, Math.max(0, next), sections));
+      };
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+    }, [activeChordIndex, editingId, chords, beatMap, sections]);
 
     const handleChordEndChange = useCallback(
       (index: number, nextEnd: number) => {
@@ -934,8 +986,7 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
             finishChordDnD();
             return;
           }
-          const order = sortedChordIndices(chords);
-          setChords(moveChordToSlot(chords, idx, slot, order, sections));
+          setChords(moveChordToTime(chords, idx, snapTimeToBeat(slot.start, beatMap), sections));
           finishChordDnD();
           return;
         }
@@ -952,7 +1003,23 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
         }
         finishWordDnD();
       },
-      [chords, slots, sections, finishChordDnD, finishWordDnD],
+      [chords, slots, sections, beatMap, finishChordDnD, finishWordDnD],
+    );
+
+    /** Largar acorde numa sílaba: começa no início dela, encaixado no tempo mais próximo. */
+    const onDropSyllable = useCallback(
+      (syllableStart: number, e: React.DragEvent) => {
+        const chordRaw = readChordDragIndexRaw(e.dataTransfer);
+        if (!chordRaw) return; // palavra arrastada: trata a célula da palavra
+        e.preventDefault();
+        e.stopPropagation();
+        const idx = parseInt(chordRaw, 10);
+        if (Number.isFinite(idx) && idx >= 0 && idx < chords.length) {
+          setChords(moveChordToTime(chords, idx, snapTimeToBeat(syllableStart, beatMap), sections));
+        }
+        finishChordDnD();
+      },
+      [chords, sections, beatMap, finishChordDnD],
     );
 
     /** Secção ou segmento sem palavras: largar acorde alinha ao intervalo temporal do bloco. */
@@ -1251,7 +1318,7 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                       zs,
                                       ze,
                                       formatChordLabel,
-                                    ).filter((cell) => chordStartsInSection(cell.chordIdx));
+                                    ).filter((cell) => chordStartsInSection(cell.chordIdx) && instrumentalChordSet.has(cell.chordIdx));
                                     pendingInstrumentalToLyricCarryChordIdx =
                                       stripCells.length > 0
                                         ? stripCells[stripCells.length - 1]?.chordIdx ?? null
@@ -1460,19 +1527,12 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                                     }
                                                   }}
                                                 >
-                                                  <div className="flex min-h-[22px] w-full flex-1 flex-row flex-wrap content-end items-end justify-center gap-x-1.5 gap-y-0.5">
-                                                    {visibleChordIdxs.length === 0 ? (
-                                                      <span
-                                                        className="pointer-events-none flex min-h-[18px] min-w-[1ch] shrink-0 select-none items-center justify-center"
-                                                        aria-hidden
-                                                      />
-                                                    ) : (
-                                                      [...visibleChordIdxs]
-                                                        .map((ci) => {
-                                                          const chord = chords[ci]!;
-                                                          const label = chordDisplayLabel(chord);
-                                                          return (
-                                                            <ChordDiagramTooltip key={`${slot.id}-${ci}`} label={label}>
+                                                  {(() => {
+                                                    const renderChordChip = (ci: number) => {
+                                                      const chord = chords[ci]!;
+                                                      const label = chordDisplayLabel(chord);
+                                                      return (
+                                                        <ChordDiagramTooltip key={`${slot.id}-${ci}`} label={label}>
                                                               <span
                                                                 data-cifra-chord-slot
                                                                 data-chord-index={ci}
@@ -1505,28 +1565,70 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                                                                 {label}
                                                               </span>
                                                             </ChordDiagramTooltip>
-                                                          );
-                                                        })
-                                                    )}
-                                                  </div>
-                                                  {editingId === slot.id ? (
-                                                    <CifraWordSlotInlineEditor
+                                                      );
+                                                    };
+                                                    if (editingId === slot.id) {
+                                                      return (
+                                                        <>
+                                                          <div className="flex min-h-[22px] w-full flex-row flex-wrap items-end justify-center gap-x-1.5">
+                                                            {visibleChordIdxs.map(renderChordChip)}
+                                                          </div>
+                                                          <CifraWordSlotInlineEditor
                                                       key={slot.id}
                                                       slot={slot}
                                                       onApply={(text, start, end) => applyWordSlotEdit(slot.id, text, start, end)}
                                                       onCancel={() => setEditingId(null)}
                                                     />
-                                                  ) : (
-                                                    <span
-                                                      data-cifra-word
-                                                      className={cn(
-                                                        "pointer-events-none block w-full min-w-0 select-none px-1 py-0.5 text-center text-[14px] font-medium leading-tight tracking-tight text-cifra-text",
-                                                        activeSlotId === slot.id && "font-semibold text-cifra-teal",
-                                                      )}
-                                                    >
-                                                      {slot.text}
-                                                    </span>
-                                                  )}
+                                                        </>
+                                                      );
+                                                    }
+                                                    /** Mesmo posicionamento do leitor: acorde sobre a sílaba em que muda. */
+                                                    const placed = placedBySlot.get(slot.id);
+                                                    const visibleSet = new Set(visibleChordIdxs);
+                                                    const syllables = placed?.syllables ?? [
+                                                      { text: slot.text, start: slot.start, end: slot.end },
+                                                    ];
+                                                    const placements = placed?.placements ?? [];
+                                                    const onsetAt = (si: number) =>
+                                                      placements
+                                                        .filter((pl) => pl.kind === "onset" && pl.syllableIndex === si && visibleSet.has(pl.chordIdx))
+                                                        .map((pl) => pl.chordIdx);
+                                                    const after = placements
+                                                      .filter((pl) => pl.kind === "after" && visibleSet.has(pl.chordIdx))
+                                                      .map((pl) => pl.chordIdx);
+                                                    return (
+                                                      <div className="flex w-full items-end justify-center">
+                                                        {syllables.map((syl, si) => (
+                                                          <div
+                                                            key={si}
+                                                            data-cifra-syllable={si}
+                                                            className="flex flex-col items-start"
+                                                            onDragOver={onDragOverWord}
+                                                            onDrop={(e) => onDropSyllable(syl.start, e)}
+                                                          >
+                                                            <div className="flex min-h-[22px] items-end gap-1">
+                                                              {onsetAt(si).map(renderChordChip)}
+                                                            </div>
+                                                            <span
+                                                              data-cifra-word
+                                                              className={cn(
+                                                                "pointer-events-none select-none whitespace-pre py-0.5 text-[14px] font-medium leading-tight tracking-tight text-cifra-text",
+                                                                activeSlotId === slot.id && "font-semibold text-cifra-teal",
+                                                              )}
+                                                            >
+                                                              {syl.text}
+                                                            </span>
+                                                          </div>
+                                                        ))}
+                                                        {after.length ? (
+                                                          <div className="flex flex-col items-start pl-1">
+                                                            <div className="flex min-h-[22px] items-end gap-1">{after.map(renderChordChip)}</div>
+                                                            <span className="pointer-events-none select-none py-0.5 text-[14px] leading-tight text-cifra-muted">…</span>
+                                                          </div>
+                                                        ) : null}
+                                                      </div>
+                                                    );
+                                                  })()}
                                                 </ContextMenuTrigger>
                                                 <ContextMenuContent>
                                                   <ContextMenuItem

@@ -44,3 +44,63 @@ export function estimateBeatSec(
 export function chordStartBar(c: MusicAiChordEvent): number | null {
   return hasGrid(c) ? Number(c.start_bar) : null;
 }
+
+export type BeatMap = {
+  /** Tempo absoluto (fracionário, 0-based) num instante (s). */
+  beatAt: (t: number) => number;
+  /** Instante (s) de um tempo absoluto. */
+  timeAt: (beat: number) => number;
+};
+
+/**
+ * Mapa tempo ↔ batida por interpolação entre os inícios/fins dos acordes com grade
+ * (extrapola nas pontas). `null` sem pelo menos dois pontos de grade.
+ */
+export function buildBeatMap(
+  chords: MusicAiChordEvent[] | undefined,
+  beatsPerBar = DEFAULT_BEATS_PER_BAR,
+): BeatMap | null {
+  const raw: { t: number; b: number }[] = [];
+  for (const c of chords ?? []) {
+    if (!hasGrid(c)) continue;
+    const s = Number(c.start);
+    const e = Number(c.end);
+    const bs = absBeat(Number(c.start_bar), Number(c.start_beat), beatsPerBar);
+    const be = absBeat(Number(c.end_bar), Number(c.end_beat), beatsPerBar);
+    if (!(e > s) || !(be > bs)) continue;
+    raw.push({ t: s, b: bs }, { t: e, b: be });
+  }
+  raw.sort((a, b) => a.t - b.t);
+  const pts: { t: number; b: number }[] = [];
+  for (const p of raw) {
+    const last = pts[pts.length - 1];
+    if (last && Math.abs(last.t - p.t) < 1e-6) last.b = (last.b + p.b) / 2;
+    else if (!last || p.b > last.b) pts.push({ ...p });
+  }
+  if (pts.length < 2) return null;
+
+  const interp = (x: number, xs: number[], ys: number[]) => {
+    const n = xs.length;
+    let i = 0;
+    if (x <= xs[0]!) i = 0;
+    else if (x >= xs[n - 1]!) i = n - 2;
+    else while (i < n - 2 && x > xs[i + 1]!) i++;
+    const x0 = xs[i]!;
+    const x1 = xs[i + 1]!;
+    const y0 = ys[i]!;
+    const y1 = ys[i + 1]!;
+    return Math.abs(x1 - x0) < 1e-9 ? y0 : y0 + ((x - x0) / (x1 - x0)) * (y1 - y0);
+  };
+  const ts = pts.map((p) => p.t);
+  const bs = pts.map((p) => p.b);
+  return {
+    beatAt: (t) => interp(t, ts, bs),
+    timeAt: (b) => interp(b, bs, ts),
+  };
+}
+
+/** Encaixa um instante no tempo mais próximo da grade; sem grade, devolve o instante. */
+export function snapTimeToBeat(t: number, map: BeatMap | null): number {
+  if (!map || !Number.isFinite(t)) return t;
+  return Math.max(0, map.timeAt(Math.round(map.beatAt(t))));
+}
