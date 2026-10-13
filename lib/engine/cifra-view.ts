@@ -19,23 +19,12 @@ import {
   chordEventIndexAtAudioTime,
   chordSegmentsInAudioWindow,
   collapseTrailingNoChordEvents,
-  dropChordSegmentsOriginatingBeforeSection,
   formatChordLabel
 } from './chord-timeline';
-import { chordsHaveBeatGridMetadata, downbeatChordStartingInsideWordWindow } from './chord-bar-grid';
+import { placeChordsOnWords } from '../cifra/chord-placement';
+import { estimateBeatSec } from '../cifra/beat-grid';
 import { attachChordDiagramHoverDom } from '../cifra/chord-diagram/attach-chord-diagram-hover-dom';
 
-/**
- * Se o cabeçalho da linha é uma secção vocal (Verse, Chorus, …) com `start` = S, só **anacruse**
- * curta antes de S usa o 1.º acorde depois de S. Caso contrário usa-se o meio-tempo da palavra.
- * Sem limiar de proximidade, letra cedo (ex. 13 s) com S no JSON à frente (ex. 44 s) fazia snap
- * em **todas** as palavras → um só acorde na linha; o «acorde no tempo» continuava certo.
- */
-const CHORD_SNAP_AFTER_SECTION_START_SEC = 0.06;
-/** Palavra ainda «antes do compasso» se o seu fim não passa do downbeat (tolerância ao alinhamento). */
-const CHORD_SNAP_PICKUP_END_EPS_SEC = 0.12;
-/** Só anacruse se o fim da palavra está a no máximo isto **antes** de S (evita confundir desvio Whisper/Music.AI com pickup). */
-const CHORD_SNAP_MAX_LEAD_BEFORE_SECTION_SEC = 4;
 /**
  * Último acorde visível da grelha instrumental desde `fromIdx`.
  *
@@ -113,7 +102,8 @@ function createInstrumentalChordStrip(
   stripCellsOut,
   formatChordEvent,
   embeddedInSection,
-  wireChordDiagram
+  wireChordDiagram,
+  allowedChordIdxs
 ) {
   const outer = document.createElement('div');
   outer.className = embeddedInSection ? 'mb-0' : 'mb-6';
@@ -129,6 +119,7 @@ function createInstrumentalChordStrip(
     const c = chords[s.chordIdx];
     if (!c) return false;
     const cA0 = Number(c.start) + off;
+    if (allowedChordIdxs && !allowedChordIdxs.has(s.chordIdx)) return false;
     return Number.isFinite(cA0) && cA0 >= Number(iv.start) - 1e-3;
   });
   if (!segs.length) return null;
@@ -169,6 +160,50 @@ function createInstrumentalChordStrip(
 
   outer.appendChild(row);
   return outer;
+}
+
+/**
+ * Sílaba de uma palavra cantada, com o(s) acorde(s) que começam nela alinhados à esquerda.
+ * Um acorde mais largo que a sílaba alarga a peça (como o espaçamento das cifras).
+ *
+ * @param {string} text
+ * @param {{ label: string, chordIdx: number, c: import('./musicai-types.ts').MusicAiChordEvent }[]} shown
+ * @param {number} off
+ * @param {(el: HTMLElement, label: string) => void} [wireChordDiagram]
+ * @returns {HTMLElement}
+ */
+function createSyllablePiece(text, shown, off, wireChordDiagram) {
+  const piece = document.createElement('span');
+  piece.className = 'cifra-syllable inline-flex flex-col items-start gap-1';
+  const chordRow = document.createElement('span');
+  chordRow.className = 'inline-flex min-h-[1.125rem] items-end gap-1.5';
+  if (!shown.length) {
+    const sym = document.createElement('span');
+    sym.className = 'cifra-chord__symbol inline-flex items-end font-mono text-xs sm:text-sm';
+    sym.textContent = ' ';
+    chordRow.appendChild(sym);
+  }
+  for (const v of shown) {
+    // Cada acorde é um alvo próprio de destaque (tempo e índice do evento).
+    const track = document.createElement('span');
+    track.className = 'cifra-chord--track inline-flex rounded-md transition-colors';
+    track.dataset.playbackA0 = String(Number(v.c.start) + off);
+    track.dataset.playbackA1 = String(Number(v.c.end) + off);
+    track.dataset.chordIdx = String(v.chordIdx);
+    const sym = document.createElement('span');
+    sym.className =
+      'cifra-chord__symbol inline-flex items-end whitespace-pre pr-1 font-mono text-xs font-semibold text-auris-teal sm:text-sm';
+    sym.textContent = v.label;
+    track.appendChild(sym);
+    chordRow.appendChild(track);
+    if (typeof wireChordDiagram === 'function') wireChordDiagram(sym, v.label);
+  }
+  const tx = document.createElement('span');
+  tx.className = 'text-auris-ink whitespace-pre text-[14px] font-medium leading-tight tracking-tight';
+  tx.textContent = text;
+  piece.appendChild(chordRow);
+  piece.appendChild(tx);
+  return piece;
 }
 
 /**
@@ -224,33 +259,6 @@ function createLyricChordCell(chordText, lyricText, g, spansOut, playbackWin, ch
 }
 
 /**
- * Colapsa acordes iguais consecutivos (já em ordem temporal), preservando apenas
- * a primeira ocorrência de cada sequência contínua.
- *
- * @param {{ label: string, a0: number, a1: number, chordIdx?: number }[]} segs
- * @returns {{ label: string, a0: number, a1: number, chordIdx?: number }[]}
- */
-function collapseSequentialEqualChordSegments(segs) {
-  /** @type {{ label: string, a0: number, a1: number, chordIdx?: number }[]} */
-  const out = [];
-  for (let i = 0; i < segs.length; i++) {
-    const s = segs[i];
-    const last = out[out.length - 1];
-    if (last && last.label === s.label) {
-      last.a1 = Math.max(last.a1, s.a1);
-      continue;
-    }
-    out.push({
-      label: s.label,
-      a0: s.a0,
-      a1: s.a1,
-      chordIdx: s.chordIdx
-    });
-  }
-  return out;
-}
-
-/**
  * @param {object} params
  * @param {HTMLElement} params.container
  * @param {import('./section-layout.ts').CifraRenderEvent[]} params.renderPlan
@@ -261,9 +269,7 @@ function collapseSequentialEqualChordSegments(segs) {
  * @param {import('./musicai-types.ts').MusicAiChordEvent[]} [params.chords]
  * @param {number} [params.chordTimeOffsetSec]
  * @param {boolean} [params.showSectionBars=true] — só barras/cabeçalhos de parte; o snap de acorde por secção usa `sectionsSorted` sempre que houver dados
- * @param {boolean} [params.showAllChordPositions=false] — não colapsa acordes repetidos em linhas vocais
- * @param {boolean} [params.useChordBarAnchors] — se omitido, ativa com `start_bar/start_beat/end_bar/end_beat` completos; âncoras só por beat absoluto (`chord-bar-grid`)
- * @param {number} [params.beatsPerBar=4] — para conversão bar:beat → beat absoluto
+ * @param {number} [params.beatSec] — duração de um tempo (s); por omissão estimada da grade dos acordes
  * @returns {{ spans: CifraSpan[], stripCells: StripChordCell[], clear: () => void, rebuild: () => void }}
  */
 export function mountCifraView(params) {
@@ -277,18 +283,10 @@ export function mountCifraView(params) {
     chords = [],
     chordTimeOffsetSec = 0,
     showSectionBars = true,
-    showAllChordPositions = false,
-    useChordBarAnchors: useChordBarAnchorsParam,
-    beatsPerBar: beatsPerBarParam = 4,
-    slotIdsInLyricOrder = null,
-    chordAnchorsBySlotId = null,
+    beatSec: beatSecParam,
     chordDiagramHoverOptionsRef = null,
   } = params;
 
-  const beatsPerBar = Number.isFinite(beatsPerBarParam) && beatsPerBarParam >= 1 ? beatsPerBarParam : 4;
-
-  const useChordBarAnchors =
-    useChordBarAnchorsParam !== undefined ? useChordBarAnchorsParam : chordsHaveBeatGridMetadata(chords);
 
   /** @type {CifraSpan[]} */
   const spans = [];
@@ -329,137 +327,40 @@ export function mountCifraView(params) {
   function build() {
     clear();
     const normalizedChords = collapseTrailingNoChordEvents(Array.isArray(chords) ? chords : []);
-    /**
-     * Janela temporal efetiva da palavra (mesma heurística usada no render da linha).
-     * @param {any[]} words
-     * @param {number} idx
-     * @returns {{ start: number, end: number } | null}
-     */
-    const wordAudioWindow = (words, idx) => {
-      const tw = words[idx];
-      if (!tw || tw.start == null || !Number.isFinite(tw.start)) return null;
-      const nextStart =
-        idx + 1 < words.length && words[idx + 1].start != null && Number.isFinite(words[idx + 1].start)
-          ? words[idx + 1].start
-          : null;
-      let upper =
-        nextStart != null && Number.isFinite(nextStart) && nextStart > tw.start + 1e-4
-          ? nextStart
-          : tw.end != null && Number.isFinite(tw.end) && tw.end > tw.start + 1e-4
-            ? tw.end
-            : tw.start + 0.5;
-      if (
-        tw.end != null &&
-        Number.isFinite(tw.end) &&
-        tw.end > tw.start + 1e-4 &&
-        upper > tw.end + 1e-6
-      ) {
-        upper = tw.end;
-      }
-      if (!Number.isFinite(upper) || upper <= tw.start + 1e-4) return null;
-      return { start: Number(tw.start), end: Number(upper) };
-    };
-    /**
-     * Índices de acorde por `TimedWord.g` (= índice na ordem da letra).
-     * Preferência: mapa vindo do TypeScript (`buildPreviewChordAnchors`), **idêntico** ao editor.
-     * Fallback: heurística local (payloads sem campo extra).
-     * @type {Map<number, number[]>}
-     */
-    const anchoredChordIdxByG = new Map();
     const off = Number.isFinite(chordTimeOffsetSec) ? chordTimeOffsetSec : 0;
 
-    const useEditorAnchors =
-      Array.isArray(slotIdsInLyricOrder) &&
-      slotIdsInLyricOrder.length > 0 &&
-      chordAnchorsBySlotId &&
-      typeof chordAnchorsBySlotId === 'object';
-
-    if (useEditorAnchors) {
-      for (let g = 0; g < slotIdsInLyricOrder.length; g++) {
-        const sid = slotIdsInLyricOrder[g];
-        const raw = chordAnchorsBySlotId[sid];
-        if (!Array.isArray(raw) || raw.length === 0) continue;
-        const sorted = [...raw].sort(
-          (a, b) => Number(normalizedChords[a]?.start) - Number(normalizedChords[b]?.start),
-        );
-        anchoredChordIdxByG.set(g, sorted);
-      }
-    } else {
-      /**
-       * @type {{ w: any, start: number, end: number }[]}
-       */
-      const lyricWordAnchorIntervals = [];
-      for (let i = 0; i < renderPlan.length; i++) {
-        const ev = renderPlan[i];
-        if (!ev || ev.kind !== 'lyric' || !Array.isArray(ev.line)) continue;
-        for (let wi = 0; wi < ev.line.length; wi++) {
-          const w = ev.line[wi];
-          if (!w || w.start == null || !Number.isFinite(Number(w.start))) continue;
-          const ws = Number(w.start);
-          let we =
-            w.end != null && Number.isFinite(Number(w.end)) && Number(w.end) > ws + 1e-6
-              ? Number(w.end)
-              : ws + Math.max(0.02, 1e-3);
-          if (!(we > ws + 1e-6)) continue;
-          lyricWordAnchorIntervals.push({ w, start: ws, end: we });
-        }
-      }
-      lyricWordAnchorIntervals.sort((a, b) => a.w.g - b.w.g);
-
-      for (let ci = 0; ci < normalizedChords.length; ci++) {
-        const c = normalizedChords[ci];
-        if (!c) continue;
-        const cA0 = Number(c.start) + off;
-        const cA1 = Number(c.end) + off;
-        if (!Number.isFinite(cA0) || !Number.isFinite(cA1) || cA1 <= cA0 + 1e-6) continue;
-
-        /** @type {{ ww: { w: any, start: number, end: number }, wi: number }[]} */
-        const containing = [];
-        for (let wi = 0; wi < lyricWordAnchorIntervals.length; wi++) {
-          const ww = lyricWordAnchorIntervals[wi];
-          if (cA0 >= ww.start && cA0 < ww.end) {
-            containing.push({ ww, wi });
-          }
-        }
-
-        /** @type {{ w: any, start: number, end: number } | null} */
-        let target = null;
-        if (containing.length) {
-          let best = containing[0];
-          let bestD = Math.abs(best.ww.start - cA0);
-          let bestG = best.ww.w.g;
-          for (let j = 1; j < containing.length; j++) {
-            const cur = containing[j];
-            const d = Math.abs(cur.ww.start - cA0);
-            const gW = cur.ww.w.g;
-            if (d < bestD - 1e-12 || (Math.abs(d - bestD) <= 1e-12 && gW < bestG)) {
-              best = cur;
-              bestD = d;
-              bestG = gW;
-            }
-          }
-          target = best.ww;
-        } else {
-          for (let wi = 0; wi < lyricWordAnchorIntervals.length; wi++) {
-            const ww = lyricWordAnchorIntervals[wi];
-            if (cA1 > ww.start && cA0 < ww.end) {
-              target = ww;
-              break;
-            }
-          }
-        }
-
-        if (target && Number.isFinite(target.w.g)) {
-          const gKey = target.w.g;
-          const arr = anchoredChordIdxByG.get(gKey) ?? [];
-          arr.push(ci);
-          anchoredChordIdxByG.set(gKey, arr);
-        }
-      }
-      anchoredChordIdxByG.forEach((arr) => {
-        arr.sort((a, b) => Number(normalizedChords[a]?.start) - Number(normalizedChords[b]?.start));
-      });
+    /** Sem letra (faixa instrumental): uma única faixa com a música inteira. */
+    let plan = renderPlan;
+    const hasLyrics = plan.some((e) => e.kind === 'lyric' && e.line.length);
+    if (!hasLyrics && normalizedChords.length) {
+      const first = Number(normalizedChords[0].start) + off;
+      const last = Number(normalizedChords[normalizedChords.length - 1].end) + off;
+      plan = [{ kind: 'instrumental', iv: { start: Math.max(0, first - 1e-3), end: last, displayLabel: '—' } }];
     }
+
+    /**
+     * Posicionamento único (o mesmo do editor): cada acorde vai para uma sílaba, para depois de
+     * uma palavra, ou para a faixa instrumental do trecho sem voz em que começa.
+     */
+    const instrumentalIvs = plan.filter((e) => e.kind === 'instrumental').map((e) => e.iv);
+    /** @type {{ key: number, lineKey: number, text: string, start: number, end: number }[]} */
+    const placementWords = [];
+    plan.forEach((ev, li) => {
+      if (ev.kind !== 'lyric') return;
+      for (const w of ev.line) {
+        if (w.start == null || !Number.isFinite(w.start)) continue;
+        const end = w.end != null && Number.isFinite(w.end) && w.end > w.start ? w.end : w.start + 0.2;
+        placementWords.push({ key: w.g, lineKey: li, text: String(w.text ?? ''), start: Number(w.start), end: Number(end) });
+      }
+    });
+    const placement = placeChordsOnWords(placementWords, normalizedChords, {
+      chordTimeOffsetSec: off,
+      beatSec: Number.isFinite(beatSecParam) ? beatSecParam : estimateBeatSec(normalizedChords),
+      isInstrumentalTime: (t) => instrumentalIvs.some((iv) => t >= iv.start - 1e-3 && t < iv.end),
+    });
+    const placedByG = new Map(placement.words.map((w) => [w.key, w]));
+    const instrumentalSet = new Set(placement.instrumentalChordIdxs);
+
     /**
      * Bloco da **ocorrência** de secção atual. Cada ocorrência (ex.: 1.º Refrão, 2.º Refrão)
      * tem o seu próprio bloco, na ordem em que a música é tocada.
@@ -467,10 +368,6 @@ export function mountCifraView(params) {
      * @type {{ wrap: HTMLElement, inner: HTMLElement, sec: import('./musicai-types.ts').MusicAiSection } | null}
      */
     let currentShell = null;
-    /**
-     * Acrescenta `node` ao bloco da ocorrência `sec`; abre um bloco novo (no fim) se `sec`
-     * não for a mesma ocorrência do bloco atual.
-     */
     const appendToOccurrence = (sec, showHeader, node) => {
       if (!currentShell || !envelopesMatch(currentShell.sec, sec)) {
         const shell = createSectionShell(sec, showHeader, formatClock);
@@ -479,127 +376,40 @@ export function mountCifraView(params) {
       }
       currentShell.inner.appendChild(node);
     };
-    /** @type {string|null} */
-    let currentLyricSectionLabelKey = null;
-    /** Último acorde vocal visível para dedupe no começo da linha seguinte. */
-    let carryLyricChordLabel = /** @type {string|null} */ (null);
-    /**
-     * Dedupe do 1.º acorde vocal imediatamente após um bloco instrumental (mesma secção).
-     * @type {{ label: string, chordIdx: number|null, sectionLabelKey: string|null } | null}
-     */
-    let pendingInstrumentalToLyricCarry = null;
-    /**
-     * Última célula vocal com símbolo de acorde visível na linha anterior (para não repetir o mesmo
-     * `chordIdx` na 1.ª palavra da linha seguinte — um só objeto JSON atravessa a quebra de linha).
-     * @type {{ wrap: HTMLElement, chordIdx: number } | null}
-     */
-    let prevLyricRowLastVisibleChord = null;
 
-    for (let evIdx = 0; evIdx < renderPlan.length; evIdx++) {
-      const ev = renderPlan[evIdx];
+    /** Último símbolo mostrado: um acorde repetido em seguida não se reescreve (vale até o próximo). */
+    let lastShownLabel = /** @type {string|null} */ (null);
+    /** Secção do último símbolo: numa secção nova o acorde pode ser reafirmado. */
+    let lastShownSectionKey = /** @type {string|null} */ (null);
+
+    for (let evIdx = 0; evIdx < plan.length; evIdx++) {
+      const ev = plan[evIdx];
+
       if (ev.kind === 'instrumental') {
-        carryLyricChordLabel = null;
-        prevLyricRowLastVisibleChord = null;
-        pendingInstrumentalToLyricCarry = null;
-        const instrumentalStripStartIdx = stripCells.length;
         const iv0 = ev.iv;
         const env0 =
-          sectionsSorted.length > 0
-            ? musicAiSectionEnvelopeForTime((iv0.start + iv0.end) / 2, sectionsSorted)
-            : null;
-        /** @type {{ start: number, end: number, displayLabel: string }[]} */
-        const instGroup = [iv0];
+          sectionsSorted.length > 0 ? musicAiSectionEnvelopeForTime((iv0.start + iv0.end) / 2, sectionsSorted) : null;
+        const group = [iv0];
         let nextIdx = evIdx + 1;
-        while (nextIdx < renderPlan.length && renderPlan[nextIdx].kind === 'instrumental') {
-          const ivn = renderPlan[nextIdx].iv;
+        while (nextIdx < plan.length && plan[nextIdx].kind === 'instrumental') {
+          const ivn = plan[nextIdx].iv;
           const envN =
-            sectionsSorted.length > 0
-              ? musicAiSectionEnvelopeForTime((ivn.start + ivn.end) / 2, sectionsSorted)
-              : null;
+            sectionsSorted.length > 0 ? musicAiSectionEnvelopeForTime((ivn.start + ivn.end) / 2, sectionsSorted) : null;
           if (!envelopesMatch(env0, envN)) break;
-          instGroup.push(ivn);
+          group.push(ivn);
           nextIdx++;
         }
-
-        let mergeLyricEnv = null;
-        if (nextIdx < renderPlan.length && renderPlan[nextIdx].kind === 'lyric') {
-          const ln = renderPlan[nextIdx].line;
-          const fs = ln[0]?.start;
-          if (sectionsSorted.length > 0 && fs != null && Number.isFinite(fs)) {
-            mergeLyricEnv = musicAiSectionEnvelopeForTime(fs, sectionsSorted);
-          }
-        }
-        const mergeIntoLyrics =
-          env0 != null && mergeLyricEnv != null && envelopesMatch(env0, mergeLyricEnv);
-
-        const lab0 = String(iv0.displayLabel ?? '').trim() || '—';
-        const wantInstrumentalHeader =
-          showSectionBars &&
-          (sectionsSorted.length > 0 || lab0 === '—' || isInstrumentalSectionLabel(iv0.displayLabel));
-        let secLike0 = { start: iv0.start, end: iv0.end, label: lab0 };
-        if (sectionsSorted.length) {
-          const e0 = musicAiSectionEnvelopeForTime((iv0.start + iv0.end) / 2, sectionsSorted);
-          if (e0) {
-            secLike0 = {
-              start: e0.start,
-              end: e0.end,
-              label: String(e0.label ?? '').trim() || lab0
-            };
-          }
-        }
-        const wrapInstrumental = sectionsSorted.length > 0 || wantInstrumentalHeader;
-
-        if (mergeIntoLyrics && wrapInstrumental) {
-          for (let g = 0; g < instGroup.length; g++) {
-            const strip = createInstrumentalChordStrip(
-              instGroup[g],
-              chords,
-              chordTimeOffsetSec,
-              stripCells,
-              formatChordEvent,
-              true,
-              wireChordDiagramIfResolvable
-            );
-            if (strip) appendToOccurrence(secLike0, wantInstrumentalHeader, strip);
-          }
-          const lastVisibleMerged = lastVisibleChordInStripCellsSince(
-            stripCells,
-            instrumentalStripStartIdx,
-            getChordLabelAtAudioTime
-          );
-          if (lastVisibleMerged && String(lastVisibleMerged.label).trim() !== '') {
-            pendingInstrumentalToLyricCarry = {
-              label: lastVisibleMerged.label,
-              chordIdx: lastVisibleMerged.chordIdx,
-              sectionLabelKey: sectionDisplayLabelKey(secLike0.label)
-            };
-          }
-          currentLyricSectionLabelKey = sectionDisplayLabelKey(secLike0.label);
-          evIdx = nextIdx - 1;
-          continue;
-        }
-
-        currentLyricSectionLabelKey = null;
-
-        for (let g = 0; g < instGroup.length; g++) {
-          const iv = instGroup[g];
+        for (const iv of group) {
           const lab = String(iv.displayLabel ?? '').trim() || '—';
+          const env =
+            sectionsSorted.length > 0 ? musicAiSectionEnvelopeForTime((iv.start + iv.end) / 2, sectionsSorted) : null;
+          const secLike = env
+            ? { start: env.start, end: env.end, label: String(env.label ?? '').trim() || lab }
+            : { start: iv.start, end: iv.end, label: lab };
           const wantHeader =
-            showSectionBars &&
-            (sectionsSorted.length > 0 || lab === '—' || isInstrumentalSectionLabel(iv.displayLabel));
-          let secLike = { start: iv.start, end: iv.end, label: lab };
-          if (sectionsSorted.length) {
-            const env = musicAiSectionEnvelopeForTime((iv.start + iv.end) / 2, sectionsSorted);
-            if (env) {
-              secLike = {
-                start: env.start,
-                end: env.end,
-                label: String(env.label ?? '').trim() || lab
-              };
-            }
-          }
+            showSectionBars && (sectionsSorted.length > 0 || lab === '—' || isInstrumentalSectionLabel(iv.displayLabel));
           const wrapInst = sectionsSorted.length > 0 || wantHeader;
-
+          const stripStart = stripCells.length;
           const strip = createInstrumentalChordStrip(
             iv,
             chords,
@@ -607,7 +417,8 @@ export function mountCifraView(params) {
             stripCells,
             formatChordEvent,
             wrapInst,
-            wireChordDiagramIfResolvable
+            wireChordDiagramIfResolvable,
+            instrumentalSet
           );
           if (!strip) continue;
           if (wrapInst) {
@@ -616,421 +427,80 @@ export function mountCifraView(params) {
             currentShell = null;
             container.appendChild(strip);
           }
+          const lastCell = lastVisibleChordInStripCellsSince(stripCells, stripStart, getChordLabelAtAudioTime);
+          if (lastCell) lastShownLabel = lastCell.label;
+          lastShownSectionKey = sectionDisplayLabelKey(secLike.label);
         }
-
-        if (nextIdx < renderPlan.length && renderPlan[nextIdx].kind === 'lyric' && env0 && sectionsSorted.length) {
-          const ln0 = renderPlan[nextIdx].line;
-          const fs = ln0[0]?.start;
-          let lyricEnv = null;
-          if (fs != null && Number.isFinite(fs)) {
-            lyricEnv = musicAiSectionEnvelopeForTime(fs, sectionsSorted);
-          }
-          if (lyricEnv) {
-            const lastVisible = lastVisibleChordInStripCellsSince(
-              stripCells,
-              instrumentalStripStartIdx,
-              getChordLabelAtAudioTime
-            );
-            if (lastVisible && String(lastVisible.label).trim() !== '') {
-              pendingInstrumentalToLyricCarry = {
-                label: lastVisible.label,
-                chordIdx: lastVisible.chordIdx,
-                sectionLabelKey:
-                  lyricEnv != null ? sectionDisplayLabelKey(lyricEnv.label) : null
-              };
-            }
-          }
-        }
-
         evIdx = nextIdx - 1;
         continue;
       }
 
       const lineWords = ev.line;
       if (!lineWords.length) continue;
-
       const fw = lineWords[0];
-      /** Cabeçalhos de parte só com `showSectionBars`; snap de acorde usa secções sempre que existirem no payload. */
-      const secHeader =
+      const sec =
         sectionsSorted.length && fw.start != null && Number.isFinite(fw.start)
           ? vocalSectionHeaderForLyricTime(fw.start, sectionsSorted)
           : null;
-      const sec = secHeader;
       const secLabelKey = sec ? sectionDisplayLabelKey(sec.label) : null;
-      const sectionChangedFromPrevRow =
-        secLabelKey != null &&
-        currentLyricSectionLabelKey != null &&
-        secLabelKey !== currentLyricSectionLabelKey;
-
-      if (sectionChangedFromPrevRow) {
-        carryLyricChordLabel = null;
-        prevLyricRowLastVisibleChord = null;
-      }
-
-      let crossRowCarryFromPrev = sectionChangedFromPrevRow ? null : prevLyricRowLastVisibleChord;
+      if (secLabelKey !== lastShownSectionKey) lastShownLabel = null;
 
       const row = document.createElement('div');
       row.className = 'cifra-line flex flex-wrap items-end gap-x-3 gap-y-4';
 
-      let rowPrevChordLabel = carryLyricChordLabel;
-      let exactPrevRenderedLabel = /** @type {string|null} */ (null);
-      if (pendingInstrumentalToLyricCarry && !sectionChangedFromPrevRow) {
-        const carrySecKey = pendingInstrumentalToLyricCarry.sectionLabelKey;
-        const sameSectionAsLyric =
-          carrySecKey == null || secLabelKey == null || carrySecKey === secLabelKey;
-        if (sameSectionAsLyric) {
-          if (showAllChordPositions) {
-            exactPrevRenderedLabel = pendingInstrumentalToLyricCarry.label;
-          }
-          if (
-            pendingInstrumentalToLyricCarry.chordIdx != null &&
-            Number.isFinite(pendingInstrumentalToLyricCarry.chordIdx)
-          ) {
-            crossRowCarryFromPrev = {
-              wrap: /** @type {HTMLElement} */ (null),
-              chordIdx: Number(pendingInstrumentalToLyricCarry.chordIdx)
-            };
-          }
-        }
-      }
-      lineWords.forEach((tw, idx) => {
-        /** Início da sílaba: alinha com o «acorde no tempo» na entrada da palavra; o meio-tempo atrasa a troca (D→A) para dentro da sílaba seguinte. */
-        let chordLookupT = chordGridStartAudioTime;
-        if (tw.start != null && Number.isFinite(tw.start)) {
-          chordLookupT = tw.start;
-        } else if (tw.end != null && Number.isFinite(tw.end)) {
-          chordLookupT = tw.end;
+      /** Rótulo visível de um acorde posicionado (ou `null` se repete o anterior). */
+      const nextVisible = (chordIdx) => {
+        const c = normalizedChords[chordIdx];
+        if (!c) return null;
+        const label = String(formatChordEvent(c) ?? '').trim();
+        if (!label || label === '—' || label === lastShownLabel) return null;
+        lastShownLabel = label;
+        return { label, chordIdx, c };
+      };
+
+      for (const tw of lineWords) {
+        const pw = placedByG.get(tw.g);
+        const syllables = pw ? pw.syllables : [{ text: String(tw.text ?? '') }];
+        /** @type {Map<number, number[]>} */
+        const onsetBySyl = new Map();
+        /** @type {number[]} */
+        const afters = [];
+        for (const p of pw ? pw.placements : []) {
+          if (p.kind === 'after') afters.push(p.chordIdx);
+          else onsetBySyl.set(p.syllableIndex, [...(onsetBySyl.get(p.syllableIndex) ?? []), p.chordIdx]);
         }
 
-        const leadBeforeSec =
-          secHeader && Number.isFinite(secHeader.start) && tw.end != null && Number.isFinite(tw.end)
-            ? secHeader.start - tw.end
-            : Infinity;
-        const isPickupSyllable =
-          Boolean(
-            secHeader &&
-            !isInstrumentalSectionLabel(secHeader.label) &&
-            Number.isFinite(secHeader.start) &&
-            tw.start != null &&
-            Number.isFinite(tw.start) &&
-            tw.start < secHeader.start &&
-            tw.end != null &&
-            Number.isFinite(tw.end) &&
-            tw.end <= secHeader.start + CHORD_SNAP_PICKUP_END_EPS_SEC &&
-            leadBeforeSec >= -CHORD_SNAP_PICKUP_END_EPS_SEC &&
-            leadBeforeSec <= CHORD_SNAP_MAX_LEAD_BEFORE_SECTION_SEC
-          );
-        if (isPickupSyllable) {
-          chordLookupT = secHeader.start + CHORD_SNAP_AFTER_SECTION_START_SEC;
-        }
+        const wordWrap = document.createElement('span');
+        wordWrap.className = 'cifra-word inline-flex min-w-0 items-end rounded-md px-1 py-0.5 transition-colors';
+        wordWrap.dataset.g = String(tw.g);
+        spans.push({ wrap: wordWrap, g: tw.g });
+        syllables.forEach((syl, si) => {
+          const shown = (onsetBySyl.get(si) ?? []).map(nextVisible).filter(Boolean);
+          wordWrap.appendChild(createSyllablePiece(syl.text, shown, off, wireChordDiagramIfResolvable));
+        });
+        row.appendChild(wordWrap);
 
-        /**
-         * A edição ancora acordes por sobreposição com a palavra (não pelo onset na secção).
-         * Para manter preview = edição, não removemos segmentos só porque começaram antes da secção:
-         * acordes sustentados (ex.: G# da intro até "Everywhere") devem continuar visíveis.
-         */
-        const applySectionOnsetFilter = false;
-        const sectionStartForChords =
-          secHeader && Number.isFinite(secHeader.start) ? Number(secHeader.start) : NaN;
-
-        let label = getChordLabelAtAudioTime(chordLookupT);
-        /** @type {{ label: string, a0: number, a1: number }[]} */
-        let segs = [];
-        const nextStart =
-          idx + 1 < lineWords.length &&
-            lineWords[idx + 1].start != null &&
-            Number.isFinite(lineWords[idx + 1].start)
-            ? lineWords[idx + 1].start
-            : null;
-
-        /** @type {number|null} */
-        let wordT1 = null;
-        if (tw.start != null && Number.isFinite(tw.start)) {
-          let upper =
-            nextStart != null && Number.isFinite(nextStart) && nextStart > tw.start + 1e-4
-              ? nextStart
-              : tw.end != null && Number.isFinite(tw.end) && tw.end > tw.start + 1e-4
-                ? tw.end
-                : tw.start + 0.5;
-          /**
-           * Se há hiato antes da palavra seguinte, não estender a janela [start, upper) por esse hiato:
-           * senão `chordSegmentsInAudioWindow` inclui acordes do instrumental ou do verso seguinte nesta célula.
-           * Palavras sobrepostas (nextStart antes do fim da palavra) mantêm upper = nextStart.
-           */
-          if (
-            tw.end != null &&
-            Number.isFinite(tw.end) &&
-            tw.end > tw.start + 1e-4 &&
-            upper > tw.end + 1e-6
-          ) {
-            upper = tw.end;
-          }
-          wordT1 = upper;
-        }
-
-        /**
-         * Modo editor-anchors: mostrar **apenas** os acordes ancorados pela edição.
-         * Palavra sem âncora = sem acorde (espelha a grelha do editor).
-         */
-        const anchoredIdxs = anchoredChordIdxByG.get(tw.g) ?? [];
-        if (useEditorAnchors) {
-          if (anchoredIdxs.length && tw.start != null && Number.isFinite(tw.start) && wordT1 != null) {
-            const anchoredSegs = [];
-            for (let ai = 0; ai < anchoredIdxs.length; ai++) {
-              const chordIdx = anchoredIdxs[ai];
-              const c = normalizedChords[chordIdx];
-              if (!c) continue;
-              const cA0 = Number(c.start) + off;
-              const cA1 = Number(c.end) + off;
-              const a0 = Math.max(Number(tw.start), cA0);
-              const a1 = Math.min(Number(wordT1), cA1);
-              if (Number.isFinite(a0) && Number.isFinite(a1) && a1 > a0 + 1e-6) {
-                anchoredSegs.push({ a0, a1, label: formatChordEvent(c), chordIdx });
-              } else {
-                /** Fallback: acorde ancorado mas fora da janela útil; usar tempos originais do evento. */
-                anchoredSegs.push({
-                  a0: Math.max(Number(tw.start), cA0),
-                  a1: Math.max(Number(tw.start) + 1e-4, cA0 + Math.max(1e-4, cA1 - cA0)),
-                  label: formatChordEvent(c),
-                  chordIdx,
-                });
-              }
-            }
-            if (anchoredSegs.length) {
-              anchoredSegs.sort((a, b) => a.a0 - b.a0);
-              segs = collapseSequentialEqualChordSegments(anchoredSegs);
-              label = segs[0].label;
-            }
-          } else {
-            segs = [];
-            label = '\u00A0';
-          }
-        } else {
-          if (wordT1 != null && wordT1 > tw.start + 1e-4) {
-            const segsRaw = chordSegmentsInAudioWindow(chords, tw.start, wordT1, chordTimeOffsetSec, {
-              formatChord: formatChordEvent
-            });
-            segs = collapseSequentialEqualChordSegments(segsRaw);
-            segs = dropChordSegmentsOriginatingBeforeSection(
-              segs,
-              chords,
-              chordTimeOffsetSec,
-              sectionStartForChords,
-              applySectionOnsetFilter
-            );
-          }
-
-          if (anchoredIdxs.length && tw.start != null && Number.isFinite(tw.start) && wordT1 != null) {
-            const anchoredSegs = [];
-            for (let ai = 0; ai < anchoredIdxs.length; ai++) {
-              const chordIdx = anchoredIdxs[ai];
-              const c = normalizedChords[chordIdx];
-              if (!c) continue;
-              const cA0 = Number(c.start) + off;
-              const cA1 = Number(c.end) + off;
-              const a0 = Math.max(Number(tw.start), cA0);
-              const a1 = Math.min(Number(wordT1), cA1);
-              if (Number.isFinite(a0) && Number.isFinite(a1) && a1 > a0 + 1e-6) {
-                anchoredSegs.push({ a0, a1, label: formatChordEvent(c), chordIdx });
-              }
-            }
-            if (anchoredSegs.length) {
-              anchoredSegs.sort((a, b) => a.a0 - b.a0);
-              segs = collapseSequentialEqualChordSegments(anchoredSegs);
-              label = segs[0].label;
-            }
-          }
-
-          if (
-            segs.length === 0 &&
-            useChordBarAnchors &&
-            tw.start != null &&
-            Number.isFinite(tw.start) &&
-            wordT1 != null &&
-            wordT1 > tw.start + 1e-4
-          ) {
-            const db = downbeatChordStartingInsideWordWindow(
-              tw.start,
-              wordT1,
-              chords,
-              chordTimeOffsetSec,
-              beatsPerBar
-            );
-            if (db) {
-              const rawDb = chordSegmentsInAudioWindow(chords, db.onsetAudio, wordT1, chordTimeOffsetSec, {
-                formatChord: formatChordEvent
-              });
-              let segsDb = collapseSequentialEqualChordSegments(rawDb);
-              segsDb = dropChordSegmentsOriginatingBeforeSection(
-                segsDb,
-                chords,
-                chordTimeOffsetSec,
-                sectionStartForChords,
-                applySectionOnsetFilter
-              );
-              if (segsDb.length) {
-                segs = segsDb;
-              }
-            }
-          }
-
-          if (segs.length) {
-            label = segs[0].label;
-          }
-          if (segs.length === 0 && Number.isFinite(chordLookupT)) {
-            const rawFb = chordSegmentsInAudioWindow(chords, chordLookupT, chordLookupT + 4, chordTimeOffsetSec, {
-              formatChord: formatChordEvent
-            });
-            let segsFb = collapseSequentialEqualChordSegments(rawFb);
-            segsFb = dropChordSegmentsOriginatingBeforeSection(
-              segsFb,
-              chords,
-              chordTimeOffsetSec,
-              sectionStartForChords,
-              applySectionOnsetFilter
-            );
-            if (segsFb.length) {
-              /** Só o 1.º acorde da janela de fallback; não propagar troca para o futuro na mesma célula. */
-              segs = [segsFb[0]];
-              label = segs[0].label;
-            }
-          }
-
-          if (!segs.length && applySectionOnsetFilter) {
-            label = formatChordEvent(null);
-          }
-        }
-
-        if (showAllChordPositions && exactPrevRenderedLabel != null && label === exactPrevRenderedLabel) {
-          label = '\u00A0';
-        }
-
-        /** @type {{ label: string, a0: number, a1: number }[]} */
-        let extraSegs = segs.length > 1 ? segs.slice(1) : [];
-        if (extraSegs.length) {
-          const deduped = [];
-          let prev =
-            showAllChordPositions && exactPrevRenderedLabel != null && label === '\u00A0'
-              ? exactPrevRenderedLabel
-              : label;
-          for (let ii = 0; ii < extraSegs.length; ii++) {
-            const seg = extraSegs[ii];
-            if (seg.label === prev) continue;
-            deduped.push(seg);
-            prev = seg.label;
-          }
-          extraSegs = deduped;
-        }
-
-
-
-        let showChordLabel = true;
-        if (!showAllChordPositions) {
-          showChordLabel = rowPrevChordLabel === null || label !== rowPrevChordLabel;
-        }
-
-        const crossLineSameEventDup =
-          !sectionChangedFromPrevRow &&
-          idx === 0 &&
-          crossRowCarryFromPrev != null &&
-          segs.length > 0 &&
-          Number.isFinite(segs[0].chordIdx) &&
-          segs[0].chordIdx === crossRowCarryFromPrev.chordIdx;
-        if (crossLineSameEventDup) {
-          showChordLabel = false;
-        }
-
-        const chordDisplay = showChordLabel ? label : '\u00A0';
-        const mainPlaybackWin =
-          chordDisplay !== '\u00A0' && String(chordDisplay).trim() !== '' && segs.length
-            ? { a0: segs[0].a0, a1: segs[0].a1 }
-            : null;
-
-        const mainChordIdx =
-          segs.length && Number.isFinite(segs[0].chordIdx) ? segs[0].chordIdx : undefined;
-        const wrap = createLyricChordCell(
-          chordDisplay,
-          tw.text,
-          tw.g,
-          spans,
-          mainPlaybackWin,
-          mainChordIdx,
-          wireChordDiagramIfResolvable
-        );
-        row.appendChild(wrap);
-
-        if (crossLineSameEventDup && crossRowCarryFromPrev != null && segs.length > 0) {
-          const c = normalizedChords[segs[0].chordIdx];
-          const cEnd = c != null ? Number(c.end) + off : NaN;
-          const pw = crossRowCarryFromPrev.wrap;
-          if (Number.isFinite(cEnd) && pw && pw.dataset && pw.dataset.playbackA1 != null) {
-            const prevA1 = Number(pw.dataset.playbackA1);
-            if (Number.isFinite(prevA1)) {
-              pw.dataset.playbackA1 = String(Math.max(prevA1, cEnd));
-            } else {
-              pw.dataset.playbackA1 = String(cEnd);
-            }
-          }
-        }
-
-        if (
-          chordDisplay !== '\u00A0' &&
-          String(chordDisplay).trim() !== '' &&
-          mainChordIdx != null &&
-          Number.isFinite(mainChordIdx)
-        ) {
-          prevLyricRowLastVisibleChord = { wrap, chordIdx: mainChordIdx };
-        }
-
-        if (
-          showAllChordPositions &&
-          chordDisplay !== '\u00A0' &&
-          String(chordDisplay).trim() !== '' &&
-          label !== '\u00A0'
-        ) {
-          exactPrevRenderedLabel = label;
-        }
-
-        /** Acorde no instante desta palavra (comparação entre palavras; iguais ao modo «exato»). */
-        rowPrevChordLabel = label;
-
-        if (extraSegs.length) {
-          for (let ii = 0; ii < extraSegs.length; ii++) {
-            const seg = extraSegs[ii];
-            if (showAllChordPositions && exactPrevRenderedLabel != null && seg.label === exactPrevRenderedLabel) {
-              continue;
-            }
-            const ghost = createLyricChordCell(
-              seg.label,
-              '\u00A0',
+        for (const ci of afters) {
+          const v = nextVisible(ci);
+          if (!v) continue;
+          row.appendChild(
+            createLyricChordCell(
+              v.label,
+              ' ',
               tw.g,
               spans,
-              {
-                a0: seg.a0,
-                a1: seg.a1
-              },
-              Number.isFinite(seg.chordIdx) ? seg.chordIdx : undefined,
+              { a0: Number(v.c.start) + off, a1: Number(v.c.end) + off },
+              ci,
               wireChordDiagramIfResolvable
-            );
-            row.appendChild(ghost);
-            if (showAllChordPositions) {
-              exactPrevRenderedLabel = seg.label;
-            }
-            if (seg.label !== '\u00A0' && String(seg.label).trim() !== '' && Number.isFinite(seg.chordIdx)) {
-              prevLyricRowLastVisibleChord = { wrap: ghost, chordIdx: seg.chordIdx };
-            }
-          }
+            )
+          );
         }
-      });
-
-      carryLyricChordLabel = rowPrevChordLabel;
-      pendingInstrumentalToLyricCarry = null;
+      }
+      lastShownSectionKey = secLabelKey;
 
       if (sectionsSorted.length && sec && secLabelKey) {
         appendToOccurrence(sec, showSectionBars, row);
-        currentLyricSectionLabelKey = secLabelKey;
       } else {
-        currentLyricSectionLabelKey = null;
         currentShell = null;
         container.appendChild(row);
       }

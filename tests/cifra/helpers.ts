@@ -87,6 +87,15 @@ const clean = (s: string | null | undefined) => (s ?? "").replace(/ /g, "").tri
 export function sheetRows(container: HTMLElement): string[] {
   return [...container.querySelectorAll<HTMLElement>(".cifra-line")].map((row) => {
     const cells = [...row.children].map((c) => {
+      if (c.classList.contains("cifra-word")) {
+        // Palavra em sílabas: o acorde aparece antes da sílaba em que começa (ex.: "a[G]mor").
+        return [...c.children]
+          .map((piece) => {
+            const syms = [...piece.querySelectorAll(".cifra-chord__symbol")].map((e) => clean(e.textContent)).filter(Boolean);
+            return (syms.length ? `[${syms.join(" ")}]` : "") + (piece.children[1]?.textContent ?? "");
+          })
+          .join("");
+      }
       const sym = clean(c.children[0]?.textContent);
       const txt = clean(c.children[1]?.textContent);
       return sym ? `[${sym}]${txt}` : txt;
