@@ -42,12 +42,12 @@ describe("ordem das seções repetidas (R1)", () => {
   it("cada ocorrência tem o seu bloco, com o próprio intervalo de tempo", () => {
     const { container } = renderCifra(payload, 80);
     expect(sectionHeaders(container)).toEqual([
-      "intro 0:00 — 0:08",
-      "verse 0:08 — 0:24",
-      "chorus 0:24 — 0:40",
-      "verse 0:40 — 0:56",
-      "chorus 0:56 — 1:12",
-      "outro 1:12 — 1:20",
+      "Intro 0:00 — 0:08",
+      "Verso 0:08 — 0:24",
+      "Refrão 0:24 — 0:40",
+      "Verso 0:40 — 0:56",
+      "Refrão 0:56 — 1:12",
+      "Final 1:12 — 1:20",
     ]);
   });
 

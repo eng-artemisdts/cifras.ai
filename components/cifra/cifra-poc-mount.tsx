@@ -49,7 +49,7 @@ function PlaybackProviderTabs({
       {tabs.map((provider) => {
         const enabled = availableProviders.includes(provider);
         const active = selectedProvider === provider;
-        const label = provider === "youtube" ? "YouTube" : "Spotify";
+        const label = provider === "youtube" ? "YouTube" : provider === "internal" ? "Áudio" : "Spotify";
         return (
           <button
             key={provider}
@@ -363,15 +363,23 @@ export function CifraPocMount({
   const availableProviders = useMemo<PlaybackProvider[]>(() => {
     const providers: PlaybackProvider[] = [];
     if (youtubeVideoId) providers.push("youtube");
+    // Sem vídeo, o áudio analisado precisa de uma aba própria para se poder voltar a ele.
+    else if (spotifyTrackId && s3AudioUrl) providers.push("internal");
     if (spotifyTrackId) providers.push("spotify");
     return providers;
-  }, [spotifyTrackId, youtubeVideoId]);
+  }, [spotifyTrackId, youtubeVideoId, s3AudioUrl]);
 
+  /**
+   * «YouTube» toca o áudio analisado (S3) com o cartão do vídeo. O Spotify toca outra gravação,
+   * que pode ser outra versão/edição e deslocar o encaixe: só é a fonte por omissão quando não
+   * há áudio analisado.
+   */
   const defaultProvider = useMemo<PlaybackProvider>(() => {
     if (availableProviders.includes("youtube")) return "youtube";
+    if (s3AudioUrl) return "internal";
     if (availableProviders.includes("spotify")) return "spotify";
     return "internal";
-  }, [availableProviders]);
+  }, [availableProviders, s3AudioUrl]);
   const [providerChoice, setProviderChoice] = useState<{ trackKey: string; provider: PlaybackProvider } | null>(
     null,
   );
@@ -668,7 +676,7 @@ export function CifraPocMount({
               />
             </div>
           ) : null}
-          <div className={STREAMING_PLAYER_HEIGHT_CLASS}>
+          <div className={cn(STREAMING_PLAYER_HEIGHT_CLASS, selectedProvider === "internal" && "hidden")}>
             {selectedProvider === "spotify" && spotifyTrackId ? (
               spotifyStatus.loading ? (
                 <div className="flex h-full items-center gap-4 px-4">

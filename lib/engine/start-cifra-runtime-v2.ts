@@ -6,6 +6,7 @@ import {
 } from "./cifra-view";
 import { createChordTimeline, formatChordLabel, isNoChordEvent } from "./chord-timeline";
 import { buildLyricModel } from "./lyric-timeline";
+import { sectionDisplayName } from "@/lib/cifra/section-labels";
 import { mergeConsecutiveDuplicateSectionLabels, sortSections } from "./payload-read";
 import { sectionAtTimestamp } from "./section-timeline";
 import {
@@ -793,7 +794,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     currentChordEl.classList.toggle("text-cifra-muted", isNoChordEvent(chNow));
     currentChordEl.classList.toggle("text-cifra-teal", !isNoChordEvent(chNow));
     const sec = sectionAtTimestamp(sectionsSorted, t);
-    currentSectionEl.textContent = sec ? sec.label : "—";
+    currentSectionEl.textContent = sec ? sectionDisplayName(sec.label) : "—";
     currentSectionEl.title = sec ? `${formatClock(sec.start)} — ${formatClock(sec.end)}` : "";
     if (renderPlan.length) {
       ensureCifraMounted();

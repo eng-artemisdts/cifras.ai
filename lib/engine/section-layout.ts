@@ -39,7 +39,7 @@ export function isInstrumentalSectionLabel(label) {
   if (!s) return false;
   if (s.includes('intro')) return true;
   if (s.includes('instrumental')) return true;
-  if (isBridgeLabel(label)) return true;
+  // Ponte («bridge») costuma ter voz: só é instrumental se não houver letra (decidido pelo layout).
   if (/\bsolo\b/.test(s) && !s.includes('verse') && !s.includes('bridge')) return true;
   return false;
 }

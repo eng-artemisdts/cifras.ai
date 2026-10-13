@@ -1,5 +1,6 @@
 "use client";
 
+import { sectionDisplayName } from "@/lib/cifra/section-labels";
 import { ChevronDown, Eye, Plus } from "lucide-react";
 import {
   Fragment,
@@ -1206,7 +1207,7 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
                               />
                             </span>
                             <span className="truncate font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-cifra-teal">
-                              {group.title}
+                              {sectionDisplayName(group.title)}
                             </span>
                           </span>
                           <span className="shrink-0 text-right font-mono text-[10px] tabular-nums text-cifra-muted">

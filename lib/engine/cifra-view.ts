@@ -23,6 +23,7 @@ import {
 } from './chord-timeline';
 import { placeChordsOnWords } from '../cifra/chord-placement';
 import { estimateBeatSec } from '../cifra/beat-grid';
+import { sectionDisplayName } from '../cifra/section-labels';
 import { attachChordDiagramHoverDom } from '../cifra/chord-diagram/attach-chord-diagram-hover-dom';
 
 /**
@@ -536,7 +537,7 @@ function createSectionShell(sec, showHeader, fmt) {
   if (showHeader) {
     const t1 = document.createElement('div');
     t1.className = 'font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-auris-teal';
-    t1.textContent = sec.label || '—';
+    t1.textContent = sectionDisplayName(sec.label);
 
     const t2 = document.createElement('div');
     t2.className = 'mt-0.5 font-mono text-[10px] text-auris-muted tabular-nums';
