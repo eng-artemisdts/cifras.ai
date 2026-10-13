@@ -11,7 +11,6 @@ import type { BillingPlan } from "@/lib/billing/plan-types";
 import { GA_EVENTS } from "@/lib/analytics/events";
 import { trackAnalyticsEvent } from "@/lib/analytics/track";
 import type { MusicAiDemoPayload } from "@/lib/cifra/musicai-types";
-import { buildPreviewChordAnchors } from "@/lib/cifra/preview-chord-anchors";
 import {
   createInternalAudioAdapter,
   createSpotifyAdapter,
@@ -227,18 +226,8 @@ export function CifraPocMount({
   /** Regra do capotraste: mudar o capo recalcula shapes mantendo o mesmo tom da música. */
   const runtimeTransposeSemitones = transposeSemitones - capoDeltaSemitones;
 
-  const payloadForRuntime = useMemo(() => {
-    const previewAnchors = buildPreviewChordAnchors(
-      payload.lyrics,
-      payload.chords,
-      payload.sections,
-    );
-    return {
-      ...payload,
-      slotIdsInLyricOrder: previewAnchors.slotIdsInLyricOrder,
-      chordAnchorsBySlotId: previewAnchors.chordAnchorsBySlotId,
-    };
-  }, [payload]);
+  /** O posicionamento dos acordes é calculado no próprio leitor (`lib/cifra/chord-placement`). */
+  const payloadForRuntime = payload;
 
   const cifraViewTrackedForKey = useRef<string | null>(null);
   const scrollRootRef = useRef<HTMLDivElement>(null);

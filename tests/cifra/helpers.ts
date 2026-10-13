@@ -4,7 +4,6 @@ vi.mock("@/lib/cifra/chord-diagram/attach-chord-diagram-hover-dom", () => ({
   attachChordDiagramHoverDom: () => () => {},
 }));
 
-import { buildPreviewChordAnchors } from "@/lib/cifra/preview-chord-anchors";
 import { mergeConsecutiveDuplicateSectionLabels, sortSections } from "@/lib/cifra/lyric-expand-clamp";
 import type { MusicAiChordEvent, MusicAiLyricSegment, MusicAiSection } from "@/lib/cifra/musicai-types";
 import { createChordTimeline, formatChordLabel } from "@/lib/engine/chord-timeline";
@@ -69,7 +68,6 @@ export function renderCifra(payload: Payload, durationSec: number) {
     formatChord: (c: MusicAiChordEvent) => formatChordLabel(c),
   });
   const plan = buildCifraRenderPlan(blocks, vocal);
-  const anchors = buildPreviewChordAnchors(payload.lyrics, payload.chords, payload.sections);
   document.body.innerHTML = "";
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -83,9 +81,6 @@ export function renderCifra(payload: Payload, durationSec: number) {
     chords: payload.chords,
     chordTimeOffsetSec: 0,
     showSectionBars: true,
-    showAllChordPositions: true,
-    slotIdsInLyricOrder: anchors.slotIdsInLyricOrder,
-    chordAnchorsBySlotId: anchors.chordAnchorsBySlotId,
   });
   return { container, timeline };
 }
