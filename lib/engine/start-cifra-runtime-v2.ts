@@ -24,6 +24,7 @@ import {
   resolveChordDiagram,
 } from "@/lib/cifra/chord-diagram/svguitar-from-db";
 import { transposeChordLabel } from "@/lib/cifra/chord-transpose";
+import { spellChordForKey } from "@/lib/cifra/chord-spelling";
 
 const LS_AUTO_SCROLL_LEAD = "cifra-ai:autoScrollLeadSec";
 const LS_AUTO_SCROLL_DURATION_MS = "cifra-ai:autoScrollDurationMs";
@@ -50,6 +51,7 @@ function coalescePayload(raw) {
     sections: Array.isArray(p.sections) ? p.sections : [],
     meta: p.meta && typeof p.meta === "object" ? p.meta : {},
     chordTimeOffsetSec: Number.isFinite(p.chordTimeOffsetSec) ? p.chordTimeOffsetSec : 0,
+    original_tune: typeof p.original_tune === "string" ? p.original_tune : "",
     slotIdsInLyricOrder: Array.isArray(p.slotIdsInLyricOrder) ? p.slotIdsInLyricOrder : null,
     chordAnchorsBySlotId:
       p.chordAnchorsBySlotId && typeof p.chordAnchorsBySlotId === "object" ? p.chordAnchorsBySlotId : null,
@@ -165,8 +167,10 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
   const { timedLines: rawTimedLines } = buildLyricModel(payload.lyrics);
   const meta = payload.meta;
 
+  /** Rótulo exibido: transposto e escrito com sustenidos/bemóis conforme o tom resultante. */
   function chordForDisplayFromEvent(c) {
-    return transposeChordLabel(formatChordLabel(c), getTransposeSemitones());
+    const semitones = getTransposeSemitones();
+    return spellChordForKey(transposeChordLabel(formatChordLabel(c), semitones), payload.original_tune, semitones);
   }
 
   let cachedScrollContainer = null;
