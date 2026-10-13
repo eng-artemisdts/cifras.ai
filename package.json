@@ -7,13 +7,18 @@
     "node": "22.x"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["@sentry/cli", "sharp", "unrs-resolver"]
+    "onlyBuiltDependencies": [
+      "@sentry/cli",
+      "sharp",
+      "unrs-resolver"
+    ]
   },
   "scripts": {
     "dev": "next dev",
     "build": "NODE_ENV=production next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run"
   },
   "dependencies": {
     "@auth0/nextjs-auth0": "^4.17.0",
@@ -50,7 +55,9 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
+    "jsdom": "26.1.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "3.2.4"
   }
 }

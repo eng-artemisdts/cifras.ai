@@ -49,7 +49,7 @@ import {
   chordAnchorSlotIds,
   chordIndicesAttachedToSlot,
   clusterSlotsByLyricSegment,
-  createChordEvent,
+  insertChordAtTime,
   defaultChordTimesOnTimeRange,
   defaultChordTimesOnWordSlot,
   defaultTimesForNewWordInGroup,
@@ -763,15 +763,15 @@ export const CifraTranscriptionEditor = forwardRef<CifraTranscriptionEditorHandl
       [finalizeSections],
     );
 
-    const commitAddChord = useCallback((symbol: string, start: number, end: number) => {
-      let newIndex = 0;
-      setChords((prev) => {
-        newIndex = prev.length;
-        return [...prev, createChordEvent(symbol, start, end)];
-      });
-      setAddChordContext(null);
-      setActiveChordIndex(newIndex);
-    }, []);
+    const commitAddChord = useCallback(
+      (symbol: string, start: number, end: number) => {
+        const { chords: next, index } = insertChordAtTime(chords, symbol, start, end);
+        setChords(next);
+        setAddChordContext(null);
+        setActiveChordIndex(index);
+      },
+      [chords],
+    );
 
     const handleChordEndChange = useCallback(
       (index: number, nextEnd: number) => {

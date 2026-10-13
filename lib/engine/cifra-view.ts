@@ -13,7 +13,6 @@ import {
   isInstrumentalSectionLabel,
   musicAiSectionEnvelopeForTime,
   sectionDisplayLabelKey,
-  vocalSectionDisplayEnvelopeForTime,
   vocalSectionHeaderForLyricTime
 } from './section-layout';
 import {
@@ -37,16 +36,6 @@ const CHORD_SNAP_AFTER_SECTION_START_SEC = 0.06;
 const CHORD_SNAP_PICKUP_END_EPS_SEC = 0.12;
 /** Só anacruse se o fim da palavra está a no máximo isto **antes** de S (evita confundir desvio Whisper/Music.AI com pickup). */
 const CHORD_SNAP_MAX_LEAD_BEFORE_SECTION_SEC = 4;
-/** Atualiza o intervalo temporal no cabeçalho de uma secção já criada (rótulos repetidos). */
-function refreshSectionShellTimeRange(wrap, sec, fmt) {
-  if (!wrap || !sec) return;
-  wrap.setAttribute('data-section-start', String(sec.start));
-  wrap.setAttribute('data-section-end', String(sec.end));
-  const timeEl = wrap.querySelector('[data-section-time]');
-  if (timeEl) {
-    timeEl.textContent = `${fmt(sec.start)} — ${fmt(sec.end)}`;
-  }
-}
 /**
  * Último acorde visível da grelha instrumental desde `fromIdx`.
  *
@@ -142,6 +131,7 @@ function createInstrumentalChordStrip(
     const cA0 = Number(c.start) + off;
     return Number.isFinite(cA0) && cA0 >= Number(iv.start) - 1e-3;
   });
+  if (!segs.length) return null;
   const row = document.createElement('div');
   row.className = 'cifra-line flex flex-wrap items-end gap-x-3 gap-y-4';
   row.setAttribute('data-instrumental-strip', `${iv.start}-${iv.end}`);
@@ -471,12 +461,24 @@ export function mountCifraView(params) {
       });
     }
     /**
-     * Shells vocais por rótulo — secções repetidas (ex.: 2.º Refrão) reutilizam o mesmo bloco
-     * ou continuam sem cabeçalho duplicado, preservando a ordem cronológica da letra.
+     * Bloco da **ocorrência** de secção atual. Cada ocorrência (ex.: 1.º Refrão, 2.º Refrão)
+     * tem o seu próprio bloco, na ordem em que a música é tocada.
      *
-     * @type {Map<string, { wrap: HTMLElement, inner: HTMLElement, displaySec: import('./musicai-types.ts').MusicAiSection }>}
+     * @type {{ wrap: HTMLElement, inner: HTMLElement, sec: import('./musicai-types.ts').MusicAiSection } | null}
      */
-    const vocalShellByLabel = new Map();
+    let currentShell = null;
+    /**
+     * Acrescenta `node` ao bloco da ocorrência `sec`; abre um bloco novo (no fim) se `sec`
+     * não for a mesma ocorrência do bloco atual.
+     */
+    const appendToOccurrence = (sec, showHeader, node) => {
+      if (!currentShell || !envelopesMatch(currentShell.sec, sec)) {
+        const shell = createSectionShell(sec, showHeader, formatClock);
+        container.appendChild(shell.wrap);
+        currentShell = { wrap: shell.wrap, inner: shell.inner, sec: { ...sec } };
+      }
+      currentShell.inner.appendChild(node);
+    };
     /** @type {string|null} */
     let currentLyricSectionLabelKey = null;
     /** Último acorde vocal visível para dedupe no começo da linha seguinte. */
@@ -548,21 +550,18 @@ export function mountCifraView(params) {
         const wrapInstrumental = sectionsSorted.length > 0 || wantInstrumentalHeader;
 
         if (mergeIntoLyrics && wrapInstrumental) {
-          const shell = createSectionShell(secLike0, wantInstrumentalHeader, formatClock);
           for (let g = 0; g < instGroup.length; g++) {
-            shell.inner.appendChild(
-              createInstrumentalChordStrip(
-                instGroup[g],
-                chords,
-                chordTimeOffsetSec,
-                stripCells,
-                formatChordEvent,
-                true,
-                wireChordDiagramIfResolvable
-              )
+            const strip = createInstrumentalChordStrip(
+              instGroup[g],
+              chords,
+              chordTimeOffsetSec,
+              stripCells,
+              formatChordEvent,
+              true,
+              wireChordDiagramIfResolvable
             );
+            if (strip) appendToOccurrence(secLike0, wantInstrumentalHeader, strip);
           }
-          container.appendChild(shell.wrap);
           const lastVisibleMerged = lastVisibleChordInStripCellsSince(
             stripCells,
             instrumentalStripStartIdx,
@@ -575,13 +574,7 @@ export function mountCifraView(params) {
               sectionLabelKey: sectionDisplayLabelKey(secLike0.label)
             };
           }
-          const mergeLabelKey = sectionDisplayLabelKey(secLike0.label);
-          vocalShellByLabel.set(mergeLabelKey, {
-            wrap: shell.wrap,
-            inner: shell.inner,
-            displaySec: { ...secLike0 }
-          });
-          currentLyricSectionLabelKey = mergeLabelKey;
+          currentLyricSectionLabelKey = sectionDisplayLabelKey(secLike0.label);
           evIdx = nextIdx - 1;
           continue;
         }
@@ -607,32 +600,21 @@ export function mountCifraView(params) {
           }
           const wrapInst = sectionsSorted.length > 0 || wantHeader;
 
+          const strip = createInstrumentalChordStrip(
+            iv,
+            chords,
+            chordTimeOffsetSec,
+            stripCells,
+            formatChordEvent,
+            wrapInst,
+            wireChordDiagramIfResolvable
+          );
+          if (!strip) continue;
           if (wrapInst) {
-            const shell = createSectionShell(secLike, wantHeader, formatClock);
-            shell.inner.appendChild(
-              createInstrumentalChordStrip(
-                iv,
-                chords,
-                chordTimeOffsetSec,
-                stripCells,
-                formatChordEvent,
-                true,
-                wireChordDiagramIfResolvable
-              )
-            );
-            container.appendChild(shell.wrap);
+            appendToOccurrence(secLike, wantHeader, strip);
           } else {
-            container.appendChild(
-              createInstrumentalChordStrip(
-                iv,
-                chords,
-                chordTimeOffsetSec,
-                stripCells,
-                formatChordEvent,
-                false,
-                wireChordDiagramIfResolvable
-              )
-            );
+            currentShell = null;
+            container.appendChild(strip);
           }
         }
 
@@ -673,10 +655,7 @@ export function mountCifraView(params) {
         sectionsSorted.length && fw.start != null && Number.isFinite(fw.start)
           ? vocalSectionHeaderForLyricTime(fw.start, sectionsSorted)
           : null;
-      const sec =
-        sectionsSorted.length && fw.start != null && Number.isFinite(fw.start)
-          ? vocalSectionDisplayEnvelopeForTime(fw.start, sectionsSorted)
-          : secHeader;
+      const sec = secHeader;
       const secLabelKey = sec ? sectionDisplayLabelKey(sec.label) : null;
       const sectionChangedFromPrevRow =
         secLabelKey != null &&
@@ -1048,26 +1027,11 @@ export function mountCifraView(params) {
       pendingInstrumentalToLyricCarry = null;
 
       if (sectionsSorted.length && sec && secLabelKey) {
-        const isRepeatAfterOtherSection =
-          vocalShellByLabel.has(secLabelKey) && currentLyricSectionLabelKey !== secLabelKey;
-        let shellEntry = vocalShellByLabel.get(secLabelKey);
-        if (!shellEntry) {
-          const shell = createSectionShell(sec, showSectionBars, formatClock);
-          container.appendChild(shell.wrap);
-          shellEntry = { wrap: shell.wrap, inner: shell.inner, displaySec: { ...sec } };
-          vocalShellByLabel.set(secLabelKey, shellEntry);
-        } else {
-          shellEntry.displaySec = { ...sec };
-          refreshSectionShellTimeRange(shellEntry.wrap, sec, formatClock);
-        }
-        if (isRepeatAfterOtherSection) {
-          container.appendChild(row);
-        } else {
-          shellEntry.inner.appendChild(row);
-        }
+        appendToOccurrence(sec, showSectionBars, row);
         currentLyricSectionLabelKey = secLabelKey;
       } else {
         currentLyricSectionLabelKey = null;
+        currentShell = null;
         container.appendChild(row);
       }
     }

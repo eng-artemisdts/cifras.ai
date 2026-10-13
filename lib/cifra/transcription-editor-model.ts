@@ -363,6 +363,39 @@ export function createChordEvent(symbol: string, start: number, end: number): Mu
 }
 
 /**
+ * Insere um acorde novo como numa cifra: ele vale até o próximo acorde.
+ * - Se `start` cai dentro de um acorde existente, esse acorde é dividido (termina em `start`)
+ *   e o novo herda o fim dele.
+ * - Se cai num intervalo sem acorde, o novo vai até o próximo acorde (ou até `fallbackEnd`).
+ * - Acorde que começa no mesmo instante é substituído.
+ * Devolve a lista ordenada e o índice do acorde novo nela.
+ */
+export function insertChordAtTime(
+  chords: MusicAiChordEvent[],
+  symbol: string,
+  start: number,
+  fallbackEnd: number,
+): { chords: MusicAiChordEvent[]; index: number } {
+  const s = Math.max(0, start);
+  const sorted = [...chords]
+    .map((c) => ({ ...c }))
+    .sort((a, b) => a.start - b.start)
+    .filter((c) => Math.abs(c.start - s) > 0.02);
+  let end = Math.max(s + 0.05, fallbackEnd);
+  const containing = sorted.find((c) => c.start < s && c.end > s);
+  if (containing) {
+    end = containing.end;
+    containing.end = s;
+  } else {
+    const next = sorted.find((c) => c.start > s);
+    if (next) end = next.start;
+  }
+  const created = createChordEvent(symbol, s, Math.max(s + 0.05, end));
+  const out = [...sorted, created].sort((a, b) => a.start - b.start);
+  return { chords: out, index: out.indexOf(created) };
+}
+
+/**
  * Índice do slot cuja janela temporal contém `t` (preferência: primeiro que couber).
  * Se nenhum slot contiver `t`, devolve o índice do slot cujo centro está mais perto (útil para UI de alvo genérico).
  * Para ancorar acordes a palavras use `anchorSlotIdForChord` — não use este fallback.

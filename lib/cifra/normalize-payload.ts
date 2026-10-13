@@ -16,7 +16,9 @@ export function normalizeDemoPayload(raw: MusicAiDemoPayload | null | undefined)
   const capoRaw = Number.isFinite(payload.capo_at) ? Math.round(Number(payload.capo_at)) : 0;
   return {
     // Preserve original chord spans (some tracks intentionally sustain across section boundaries).
-    chords: rawChords.map((c) => ({ ...c })),
+    chords: rawChords
+      .map((c) => ({ ...c }))
+      .sort((a, b) => Number(a.start) - Number(b.start)),
     lyrics: expandMergedLyricSegments(rawLyrics),
     sections: sectionsSorted,
     meta: payload.meta && typeof payload.meta === "object" ? payload.meta : {},
