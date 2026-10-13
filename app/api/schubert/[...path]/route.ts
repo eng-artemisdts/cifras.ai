@@ -2,14 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 
 import { isAccessTokenLikelyJwt } from "@/lib/access-token-shape";
-import { resolveBillingPlanForSessionUser } from "@/lib/billing/resolve-billing-plan";
+import { resolveBillingEntitlementsForSessionUser } from "@/lib/billing/resolve-billing-plan";
 import { getAuth0 } from "@/lib/auth0";
 import { isAuth0Configured } from "@/lib/auth0-env";
 import {
   isAuth0SessionExpiredError,
   sessionExpiredResponse,
 } from "@/lib/auth0-session-expired";
-import { permissionsFromSessionUser } from "@/lib/entitlements";
 
 /**
  * O `withApiAuthRequired` do SDK chama `getSession()` sem argumentos (usa só `cookies()`).
@@ -35,6 +34,44 @@ function schubertAudience(): string | null {
 }
 
 type RouteCtx = { params?: Promise<{ path?: string[] }> };
+
+function isPublicSchubertTrackRead(method: string, segments: string[]): boolean {
+  if (method !== "GET" && method !== "HEAD") return false;
+  if (segments[0] !== "tracks") return false;
+  if (segments[1] === "by-key" && segments.length === 3) return true;
+  return segments[1] === "by-slug" && segments.length === 4;
+}
+
+/** Leitura anónima de faixas — espelha o fallback directo usado em `schubert-fetch-track`. */
+async function proxyPublicSchubertTrackRead(req: Request, ctx: RouteCtx): Promise<Response> {
+  const resolved = await ctx.params;
+  const segments = resolved?.path ?? [];
+  if (!isPublicSchubertTrackRead(req.method, segments)) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const suffix = segments.join("/");
+  const incoming = new URL(req.url);
+  const target = `${schubertBase()}/${suffix}${incoming.search}`;
+
+  const headers: Record<string, string> = {};
+  const accept = req.headers.get("accept");
+  if (accept) headers.accept = accept;
+
+  const upstream = await fetch(target, { method: req.method, headers });
+
+  const responseHeaders = new Headers();
+  const passCt = upstream.headers.get("content-type");
+  if (passCt) {
+    responseHeaders.set("content-type", passCt);
+  }
+
+  return new NextResponse(upstream.body, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers: responseHeaders,
+  });
+}
 
 /** Hobby: máx. 60s; Pro pode subir para 300 e `SCHUBERT_PROXY_TIMEOUT_MS` até ~280000. */
 export const maxDuration = 60;
@@ -226,8 +263,8 @@ async function runAuthed(req: Request, ctx: RouteCtx) {
   }
 
   const auth0Sub = typeof session.user.sub === "string" ? session.user.sub : "";
-  const billingPlan = await resolveBillingPlanForSessionUser(session.user);
-  const appPermissions = permissionsFromSessionUser(session.user);
+  const { plan: billingPlan, permissions: appPermissions } =
+    await resolveBillingEntitlementsForSessionUser(session.user);
 
   return proxyToSchubert(req, ctx, {
     auth0Sub,
@@ -236,10 +273,28 @@ async function runAuthed(req: Request, ctx: RouteCtx) {
   });
 }
 
-export const GET = runAuthed;
+async function dispatchGet(req: Request, ctx: RouteCtx) {
+  const resolved = await ctx.params;
+  const segments = resolved?.path ?? [];
+  if (isPublicSchubertTrackRead(req.method, segments)) {
+    return proxyPublicSchubertTrackRead(req, ctx);
+  }
+  return runAuthed(req, ctx);
+}
+
+async function dispatchHead(req: Request, ctx: RouteCtx) {
+  const resolved = await ctx.params;
+  const segments = resolved?.path ?? [];
+  if (isPublicSchubertTrackRead(req.method, segments)) {
+    return proxyPublicSchubertTrackRead(req, ctx);
+  }
+  return runAuthed(req, ctx);
+}
+
+export const GET = dispatchGet;
 export const POST = runAuthed;
 export const PUT = runAuthed;
 export const PATCH = runAuthed;
 export const DELETE = runAuthed;
-export const HEAD = runAuthed;
+export const HEAD = dispatchHead;
 

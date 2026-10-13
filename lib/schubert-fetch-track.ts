@@ -115,3 +115,30 @@ export async function fetchSchubertTrackBySlug(
   const urlPath = `tracks/by-slug/${encodeURIComponent(a)}/${encodeURIComponent(s)}`;
   return fetchSchubertTrackRead(urlPath);
 }
+
+const schubertPublicBySlugCache = new Map<string, Promise<SchubertTrackJson | null>>();
+
+/**
+ * Leitura pública por slug para metadados de partilha (crawlers sem sessão).
+ * Cache em memória do processo para evitar chamadas duplicadas no mesmo render.
+ */
+export function fetchSchubertTrackBySlugPublic(
+  artistSlug: string,
+  songSlug: string,
+): Promise<SchubertTrackJson | null> {
+  const a = artistSlug.trim();
+  const s = songSlug.trim();
+  if (!a || !s) return Promise.resolve(null);
+
+  const cacheKey = `${a}/${s}`;
+  const cached = schubertPublicBySlugCache.get(cacheKey);
+  if (cached) return cached;
+
+  const urlPath = `tracks/by-slug/${encodeURIComponent(a)}/${encodeURIComponent(s)}`;
+  const pending = fetchSchubertTrackReadPublic(urlPath).catch((error) => {
+    schubertPublicBySlugCache.delete(cacheKey);
+    throw error;
+  });
+  schubertPublicBySlugCache.set(cacheKey, pending);
+  return pending;
+}

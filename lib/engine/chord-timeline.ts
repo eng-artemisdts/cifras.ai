@@ -11,6 +11,7 @@ import {
   collapseTrailingNoChordEvents,
   formatChordLabel,
   isNoChordEvent,
+  soundingChordIndex,
 } from "../cifra/chord-timeline";
 
 export { collapseTrailingNoChordEvents, formatChordLabel, isNoChordEvent };
@@ -50,12 +51,8 @@ export function createChordTimeline(chords, options = {}) {
    * @param {number} tChord — segundos no mesmo referencial que chords[].start
    */
   function atChordTime(tChord) {
-    for (let i = 0; i < normalizedChords.length; i++) {
-      const c = normalizedChords[i];
-      if (tChord >= c.start && tChord < c.end) return c;
-    }
-    if (normalizedChords.length && tChord < normalizedChords[0].start) return null;
-    return normalizedChords.length ? normalizedChords[normalizedChords.length - 1] : null;
+    const i = soundingChordIndex(normalizedChords, tChord);
+    return i >= 0 ? normalizedChords[i] : null;
   }
 
   function atAudioTime(tAudio) {
@@ -89,13 +86,7 @@ export function chordEventIndexAtAudioTime(chords, tAudio, offsetSec = 0) {
   const off = Number.isFinite(offsetSec) ? offsetSec : 0;
   const normalized = collapseTrailingNoChordEvents(Array.isArray(chords) ? chords : []);
   if (!normalized.length) return -1;
-  const tChord = tAudio - off;
-  if (normalized.length && tChord < normalized[0].start) return -1;
-  for (let i = 0; i < normalized.length; i++) {
-    const c = normalized[i];
-    if (tChord >= c.start && tChord < c.end) return i;
-  }
-  return normalized.length - 1;
+  return soundingChordIndex(normalized, tAudio - off);
 }
 
 /**

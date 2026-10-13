@@ -1,41 +1,37 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 
+import {
+  ensureStripeBillingMetadata,
+  resolveAuth0SubForStripeBilling,
+  syncAuth0FromStripeSubscription,
+} from "@/lib/billing/stripe-auth0-reconcile";
 import { patchAuth0UserAppMetadata } from "@/lib/billing/auth0-management";
-import { billingStateFromStripeSubscription } from "@/lib/billing/subscription-sync";
 import { getStripe, isStripeBillingConfigured } from "@/lib/billing/stripe-server";
 
 export const runtime = "nodejs";
 
-async function resolveAuth0SubFromSubscription(
-  stripe: Stripe,
-  sub: Stripe.Subscription,
-): Promise<string | undefined> {
-  const fromMeta = sub.metadata?.auth0_sub?.trim();
-  if (fromMeta) return fromMeta;
-  const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
-  if (!customerId) return undefined;
-  const customer = await stripe.customers.retrieve(customerId);
-  if ("deleted" in customer && customer.deleted) return undefined;
-  const c = customer.metadata?.auth0_sub?.trim();
-  return c || undefined;
-}
-
 async function handleSubscriptionSynced(stripe: Stripe, sub: Stripe.Subscription) {
-  const auth0Sub = await resolveAuth0SubFromSubscription(stripe, sub);
-  if (!auth0Sub) return;
-  const state = billingStateFromStripeSubscription(sub);
-  await patchAuth0UserAppMetadata(auth0Sub, {
-    plan: state.plan,
-    stripe_customer_id: state.stripe_customer_id,
-    stripe_subscription_id: state.stripe_subscription_id,
-    subscription_status: state.subscription_status,
-  });
+  const auth0Sub = await resolveAuth0SubForStripeBilling(stripe, { subscription: sub });
+  if (!auth0Sub) {
+    console.warn(
+      "[stripe webhook] utilizador Auth0 não encontrado; ignorando sync da subscrição",
+      sub.id,
+    );
+    return;
+  }
+  await syncAuth0FromStripeSubscription(stripe, sub, auth0Sub);
 }
 
 async function handleSubscriptionDeleted(stripe: Stripe, sub: Stripe.Subscription) {
-  const auth0Sub = await resolveAuth0SubFromSubscription(stripe, sub);
-  if (!auth0Sub) return;
+  const auth0Sub = await resolveAuth0SubForStripeBilling(stripe, { subscription: sub });
+  if (!auth0Sub) {
+    console.warn(
+      "[stripe webhook] utilizador Auth0 não encontrado; ignorando cancelamento da subscrição",
+      sub.id,
+    );
+    return;
+  }
   const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
   await patchAuth0UserAppMetadata(auth0Sub, {
     plan: "free",
@@ -64,7 +60,11 @@ export async function POST(req: Request) {
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(body, sig, secret);
-  } catch {
+  } catch (e) {
+    console.warn(
+      "[stripe webhook] assinatura inválida — confirme STRIPE_WEBHOOK_SECRET e que `stripe listen` usa a mesma conta que STRIPE_SECRET_KEY (`--api-key sk_test_...`)",
+      e instanceof Error ? e.message : e,
+    );
     return NextResponse.json({ error: "invalid_signature" }, { status: 400 });
   }
 
@@ -73,22 +73,32 @@ export async function POST(req: Request) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         if (session.mode !== "subscription") break;
-        const auth0Sub =
-          session.metadata?.auth0_sub?.trim() || session.client_reference_id?.trim();
+        const auth0Sub = await resolveAuth0SubForStripeBilling(stripe, { session });
         const subId = session.subscription;
-        if (!auth0Sub || typeof subId !== "string") break;
+        if (!auth0Sub || typeof subId !== "string") {
+          console.warn("[stripe webhook] checkout sem utilizador Auth0 ou subscription id", session.id);
+          break;
+        }
         const sub = await stripe.subscriptions.retrieve(subId, { expand: ["items.data.price"] });
-        const state = billingStateFromStripeSubscription(sub);
-        await patchAuth0UserAppMetadata(auth0Sub, state);
-        if (typeof session.customer === "string") {
-          await stripe.customers.update(session.customer, {
-            metadata: { auth0_sub: auth0Sub },
+        await syncAuth0FromStripeSubscription(stripe, sub, auth0Sub);
+        const customerId =
+          typeof session.customer === "string" ? session.customer : session.customer?.id;
+        if (customerId) {
+          await ensureStripeBillingMetadata(stripe, {
+            auth0Sub,
+            customerId,
+            subscriptionId: sub.id,
           });
         }
         break;
       }
+      case "customer.subscription.created":
       case "customer.subscription.updated": {
-        await handleSubscriptionSynced(stripe, event.data.object as Stripe.Subscription);
+        const raw = event.data.object as Stripe.Subscription;
+        const sub = await stripe.subscriptions.retrieve(raw.id, {
+          expand: ["items.data.price"],
+        });
+        await handleSubscriptionSynced(stripe, sub);
         break;
       }
       case "customer.subscription.deleted": {

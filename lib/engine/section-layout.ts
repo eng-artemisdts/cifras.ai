@@ -39,7 +39,7 @@ export function isInstrumentalSectionLabel(label) {
   if (!s) return false;
   if (s.includes('intro')) return true;
   if (s.includes('instrumental')) return true;
-  if (isBridgeLabel(label)) return true;
+  // Ponte («bridge») costuma ter voz: só é instrumental se não houver letra (decidido pelo layout).
   if (/\bsolo\b/.test(s) && !s.includes('verse') && !s.includes('bridge')) return true;
   return false;
 }
@@ -1009,4 +1009,42 @@ export function musicAiSectionEnvelopeForTime(t, sectionsSorted) {
  */
 export function vocalSectionHeaderForLyricTime(t, sectionsSorted) {
   return musicAiSectionEnvelopeForTime(t, sectionsSorted);
+}
+
+/**
+ * Chave estável para agrupar secções repetidas na UI (ex.: dois «Refrão» → um só cabeçalho).
+ *
+ * @param {string|undefined|null} label
+ * @returns {string}
+ */
+export function sectionDisplayLabelKey(label) {
+  const k = String(label ?? '')
+    .trim()
+    .toLowerCase();
+  return k || '—';
+}
+
+/**
+ * Envelope de exibição: funde **todas** as ocorrências com o mesmo rótulo num único intervalo
+ * [min(start), max(end)] para cabeçalhos e shells «muito grandes» na cifra.
+ *
+ * @param {number} t
+ * @param {import('./musicai-types.ts').MusicAiSection[]} sectionsSorted
+ * @returns {import('./musicai-types.ts').MusicAiSection|null}
+ */
+export function vocalSectionDisplayEnvelopeForTime(t, sectionsSorted) {
+  const hit = vocalSectionHeaderForLyricTime(t, sectionsSorted);
+  if (!hit) return null;
+  const key = sectionDisplayLabelKey(hit.label);
+  let start = Number(hit.start);
+  let end = Number(hit.end);
+  for (const s of sectionsSorted) {
+    if (sectionDisplayLabelKey(s.label) !== key) continue;
+    const a = Number(s.start);
+    const b = Number(s.end);
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) continue;
+    start = Math.min(start, a);
+    end = Math.max(end, b);
+  }
+  return { start, end, label: String(hit.label ?? '').trim() || '—' };
 }

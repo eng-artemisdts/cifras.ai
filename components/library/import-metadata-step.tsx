@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useId, useState } from "react";
 
 import { ChordIngestLoadingOverlay } from "@/components/library/chord-ingest-loading-overlay";
+import { useImportQuota } from "@/components/providers/import-quota-context";
 import { useIngestJobs } from "@/components/providers/ingest-jobs-context";
 import { createBeethovenVariationFromSchubertTrack } from "@/lib/beethoven-variations";
 import { isPaidPlan, type BillingPlan } from "@/lib/billing/plan-types";
@@ -84,6 +85,7 @@ export function ImportMetadataStep({
 }: ImportMetadataStepProps) {
   const router = useRouter();
   const { registerIngestJob, blockNewIngestIfBusy } = useIngestJobs();
+  const { canImport, refreshQuota } = useImportQuota();
   const baseId = useId();
   const song = context.song;
   const isVariation = context.mode === "variation";
@@ -245,6 +247,10 @@ export function ImportMetadataStep({
       }
 
       if (blockNewIngestIfBusy()) return;
+      if (!canImport) {
+        setError("Atingiu o limite semanal de importações do seu plano.");
+        return;
+      }
 
       const ingestResponse = await postTrackIngestWithMeta(ingestFile, mergedSong, {
         capo_at: capoClamped,
@@ -264,6 +270,7 @@ export function ImportMetadataStep({
               : null,
         });
         if (!registered) return;
+        void refreshQuota();
         onDoneNavigation();
         router.push("/biblioteca/ingestoes");
         return;
@@ -273,6 +280,7 @@ export function ImportMetadataStep({
           ? resolvedTrack.trackId.trim()
           : "";
       onDoneNavigation();
+      void refreshQuota();
       const pair = resolveCifraSlugPairFromTrack(resolvedTrack as SchubertTrackJson);
       if (pair) {
         router.push(cifraEditHref(pair.artistSlug, pair.songSlug));
@@ -306,6 +314,8 @@ export function ImportMetadataStep({
     capoAt,
     registerIngestJob,
     blockNewIngestIfBusy,
+    canImport,
+    refreshQuota,
   ]);
 
   return (
@@ -687,7 +697,7 @@ export function ImportMetadataStep({
           <button
             type="button"
             onClick={() => void submit()}
-            disabled={submitting}
+            disabled={submitting || (isIngest && !canImport)}
             className="inline-flex items-center gap-2 rounded-[10px] bg-cifra-teal px-[22px] py-3 text-xs font-semibold text-cifra-bg transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <LibraryBig className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />

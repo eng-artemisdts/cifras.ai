@@ -6,6 +6,7 @@ import {
 } from "./cifra-view";
 import { createChordTimeline, formatChordLabel, isNoChordEvent } from "./chord-timeline";
 import { buildLyricModel } from "./lyric-timeline";
+import { sectionDisplayName } from "@/lib/cifra/section-labels";
 import { mergeConsecutiveDuplicateSectionLabels, sortSections } from "./payload-read";
 import { sectionAtTimestamp } from "./section-timeline";
 import {
@@ -23,6 +24,7 @@ import {
   resolveChordDiagram,
 } from "@/lib/cifra/chord-diagram/svguitar-from-db";
 import { transposeChordLabel } from "@/lib/cifra/chord-transpose";
+import { spellChordForKey } from "@/lib/cifra/chord-spelling";
 
 const LS_AUTO_SCROLL_LEAD = "cifra-ai:autoScrollLeadSec";
 const LS_AUTO_SCROLL_DURATION_MS = "cifra-ai:autoScrollDurationMs";
@@ -49,6 +51,7 @@ function coalescePayload(raw) {
     sections: Array.isArray(p.sections) ? p.sections : [],
     meta: p.meta && typeof p.meta === "object" ? p.meta : {},
     chordTimeOffsetSec: Number.isFinite(p.chordTimeOffsetSec) ? p.chordTimeOffsetSec : 0,
+    original_tune: typeof p.original_tune === "string" ? p.original_tune : "",
     slotIdsInLyricOrder: Array.isArray(p.slotIdsInLyricOrder) ? p.slotIdsInLyricOrder : null,
     chordAnchorsBySlotId:
       p.chordAnchorsBySlotId && typeof p.chordAnchorsBySlotId === "object" ? p.chordAnchorsBySlotId : null,
@@ -164,15 +167,20 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
   const { timedLines: rawTimedLines } = buildLyricModel(payload.lyrics);
   const meta = payload.meta;
 
+  /** Rótulo exibido: transposto e escrito com sustenidos/bemóis conforme o tom resultante. */
   function chordForDisplayFromEvent(c) {
-    return transposeChordLabel(formatChordLabel(c), getTransposeSemitones());
+    const semitones = getTransposeSemitones();
+    return spellChordForKey(transposeChordLabel(formatChordLabel(c), semitones), payload.original_tune, semitones);
   }
 
   let cachedScrollContainer = null;
   /**
-   * Contentor rolável principal: **sempre** o `scrollRoot` passado pela UI quando ligado ao DOM.
-   * Não exigir `overflow-y` computado nem `scrollHeight > clientHeight` — isso falhava em alguns browsers /
-   * primeiro paint e fazia cair no `document`, quebrando a rolagem inteligente ou empurrando a página inteira.
+   * Contentor rolável principal.
+   *
+   * Prioridade: `scrollRoot` quando já rola; senão ancestral rolável (ex.: coluna central com
+   * `overflow-y-auto` em `CifraCenterChrome` quando o painel interno ainda não tem overflow).
+   * Mantém `scrollRoot` como fallback antes do conteúdo ultrapassar a altura (primeiro paint),
+   * sem cair no `document` — isso empurrava a página inteira e quebrava a rolagem inteligente.
    */
   function pickScrollContainer() {
     function hasOverflowScrollStyle(el) {
@@ -181,26 +189,42 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
       const oy = cs.overflowY;
       return oy === "auto" || oy === "scroll" || oy === "overlay";
     }
+    function scrollableAmount(el) {
+      return Math.max(0, el.scrollHeight - el.clientHeight);
+    }
     function canScrollNow(el) {
-      return hasOverflowScrollStyle(el) && el.scrollHeight - el.clientHeight > 1;
+      return hasOverflowScrollStyle(el) && scrollableAmount(el) > 1;
     }
+
     if (scrollRoot instanceof HTMLElement && scrollRoot.isConnected) {
-      cachedScrollContainer = scrollRoot;
-      return scrollRoot;
+      if (canScrollNow(scrollRoot)) {
+        cachedScrollContainer = scrollRoot;
+        return scrollRoot;
+      }
+
+      let node = scrollRoot.parentElement;
+      while (node && node !== document.body && node !== document.documentElement) {
+        if (canScrollNow(node)) {
+          cachedScrollContainer = node;
+          return node;
+        }
+        node = node.parentElement;
+      }
+
+      if (hasOverflowScrollStyle(scrollRoot)) {
+        cachedScrollContainer = scrollRoot;
+        return scrollRoot;
+      }
     }
-    if (cachedScrollContainer instanceof HTMLElement && cachedScrollContainer.isConnected && canScrollNow(cachedScrollContainer)) {
+
+    if (
+      cachedScrollContainer instanceof HTMLElement &&
+      cachedScrollContainer.isConnected &&
+      canScrollNow(cachedScrollContainer)
+    ) {
       return cachedScrollContainer;
     }
-    let node = scrollRoot?.parentElement ?? null;
-    while (node && node !== document.body && node !== document.documentElement) {
-      if (canScrollNow(node)) {
-        cachedScrollContainer = node;
-        return node;
-      }
-      node = node.parentElement;
-    }
-    const se = document.scrollingElement instanceof HTMLElement ? document.scrollingElement : null;
-    if (se && se.scrollHeight - se.clientHeight > 1) return se;
+
     return null;
   }
 
@@ -299,8 +323,19 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     }
     virtualRafId = requestAnimationFrame(virtualStep);
   }
-  function markProgrammaticScroll() {
-    programmaticScrollUntilMs = performance.now() + 120;
+  /** Avança o tempo localmente quando a rolagem está ligada mas o player está em pausa. */
+  function ensureSilentScrollClock() {
+    if (!autoScrollEnabled) return;
+    if (virtualPlaying) return;
+    if (playbackReady && playback.isPlaying()) return;
+    virtualT = Math.max(0, playback.getCurrentTime());
+    virtualPlaying = true;
+    lastVirtualPerfMs = 0;
+    virtualRafId = requestAnimationFrame(virtualStep);
+    updateTransportUi();
+  }
+  function markProgrammaticScroll(durationMs = 150) {
+    programmaticScrollUntilMs = Math.max(programmaticScrollUntilMs, performance.now() + durationMs);
   }
   function cancelSmoothScrolling() {
     smoothScrollAnimation?.stop();
@@ -351,15 +386,16 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     if (Math.abs(delta) < 2) return;
     const dur = Number.isFinite(durationMs) && durationMs >= 0 ? durationMs : DEFAULT_AUTO_SCROLL_DURATION_MS;
     if (dur <= 0) {
-      markProgrammaticScroll();
+      markProgrammaticScroll(80);
       pane.scrollTop = targetTop;
       return;
     }
+    markProgrammaticScroll(dur + 80);
     smoothScrollAnimation = animate(startY, targetTop, {
       duration: dur / 1000,
       ease: "easeInOut",
       onUpdate: (latest) => {
-        markProgrammaticScroll();
+        markProgrammaticScroll(dur + 80);
         pane.scrollTop = Number(latest);
       },
       onComplete: () => {
@@ -378,18 +414,20 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     const curr = root.scrollTop;
     const delta = target - curr;
     if (Math.abs(delta) <= 0.5) {
-      markProgrammaticScroll();
+      markProgrammaticScroll(80);
       root.scrollTop = target;
       lastTimeBasedScrollTop = target;
       return;
     }
     cancelTimeBasedScrollAnimation();
     timeScrollTargetY = Number(nextY);
+    const timeAnimMs = 220;
+    markProgrammaticScroll(timeAnimMs + 80);
     timeScrollAnimation = animate(curr, target, {
-      duration: 0.22,
+      duration: timeAnimMs / 1000,
       ease: "linear",
       onUpdate: (latest) => {
-        markProgrammaticScroll();
+        markProgrammaticScroll(timeAnimMs + 80);
         root.scrollTop = Number(latest);
         lastTimeBasedScrollTop = root.scrollTop;
       },
@@ -760,13 +798,14 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     currentChordEl.classList.toggle("text-cifra-muted", isNoChordEvent(chNow));
     currentChordEl.classList.toggle("text-cifra-teal", !isNoChordEvent(chNow));
     const sec = sectionAtTimestamp(sectionsSorted, t);
-    currentSectionEl.textContent = sec ? sec.label : "—";
+    currentSectionEl.textContent = sec ? sectionDisplayName(sec.label) : "—";
     currentSectionEl.title = sec ? `${formatClock(sec.start)} — ${formatClock(sec.end)}` : "";
     if (renderPlan.length) {
       ensureCifraMounted();
       applyCifraPlaybackHighlight(cifraContainer, t, payload.chords || [], payload.chordTimeOffsetSec ?? 0);
       applyAutoScroll(cifraContainer, t);
     }
+    ensureSilentScrollClock();
     updateTransportUi();
   }
 
@@ -841,13 +880,19 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     if (!autoScrollEnabled) {
       cancelSmoothScrolling();
       cancelTimeBasedScrollAnimation();
+      if (virtualPlaying && playbackReady && !playback.isPlaying()) {
+        cancelVirtualPlayback();
+        updateTransportUi();
+      }
     } else {
+      userInteractingUntilMs = 0;
       const root = pickScrollContainer();
       if (root) {
         const t = nowAudioTime();
         const baseY = baseTimeBasedTargetY(root, t);
         timeScrollUserOffsetPx = root.scrollTop - baseY;
       }
+      ensureSilentScrollClock();
     }
     lastAutoScrollTarget = null;
     lastTimeBasedScrollTop = -1;
@@ -878,6 +923,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
   const onUserScrollIntent = (source: "user" | "scroll" = "scroll") => {
     // Scroll disparado por código (animação) não deve cancelar auto-scroll.
     if (source === "scroll" && performance.now() < programmaticScrollUntilMs) return;
+    if (source === "scroll" && (smoothScrollAnimation || timeScrollAnimation)) return;
     pauseAutoScrollByUser();
     const root = pickScrollContainer();
     if (!root) return;
@@ -886,9 +932,15 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     const baseY = baseTimeBasedTargetY(root, t);
     timeScrollUserOffsetPx = root.scrollTop - baseY;
   };
+  const onCapturedPaneScroll = (ev: Event) => {
+    const pane = pickScrollContainer();
+    if (!pane || ev.target !== pane) return;
+    onUserScrollIntent("scroll");
+  };
 
   const tickInterval = window.setInterval(() => tick(), 120);
   if (userScrollIntentHandlerRef) userScrollIntentHandlerRef.current = onUserScrollIntent;
+  document.addEventListener("scroll", onCapturedPaneScroll, true);
   ensureFloatingChordBadge();
   syncAutoScrollButtonUi();
   playBtn.addEventListener("click", onPlayClick);
@@ -918,6 +970,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     scrollModeSmartEl?.removeEventListener("change", onScrollModeChange);
     showFloatingChordEl?.removeEventListener("change", onFloatingChordToggle);
     showCurrentChordDiagramEl?.removeEventListener("change", onCurrentChordDiagramToggle);
+    document.removeEventListener("scroll", onCapturedPaneScroll, true);
     floatingChordDestroy?.();
     if (userScrollIntentHandlerRef) userScrollIntentHandlerRef.current = null;
     cancelSmoothScrolling();

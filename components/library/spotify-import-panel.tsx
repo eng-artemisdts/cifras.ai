@@ -15,6 +15,7 @@ import { cifraEditHref, resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-
 import type { StreamingLinkImportPanelConfig } from "@/lib/library/streaming-link-import-config";
 import type { SpotifyImportPrefill } from "@/lib/library/spotify-import-storage";
 import { useIngestJobs } from "@/components/providers/ingest-jobs-context";
+import { useImportQuota } from "@/components/providers/import-quota-context";
 import {
   mapRecognizedSongToChordPreview,
   mapSchubertMatchToChordPreview,
@@ -169,6 +170,7 @@ export function SpotifyImportPanel({
 }: SpotifyImportPanelProps) {
   const { user } = useUser();
   const { registerIngestJob, blockNewIngestIfBusy } = useIngestJobs();
+  const { canImport, refreshQuota } = useImportQuota();
   const router = useRouter();
   const pathname = usePathname();
   const returnToConnect = `${pathname || "/biblioteca/importar/spotify"}`;
@@ -344,12 +346,17 @@ export function SpotifyImportPanel({
       setSpotifyIngestBusy(true);
       try {
         if (blockNewIngestIfBusy()) return;
+        if (!canImport) {
+          setSpotifyIngestError("Atingiu o limite semanal de importações do seu plano.");
+          return;
+        }
         const ingestResp = await postSpotifySourceIngest({ trackId: spotifyTrackId, meta: song });
 
         if (ingestResp.status === "completed" && ingestResp.track && typeof ingestResp.track === "object") {
           const resolvedTrack = ingestResp.track as SchubertTrackJson;
           const pair = resolveCifraSlugPairFromTrack(resolvedTrack);
           if (pair) {
+            void refreshQuota();
             router.push(cifraEditHref(pair.artistSlug, pair.songSlug));
             return;
           }
@@ -358,10 +365,12 @@ export function SpotifyImportPanel({
               ? resolvedTrack.trackId.trim()
               : "";
           if (tid) {
+            void refreshQuota();
             router.push(`/cifras/edit?trackId=${encodeURIComponent(tid)}`);
             return;
           }
           const q = encodeURIComponent(`${song.title} ${song.artist}`.trim());
+          void refreshQuota();
           router.push(`/biblioteca?q=${q}`);
           return;
         }
@@ -382,6 +391,7 @@ export function SpotifyImportPanel({
               : null,
         });
         if (!registered) return;
+        void refreshQuota();
         router.push("/biblioteca/ingestoes");
       } catch (e) {
         const msg =
@@ -395,7 +405,7 @@ export function SpotifyImportPanel({
         setSpotifyIngestBusy(false);
       }
     },
-    [blockNewIngestIfBusy, registerIngestJob, router],
+    [blockNewIngestIfBusy, canImport, refreshQuota, registerIngestJob, router],
   );
 
   const onConfirmSpotifyIngest = useCallback(async () => {
@@ -725,7 +735,7 @@ export function SpotifyImportPanel({
                             <li key={`${selectedPlaylist.id}-${tr.id}-${tr.name}`}>
                               <button
                                 type="button"
-                                disabled={tr.importable === false || trackLookupLoading}
+                                disabled={tr.importable === false || trackLookupLoading || !canImport}
                                 onClick={() => void onPickTrack(tr)}
                                 className={cn(
                                   "flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left text-[11px] text-cifra-text transition",
@@ -814,7 +824,7 @@ export function SpotifyImportPanel({
                 {linkError ? <p className="text-[11px] text-red-300/90">{linkError}</p> : null}
                 <button
                   type="button"
-                  disabled={linkBusy || !url.trim() || proGateActive}
+                  disabled={linkBusy || !url.trim() || proGateActive || !canImport}
                   onClick={() => void onContinueLink()}
                   className="rounded-lg bg-cifra-teal px-4 py-2 text-[11px] font-semibold text-cifra-bg transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
                 >

@@ -17,13 +17,15 @@ const PUBLIC_LIBRARY_SEARCH_MAX_CHARS = 200;
 
 type RouteCtx = { params?: Promise<{ path?: string[] }> };
 
-function isPublicLibraryCatalogSearch(method: string, segments: string[]): boolean {
+function isPublicBeethovenRead(method: string, segments: string[]): boolean {
   if (method !== "GET" && method !== "HEAD") return false;
-  return segments.length === 2 && segments[0] === "library-home" && segments[1] === "search";
-}
-
-function isPublicVariationRead(method: string, segments: string[]): boolean {
-  if (method !== "GET" && method !== "HEAD") return false;
+  if (segments.length === 1 && segments[0] === "library-home") return true;
+  if (segments.length === 2 && segments[0] === "library-home" && segments[1] === "search") {
+    return true;
+  }
+  if (segments.length === 2 && segments[0] === "library-home" && segments[1] === "catalog") {
+    return true;
+  }
   return (
     segments.length === 4 &&
     segments[0] === "tracks" &&
@@ -33,14 +35,14 @@ function isPublicVariationRead(method: string, segments: string[]): boolean {
 }
 
 /**
- * Catálogo: busca de faixas para visitantes (sem sessão).
- * O Nest em `library-home/search` não exige JWT; o BFF antes bloqueava tudo com `withApiAuthRequired`.
- * Mantemos apenas este caminho explícito e só GET/HEAD — o resto continua com Bearer do utilizador.
+ * Leituras públicas no Nest Beethoven (sem JWT). O BFF antes bloqueava tudo com
+ * `withApiAuthRequired`, o que fazia páginas como `/explorar` e `/cifras` falharem para
+ * visitantes ou sessões expiradas.
  */
-async function proxyPublicLibraryCatalogSearch(req: Request, ctx: RouteCtx): Promise<Response> {
+async function proxyPublicBeethovenRead(req: Request, ctx: RouteCtx): Promise<Response> {
   const resolved = await ctx.params;
   const segments = resolved?.path ?? [];
-  if (!isPublicLibraryCatalogSearch(req.method, segments)) {
+  if (!isPublicBeethovenRead(req.method, segments)) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
@@ -164,8 +166,8 @@ async function runAuthed(req: Request, ctx: RouteCtx) {
 async function dispatchGet(req: Request, ctx: RouteCtx) {
   const resolved = await ctx.params;
   const segments = resolved?.path ?? [];
-  if (isPublicLibraryCatalogSearch(req.method, segments) || isPublicVariationRead(req.method, segments)) {
-    return proxyPublicLibraryCatalogSearch(req, ctx);
+  if (isPublicBeethovenRead(req.method, segments)) {
+    return proxyPublicBeethovenRead(req, ctx);
   }
   return runAuthed(req, ctx);
 }
@@ -173,8 +175,8 @@ async function dispatchGet(req: Request, ctx: RouteCtx) {
 async function dispatchHead(req: Request, ctx: RouteCtx) {
   const resolved = await ctx.params;
   const segments = resolved?.path ?? [];
-  if (isPublicLibraryCatalogSearch(req.method, segments) || isPublicVariationRead(req.method, segments)) {
-    return proxyPublicLibraryCatalogSearch(req, ctx);
+  if (isPublicBeethovenRead(req.method, segments)) {
+    return proxyPublicBeethovenRead(req, ctx);
   }
   return runAuthed(req, ctx);
 }

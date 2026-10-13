@@ -23,6 +23,8 @@ export function getAuth0(): Auth0Client {
       process.env.APP_BASE_URL?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim();
     client = new Auth0Client({
       ...(appBaseUrl ? { appBaseUrl } : {}),
+      /** `/v2/logout` aceita wildcards em Allowed Logout URLs — mais fiável que OIDC em dev. */
+      logoutStrategy: "v2",
       signInReturnToPath: "/explorar",
       ...(audience
         ? {

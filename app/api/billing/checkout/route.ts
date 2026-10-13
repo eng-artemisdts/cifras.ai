@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { getAuth0Session } from "@/lib/auth0";
 import { isAuth0Configured } from "@/lib/auth0-env";
 import { getSiteUrl } from "@/components/seo/google-site-seo";
+import { fetchAuth0UserBillingSnapshot } from "@/lib/billing/auth0-management";
+import { findStripeCustomerForAuth0User } from "@/lib/billing/stripe-auth0-reconcile";
 import { getStripe, isStripeBillingConfigured, stripePriceIdForPlan } from "@/lib/billing/stripe-server";
 
 export const runtime = "nodejs";
@@ -46,10 +48,19 @@ export async function POST(req: Request) {
   const origin = getSiteUrl();
   const stripe = getStripe();
 
+  const snap = await fetchAuth0UserBillingSnapshot(sub);
+  const existingCustomer = await findStripeCustomerForAuth0User(stripe, {
+    auth0Sub: sub,
+    email: session.user.email,
+    knownCustomerId: snap?.stripe_customer_id,
+  });
+
   const checkout = await stripe.checkout.sessions.create({
     mode: "subscription",
     client_reference_id: sub,
-    customer_email: session.user.email ?? undefined,
+    ...(existingCustomer
+      ? { customer: existingCustomer.id }
+      : { customer_email: session.user.email ?? undefined }),
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${origin}/conta/assinatura?checkout=success`,
     cancel_url: `${origin}/conta/assinatura?checkout=cancel`,

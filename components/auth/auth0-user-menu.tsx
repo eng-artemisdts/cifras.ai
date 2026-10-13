@@ -126,16 +126,6 @@ export function Auth0UserMenu({ user: serverUser, className }: Auth0UserMenuProp
                   Explorar
                 </Menu.LinkItem>
                 <Menu.LinkItem
-                  href="/cifras/edit"
-                  closeOnClick
-                  className={linkItemClass}
-                  onClick={() =>
-                    trackAnalyticsEvent(GA_EVENTS.ACCOUNT_MENU_NAV, { destination: "identificar_cifra" })
-                  }
-                >
-                  Identificar Cifra
-                </Menu.LinkItem>
-                <Menu.LinkItem
                   href="/conta/assinatura"
                   closeOnClick
                   className={linkItemClass}

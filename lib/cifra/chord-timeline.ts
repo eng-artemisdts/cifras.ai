@@ -56,6 +56,27 @@ export function collapseTrailingNoChordEvents(chords: MusicAiChordEvent[]): Musi
   return out;
 }
 
+/**
+ * Índice do acorde que soa em `t` (mesmo referencial que `chords[].start`): o de maior `start`
+ * que já começou. Na cifra, um acorde vale até o próximo — pausas e sobreposições (ex.: acorde
+ * inserido no editor por cima de outro) resolvem-se a favor da troca mais recente.
+ * Devolve -1 antes do 1.º acorde. Não exige a lista ordenada.
+ */
+export function soundingChordIndex(chords: MusicAiChordEvent[], t: number): number {
+  if (!Number.isFinite(t)) return -1;
+  let best = -1;
+  let bestStart = -Infinity;
+  for (let i = 0; i < chords.length; i++) {
+    const st = Number(chords[i]?.start);
+    if (!Number.isFinite(st) || st > t + 1e-9) continue;
+    if (st >= bestStart) {
+      bestStart = st;
+      best = i;
+    }
+  }
+  return best;
+}
+
 export function createChordTimeline(chords: MusicAiChordEvent[], options: { offsetSec?: number } = {}) {
   const offsetSec = Number.isFinite(options.offsetSec) ? Number(options.offsetSec) : 0;
   const normalizedChords = collapseTrailingNoChordEvents(chords);
@@ -64,13 +85,10 @@ export function createChordTimeline(chords: MusicAiChordEvent[], options: { offs
     return tAudio - offsetSec;
   }
 
+  /** Acorde que soa em `tChord`: o último que começou até esse instante (vale até o próximo). */
   function atChordTime(tChord: number): MusicAiChordEvent | null {
-    for (let i = 0; i < normalizedChords.length; i++) {
-      const c = normalizedChords[i];
-      if (tChord >= c.start && tChord < c.end) return c;
-    }
-    if (normalizedChords.length && tChord < normalizedChords[0].start) return null;
-    return normalizedChords.length ? normalizedChords[normalizedChords.length - 1] : null;
+    const i = soundingChordIndex(normalizedChords, tChord);
+    return i >= 0 ? normalizedChords[i]! : null;
   }
 
   function atAudioTime(tAudio: number) {

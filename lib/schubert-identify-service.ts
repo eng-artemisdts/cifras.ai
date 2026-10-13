@@ -1,4 +1,5 @@
 import { cifraEditHref, cifraHref, resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-routes";
+import { normalizeStreamingImportUrl } from "@/lib/library/streaming-url-validation";
 import type { SchubertTrackJson } from "@/lib/schubert-api";
 import { fetchSchubertFromBrowser } from "@/lib/schubert-api";
 import type {
@@ -200,6 +201,52 @@ export async function postSpotifySourceIngest(input: {
   return json as SchubertTrackIngestResponse;
 }
 
+/**
+ * Inicia ingestão a partir de um link público (`POST /tracks/ingest/url`).
+ * Suporta YouTube, Spotify, TikTok e Instagram no servidor (yt-dlp + pipeline de cifra).
+ */
+export async function postUrlSourceIngest(input: {
+  sourceUrl: string;
+  title?: string;
+  artist?: string;
+  album?: string;
+  coverImageUrl?: string;
+}): Promise<SchubertTrackIngestResponse> {
+  const sourceUrl = normalizeStreamingImportUrl(input.sourceUrl);
+  if (!sourceUrl) {
+    throw new SchubertIdentifyError("O link de origem é obrigatório.", 400, null);
+  }
+
+  const payload: Record<string, string> = { sourceUrl };
+  if (input.title?.trim()) payload.title = input.title.trim();
+  if (input.artist?.trim()) payload.artist = input.artist.trim();
+  if (input.album?.trim()) payload.album = input.album.trim();
+  if (input.coverImageUrl?.trim()) payload.coverImageUrl = input.coverImageUrl.trim();
+
+  const res = await fetchSchubertFromBrowser("tracks/ingest/url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const raw = await res.text();
+  let json: unknown = null;
+  if (raw) {
+    try {
+      json = JSON.parse(raw) as unknown;
+    } catch {
+      json = { raw };
+    }
+  }
+
+  if (!res.ok) {
+    const msg = formatUpstreamErrorMessage(json, res.statusText);
+    throw new SchubertIdentifyError(msg, res.status, json);
+  }
+
+  return json as SchubertTrackIngestResponse;
+}
+
 export async function getIngestJobStatus(jobId: string): Promise<SchubertIngestJobResponse> {
   const res = await fetchSchubertFromBrowser(`tracks/ingest/jobs/${encodeURIComponent(jobId)}`, {
     method: "GET",
@@ -300,7 +347,18 @@ function formatUpstreamErrorMessage(json: unknown, fallback: string): string {
   if (typeof json !== "object" || json === null) {
     return fallback || "Não foi possível processar o áudio";
   }
-  const m = (json as { message?: unknown }).message;
+  const root = json as Record<string, unknown>;
+  const nested =
+    root.message && typeof root.message === "object" && !Array.isArray(root.message)
+      ? (root.message as Record<string, unknown>)
+      : null;
+  const code = nested?.code ?? root.code;
+  if (code === "import_quota_exceeded") {
+    const msg = nested?.message ?? root.message;
+    if (typeof msg === "string" && msg.trim()) return msg;
+    return "Atingiu o limite semanal de importações do seu plano.";
+  }
+  const m = root.message;
   if (Array.isArray(m)) return m.map(String).join("; ");
   if (typeof m === "string" && m.trim()) return m;
   return fallback || "Falha na identificação";
