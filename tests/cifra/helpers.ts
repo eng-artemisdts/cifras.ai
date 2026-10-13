@@ -24,6 +24,15 @@ export const chord = (label: string, start: number, end: number): MusicAiChordEv
   chord_basic_pop: label,
 });
 
+/** Acorde com compasso/tempo (grade da Music.ai), 4/4. */
+export const gridChord = (
+  label: string,
+  start: number,
+  end: number,
+  [bar, beat]: [number, number],
+  [endBar, endBeat]: [number, number],
+): MusicAiChordEvent => ({ ...chord(label, start, end), start_bar: bar, start_beat: beat, end_bar: endBar, end_beat: endBeat });
+
 /** Segmento com tempos explícitos por palavra: `[[palavra, início, fim], ...]`. */
 export const line = (words: [string, number, number][]): MusicAiLyricSegment => ({
   start: words[0]![1],
@@ -96,6 +105,8 @@ export function sheetRows(container: HTMLElement): string[] {
           })
           .join("");
       }
+      const bar = c.querySelector(".cifra-bar");
+      if (bar) return clean(bar.textContent);
       const sym = clean(c.children[0]?.textContent);
       const txt = clean(c.children[1]?.textContent);
       return sym ? `[${sym}]${txt}` : txt;

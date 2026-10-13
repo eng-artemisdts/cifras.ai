@@ -128,36 +128,84 @@ function createInstrumentalChordStrip(
   row.className = 'cifra-line flex flex-wrap items-end gap-x-3 gap-y-4';
   row.setAttribute('data-instrumental-strip', `${iv.start}-${iv.end}`);
 
+  /** Acordes visíveis (sem reescrever o mesmo acorde seguido) e o compasso em que começam. */
+  const normalized = collapseTrailingNoChordEvents(chords);
+  /** @type {(typeof segs[number] & { bar: number|null })[]} */
+  const visible = [];
   let prevLabel = /** @type {string|null} */ (null);
-  for (const s of segs) {
-    const showLabel = prevLabel === null || s.label !== prevLabel;
-    prevLabel = s.label;
+  for (const seg of segs) {
+    if (prevLabel !== null && seg.label === prevLabel) continue;
+    prevLabel = seg.label;
+    const c = normalized[seg.chordIdx];
+    const bar = c && Number.isFinite(Number(c.start_bar)) && Number(c.start_bar) >= 1 ? Number(c.start_bar) : null;
+    visible.push({ ...seg, bar });
+  }
 
-    const wrap = document.createElement('span');
-    wrap.className =
-      'inline-flex flex-col items-start gap-1 rounded-md px-1 py-0.5 transition-colors';
+  /** Compassos: acordes que começam no mesmo compasso ficam juntos (`| G | D | Em C |`). */
+  const useBars = visible.length > 1 && visible.every((v) => v.bar != null);
+  /** @type {{ bar: number|null, items: typeof visible }[]} */
+  const bars = [];
+  for (const v of visible) {
+    const last = bars[bars.length - 1];
+    if (useBars && last && last.bar === v.bar) last.items.push(v);
+    else bars.push({ bar: v.bar, items: [v] });
+  }
 
-    const ch = document.createElement('span');
-    ch.className =
-      'cifra-chord__symbol inline-flex min-h-[1.125rem] items-end font-mono text-xs font-semibold text-auris-teal sm:text-sm';
-    ch.textContent = showLabel ? s.label : '\u00A0';
-
-    const tx = document.createElement('span');
-    tx.className = 'min-h-[1.25rem] text-auris-ink';
-    tx.textContent = '\u00A0';
-
-    wrap.appendChild(ch);
-    wrap.appendChild(tx);
-    row.appendChild(wrap);
-    stripCellsOut.push({ wrap, a0: s.a0, a1: s.a1 });
-    if (showLabel) {
-      wrap.dataset.playbackA0 = String(s.a0);
-      wrap.dataset.playbackA1 = String(s.a1);
-      wrap.dataset.chordIdx = String(s.chordIdx);
-      wrap.classList.add('cifra-chord--track');
-      if (typeof wireChordDiagram === 'function') wireChordDiagram(ch, s.label);
+  /** Sequência que se repete inteira (ex.: intro G D Em C G D Em C) → escreve uma vez com «(2x)». */
+  let period = bars.length;
+  let times = 1;
+  if (useBars && bars.length >= 2) {
+    const keys = bars.map((b) => b.items.map((i) => i.label).join(' '));
+    for (let pLen = 1; pLen <= keys.length / 2; pLen++) {
+      if (keys.length % pLen) continue;
+      let same = true;
+      for (let i = pLen; i < keys.length && same; i++) same = keys[i] === keys[i - pLen];
+      if (same) {
+        period = pLen;
+        times = keys.length / pLen;
+        break;
+      }
     }
   }
+
+  const makeSymbolCell = (text, muted) => {
+    const wrap = document.createElement('span');
+    wrap.className = 'inline-flex flex-col items-start gap-1 rounded-md px-1 py-0.5 transition-colors';
+    const ch = document.createElement('span');
+    ch.className = muted
+      ? 'cifra-bar inline-flex min-h-[1.125rem] items-end font-mono text-xs text-auris-muted sm:text-sm'
+      : 'cifra-chord__symbol inline-flex min-h-[1.125rem] items-end font-mono text-xs font-semibold text-auris-teal sm:text-sm';
+    ch.textContent = text;
+    const tx = document.createElement('span');
+    tx.className = 'min-h-[1.25rem] text-auris-ink';
+    tx.textContent = ' ';
+    wrap.appendChild(ch);
+    wrap.appendChild(tx);
+    return { wrap, ch };
+  };
+
+  for (let bi = 0; bi < period; bi++) {
+    if (useBars) row.appendChild(makeSymbolCell('|', true).wrap);
+    bars[bi].items.forEach((v, ii) => {
+      const { wrap, ch } = makeSymbolCell(v.label, false);
+      wrap.dataset.playbackA0 = String(v.a0);
+      wrap.dataset.playbackA1 = String(v.a1);
+      wrap.dataset.chordIdx = String(v.chordIdx);
+      // Passagens repetidas apontam para esta célula (destaque durante o «2x»).
+      const aliases = [];
+      for (let rep = 1; rep < times; rep++) {
+        const other = bars[bi + rep * period]?.items[ii];
+        if (other) aliases.push(other.chordIdx);
+      }
+      if (aliases.length) wrap.dataset.chordAliases = aliases.join(' ');
+      wrap.classList.add('cifra-chord--track');
+      row.appendChild(wrap);
+      stripCellsOut.push({ wrap, a0: v.a0, a1: v.a1 });
+      if (typeof wireChordDiagram === 'function') wireChordDiagram(ch, v.label);
+    });
+  }
+  if (useBars) row.appendChild(makeSymbolCell('|', true).wrap);
+  if (times > 1) row.appendChild(makeSymbolCell(`(${times}x)`, true).wrap);
 
   outer.appendChild(row);
   return outer;
@@ -626,7 +674,11 @@ export function pickActiveChordTrackWrap(container, tAudio) {
 function pickCellForChordIndex(container, tAudio, idx) {
   const eps = CHORD_CELL_TIME_EPS;
   /** @type {HTMLElement[]} */
-  const cells = [...container.querySelectorAll(`.cifra-chord--track[data-chord-idx="${idx}"]`)];
+  const cells = [
+    ...container.querySelectorAll(
+      `.cifra-chord--track[data-chord-idx="${idx}"], .cifra-chord--track[data-chord-aliases~="${idx}"]`
+    ),
+  ];
   if (!cells.length) return null;
   let bestInWin = null;
   let bestA0 = -Infinity;
