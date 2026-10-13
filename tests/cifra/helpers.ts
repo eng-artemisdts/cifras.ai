@@ -90,7 +90,11 @@ const clean = (s: string | null | undefined) => (s ?? "").replace(/ /g, "").tri
 /** Linhas da cifra como texto: `[C]palavra`, faixas instrumentais prefixadas com `♪`. */
 export function sheetRows(container: HTMLElement): string[] {
   return [...container.querySelectorAll<HTMLElement>(".cifra-line")].map((row) => {
-    const cells = [...row.children].map((c) => {
+    // Palavra + acorde "depois dela" vêm agrupados (não se separam na quebra de linha).
+    const items = [...row.children].flatMap((c) =>
+      c.classList.contains("cifra-word-group") ? [...c.children] : [c],
+    );
+    const cells = items.map((c) => {
       if (c.classList.contains("cifra-word")) {
         // Palavra em sílabas: o acorde aparece antes da sílaba em que começa (ex.: "a[G]mor").
         return [...c.children]

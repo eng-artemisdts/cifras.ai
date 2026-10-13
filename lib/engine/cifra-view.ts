@@ -212,23 +212,13 @@ function createInstrumentalChordStrip(
 }
 
 /**
- * Sílaba de uma palavra cantada, com o(s) acorde(s) que começam nela alinhados à esquerda.
- * Um acorde mais largo que a sílaba alarga a peça (como o espaçamento das cifras).
- *
- * @param {string} text
- * @param {{ label: string, chordIdx: number, c: import('./musicai-types.ts').MusicAiChordEvent }[]} shown
- * @param {number} off
- * @param {(el: HTMLElement, label: string) => void} [wireChordDiagram]
- * @returns {HTMLElement}
- */
-/**
- * Depois do layout: afasta acordes que se sobreporiam (acorde largo sobre sílaba curta seguido
- * de outro acorde). Só acrescenta espaço onde é preciso, como numa cifra impressa.
+ * Depois do layout, como numa cifra impressa: o acorde passa por cima do espaço entre as
+ * palavras e só se abre espaço quando é preciso — dois acordes que se sobreporiam, ou um acorde
+ * que sairia pela margem direita da linha.
  *
  * @param {HTMLElement} container
  */
 export function spaceOverlappingChords(container) {
-  const GAP_PX = 6;
   for (const row of container.querySelectorAll('.cifra-line:not([data-instrumental-strip])')) {
     for (const el of row.querySelectorAll('[data-chord-space]')) {
       el.style.marginLeft = '';
@@ -236,53 +226,95 @@ export function spaceOverlappingChords(container) {
       el.style.backgroundImage = '';
       el.removeAttribute('data-chord-space');
     }
-    // A última sílaba de cada palavra reserva a largura do seu acorde: a quebra de linha
-    // passa a considerá-lo e o acorde nunca sai pela margem direita.
-    for (const piece of row.querySelectorAll('.cifra-syllable:last-child')) {
+    for (const piece of row.querySelectorAll('[data-chord-reserve]')) {
       piece.style.minWidth = '';
-      const chordRow = piece.firstElementChild;
-      const w = chordRow ? chordRow.scrollWidth : 0;
-      if (w > piece.getBoundingClientRect().width) piece.style.minWidth = `${w}px`;
+      piece.removeAttribute('data-chord-reserve');
     }
-    let prevRight = -Infinity;
-    let prevTop = NaN;
-    for (const sym of row.querySelectorAll('.cifra-chord__symbol')) {
-      if (!sym.textContent || !sym.textContent.replace(/\u00a0/g, '').trim()) continue;
-      const r = sym.getBoundingClientRect();
-      if (!r.width) continue;
-      if (Math.abs(r.top - prevTop) > 4) prevRight = -Infinity; // nova linha visual (quebra)
-      const overlap = prevRight + GAP_PX - r.left;
-      if (overlap > 0) {
-        const host = sym.closest('.cifra-syllable, .cifra-chord--track:not(.cifra-syllable *)') || sym;
-        const midWord =
-          host.classList.contains('cifra-syllable') &&
-          !!host.previousElementSibling &&
-          host.previousElementSibling.classList.contains('cifra-syllable');
-        if (midWord) {
-          // Dentro da palavra o espaço leva um hífen, como na cifra impressa ("se-me-ar").
-          const pad = (parseFloat(host.style.paddingLeft || '0') || 0) + overlap;
-          const dash = Math.min(8, Math.max(3, pad - 6));
-          host.style.paddingLeft = `${pad}px`;
-          host.style.backgroundImage = 'linear-gradient(currentColor, currentColor)';
-          host.style.backgroundRepeat = 'no-repeat';
-          host.style.backgroundSize = `${dash}px 1px`;
-          host.style.backgroundPosition = `${(pad - dash) / 2}px calc(100% - 0.5em)`;
-        } else {
-          const cur = parseFloat(host.style.marginLeft || '0') || 0;
-          host.style.marginLeft = `${cur + overlap}px`;
-        }
-        host.setAttribute('data-chord-space', '1');
-        const r2 = sym.getBoundingClientRect();
-        prevRight = r2.right;
-        prevTop = r2.top;
-      } else {
-        prevRight = r.right;
-        prevTop = r.top;
-      }
+    // Reservar largura muda a quebra de linha, e a quebra muda as colisões: poucas passadas bastam.
+    for (let pass = 0; pass < 3; pass++) {
+      separateCollidingChords(row);
+      if (!reserveChordAtRowEnd(row)) break;
     }
   }
 }
 
+/** Fim visível do acorde (sem o recuo à direita do símbolo). */
+function chordInkRight(sym) {
+  const r = sym.getBoundingClientRect();
+  return r.right - (parseFloat(getComputedStyle(sym).paddingRight) || 0);
+}
+
+/** @param {HTMLElement} row */
+function separateCollidingChords(row) {
+  const GAP_PX = 6;
+  let prevRight = -Infinity;
+  let prevTop = NaN;
+  for (const sym of row.querySelectorAll('.cifra-chord__symbol')) {
+    if (!sym.textContent || !sym.textContent.replace(/ /g, '').trim()) continue;
+    const r = sym.getBoundingClientRect();
+    if (!r.width) continue;
+    if (Math.abs(r.top - prevTop) > 4) prevRight = -Infinity; // nova linha visual (quebra)
+    const overlap = prevRight + GAP_PX - r.left;
+    if (overlap > 0) {
+      const host = sym.closest('.cifra-syllable, .cifra-chord--track:not(.cifra-syllable *)') || sym;
+      const midWord =
+        host.classList.contains('cifra-syllable') &&
+        !!host.previousElementSibling &&
+        host.previousElementSibling.classList.contains('cifra-syllable');
+      if (midWord) {
+        // Dentro da palavra o espaço leva um hífen, como na cifra impressa ("se-me-ar").
+        const pad = (parseFloat(host.style.paddingLeft || '0') || 0) + overlap;
+        const dash = Math.min(8, Math.max(3, pad - 6));
+        host.style.paddingLeft = `${pad}px`;
+        host.style.backgroundImage = 'linear-gradient(currentColor, currentColor)';
+        host.style.backgroundRepeat = 'no-repeat';
+        host.style.backgroundSize = `${dash}px 1px`;
+        host.style.backgroundPosition = `${(pad - dash) / 2}px calc(100% - 0.5em)`;
+      } else {
+        const cur = parseFloat(host.style.marginLeft || '0') || 0;
+        host.style.marginLeft = `${cur + overlap}px`;
+      }
+      host.setAttribute('data-chord-space', '1');
+    }
+    prevRight = chordInkRight(sym);
+    prevTop = sym.getBoundingClientRect().top;
+  }
+}
+
+/**
+ * Acorde no fim de uma palavra que sairia pela margem direita: a sílaba passa a ocupar a
+ * largura dele, e a palavra desce de linha se não couber.
+ *
+ * @param {HTMLElement} row
+ * @returns {boolean} se alguma reserva mudou (o layout precisa ser revisto)
+ */
+function reserveChordAtRowEnd(row) {
+  const rowStyle = getComputedStyle(row);
+  const limit = row.getBoundingClientRect().right - (parseFloat(rowStyle.paddingRight) || 0);
+  let changed = false;
+  for (const piece of row.querySelectorAll('.cifra-syllable:last-child')) {
+    const syms = piece.querySelectorAll('.cifra-chord__symbol');
+    if (!syms.length) continue;
+    const over = chordInkRight(syms[syms.length - 1]) - limit;
+    if (over <= 0.5) continue;
+    const w = piece.getBoundingClientRect().width;
+    piece.style.minWidth = `${Math.ceil(w + over)}px`;
+    piece.setAttribute('data-chord-reserve', '1');
+    changed = true;
+  }
+  return changed;
+}
+
+/**
+ * Sílaba de uma palavra cantada, com o(s) acorde(s) que começam nela alinhados à esquerda.
+ * O acorde não alarga a peça; o espaçamento é feito depois do layout (`spaceOverlappingChords`).
+ *
+ * @param {string} text
+ * @param {{ label: string, chordIdx: number, c: import('./musicai-types.ts').MusicAiChordEvent }[]} shown
+ * @param {number} off
+ * @param {(el: HTMLElement, label: string) => void} [wireChordDiagram]
+ * @returns {HTMLElement}
+ */
 function createSyllablePiece(text, shown, off, wireChordDiagram) {
   const piece = document.createElement('span');
   piece.className = 'cifra-syllable inline-flex flex-col items-start gap-1';
@@ -591,12 +623,11 @@ export function mountCifraView(params) {
           const shown = (onsetBySyl.get(si) ?? []).map(nextVisible).filter(Boolean);
           wordWrap.appendChild(createSyllablePiece(syl.text, shown, off, wireChordDiagramIfResolvable));
         });
-        row.appendChild(wordWrap);
-
+        const afterCells = [];
         for (const ci of afters) {
           const v = nextVisible(ci);
           if (!v) continue;
-          row.appendChild(
+          afterCells.push(
             createLyricChordCell(
               v.label,
               ' ',
@@ -607,6 +638,15 @@ export function mountCifraView(params) {
               wireChordDiagramIfResolvable
             )
           );
+        }
+        if (afterCells.length) {
+          // O acorde que soa depois da palavra desce de linha junto com ela, nunca sozinho.
+          const group = document.createElement('span');
+          group.className = 'cifra-word-group inline-flex items-end gap-x-3';
+          group.append(wordWrap, ...afterCells);
+          row.appendChild(group);
+        } else {
+          row.appendChild(wordWrap);
         }
       }
       lastShownSectionKey = secLabelKey;
