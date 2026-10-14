@@ -522,10 +522,13 @@ function chordMidInSection(
 
 /**
  * Aplica um drag-drop de acorde respeitando:
- * 1. Sem gaps entre acordes consecutivos — fecha gap à esquerda (`new_prev.end = c.start`) e à
- *    direita (`new_next.start = c.end`) na posição nova, e estende o acorde que ficou antes da
- *    posição original para preencher o espaço deixado.
- * 2. O acorde nunca ultrapassa os limites da secção de destino (clamp de `start`/`end`).
+ * 1. Só o `start` do acorde arrastado muda. Os outros acordes mantêm o `start` (a palavra onde
+ *    assentam); apenas os `end` dos vizinhos se ajustam.
+ * 2. Sem gaps entre acordes consecutivos — o anterior na posição nova termina onde o arrastado
+ *    começa (`new_prev.end = c.start`), o arrastado dura até o seguinte começar
+ *    (`c.end = new_next.start`), e o acorde que ficou antes da posição original estende-se para
+ *    preencher o espaço deixado.
+ * 3. O acorde nunca ultrapassa os limites da secção de destino (clamp de `start`/`end`).
  *
  * `targetSection` é a secção onde o acorde fica após o drag; `originSection` é a secção original
  * (usada para decidir se faz sentido estender o acorde anterior na posição antiga). Se `null`,
@@ -586,19 +589,19 @@ function applyChordDragWithGapClosing(
     }
   }
 
-  /** `end` = `start + duração original`, capado por secção e pelo vizinho seguinte. */
-  let cEnd = c.start + prevDur;
-  if (targetSection) cEnd = Math.min(cEnd, targetSection.end);
-  if (newNextIdx >= 0) {
-    const newNext = next[newNextIdx]!;
-    if (chordMidInSection(newNext, targetSection)) {
-      /** Vai deslocar-se `newNext.start = c.end`; então `c.end < newNext.end`. */
-      cEnd = Math.min(cEnd, newNext.end - 0.05);
-    } else {
-      /** Vizinho em secção diferente: não invadir o seu intervalo. */
-      cEnd = Math.min(cEnd, newNext.start - 0.02);
-    }
+  /**
+   * `end`: o acorde dura até o seguinte começar (sem gap). O `start` do seguinte nunca muda —
+   * arrastar um acorde não pode deslocar outro acorde de palavra.
+   * Sem seguinte na secção: mantém a duração original, capada pelo fim da secção.
+   */
+  let cEnd: number;
+  if (newNextIdx >= 0 && chordMidInSection(next[newNextIdx]!, targetSection)) {
+    cEnd = next[newNextIdx]!.start;
+  } else {
+    cEnd = c.start + prevDur;
+    if (newNextIdx >= 0) cEnd = Math.min(cEnd, next[newNextIdx]!.start - 0.02);
   }
+  if (targetSection) cEnd = Math.min(cEnd, targetSection.end);
   c.end = Math.max(c.start + 0.05, cEnd);
 
   /** Fecha o gap à esquerda: `new_prev.end = c.start`. */
@@ -606,14 +609,6 @@ function applyChordDragWithGapClosing(
     const newPrev = next[newPrevIdx]!;
     if (chordMidInSection(newPrev, targetSection)) {
       newPrev.end = Math.max(newPrev.start + 0.05, c.start);
-    }
-  }
-
-  /** Fecha o gap à direita: `new_next.start = c.end` (desloca o início do seguinte). */
-  if (newNextIdx >= 0) {
-    const newNext = next[newNextIdx]!;
-    if (chordMidInSection(newNext, targetSection)) {
-      newNext.start = Math.max(0, Math.min(newNext.end - 0.05, c.end));
     }
   }
 
@@ -654,9 +649,8 @@ function applyChordDragWithGapClosing(
 }
 
 /**
- * Reposiciona um acorde sobre o slot. Preserva a duração original do acorde e, depois da
- * movimentação, aplica a regra "sem gaps" (estende `new_prev.end = c.start` e desloca
- * `new_next.start = c.end`) e limita o acorde à secção de destino.
+ * Reposiciona um acorde sobre o slot: o `start` passa a ser o da palavra e o acorde dura até o
+ * seguinte começar (regra "sem gaps"), sem deslocar outros acordes. Limitado à secção de destino.
  */
 export function moveChordToSlot(
   chords: MusicAiChordEvent[],
