@@ -11,8 +11,9 @@ type CatalogTrack = {
   isSaved?: boolean;
   hasMyVersion?: boolean;
   isOwnerVersion?: boolean;
-  userId?: string | null;
-  owner?: string | null;
+  /** Calculados pela Beethoven a partir do token: só variações do próprio utilizador. */
+  canEdit?: boolean;
+  canDelete?: boolean;
   accessHref?: string | null;
   editHref?: string | null;
 };
@@ -39,20 +40,27 @@ function normalizeCatalogKeyPart(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
 
-function isTrackOwnedByUser(track: CatalogTrack, userId?: string): boolean {
-  const normalizedUserId = normalizeCatalogKeyPart(userId);
-  if (!normalizedUserId) return track.isOwnerVersion === true;
-  const ownerId = normalizeCatalogKeyPart(track.userId ?? track.owner);
-  return track.isOwnerVersion === true || ownerId === normalizedUserId;
+/**
+ * Só a variação do próprio utilizador pode ser excluída. `canDelete` vem da Beethoven; enquanto
+ * uma Beethoven antiga não o envia, `isOwnerVersion` (variação + dono) dá a mesma resposta.
+ * A cifra base que o utilizador importou nunca é «versão» dele.
+ */
+export function canDeleteCatalogTrack(track: Pick<CatalogTrack, "canDelete" | "isOwnerVersion">): boolean {
+  return track.canDelete ?? track.isOwnerVersion === true;
 }
 
-function preferredTrack(a: CatalogTrack, b: CatalogTrack, userId?: string): CatalogTrack {
-  const score = (track: CatalogTrack): number => {
-    if (isTrackOwnedByUser(track, userId)) return 3;
-    if (track.isSaved === true) return 2;
-    return 1;
-  };
+function preferredTrack(a: CatalogTrack, b: CatalogTrack): CatalogTrack {
+  const score = (track: CatalogTrack): number => (track.isSaved === true ? 2 : 1);
   return score(b) > score(a) ? b : a;
+}
+
+/**
+ * Agrupa faixas repetidas (mesmo nome e artista) num card, mas mantém cada variação do
+ * utilizador separada da cifra base — senão a versão dele podia sumir atrás da base.
+ */
+function catalogDedupKey(track: CatalogTrack): string {
+  const base = `${normalizeCatalogKeyPart(track.name)}::${normalizeCatalogKeyPart(track.artistName)}`;
+  return track.isOwnerVersion === true ? `${base}::v:${normalizeCatalogKeyPart(track.trackKey)}` : base;
 }
 
 export async function fetchLibraryCatalog(params: {
@@ -64,6 +72,7 @@ export async function fetchLibraryCatalog(params: {
     tab: params.tab,
     limit: String(params.limit ?? 120),
   });
+  // Compatibilidade com a Beethoven anterior; a atual usa o utilizador do token e ignora isto.
   if (params.userId?.trim()) query.set("userId", params.userId.trim());
   const res = await fetchBeethovenFromServer(`library-home/catalog?${query.toString()}`, {
     cache: "no-store",
@@ -79,10 +88,10 @@ export async function fetchLibraryCatalog(params: {
       ? (() => {
           const dedup = new Map<string, CatalogTrack>();
           for (const track of tracksRawBase) {
-            const key = `${normalizeCatalogKeyPart(track.name)}::${normalizeCatalogKeyPart(track.artistName)}`;
+            const key = catalogDedupKey(track);
             if (!key || key === "::") continue;
             const prev = dedup.get(key);
-            dedup.set(key, prev ? preferredTrack(prev, track, params.userId) : track);
+            dedup.set(key, prev ? preferredTrack(prev, track) : track);
           }
           return [...dedup.values()];
         })()
@@ -92,7 +101,7 @@ export async function fetchLibraryCatalog(params: {
     const isPrivate = track.isPrivate === true;
     const isSaved = track.isSaved === true;
     const isOwnerVersion = track.isOwnerVersion === true;
-    const canDeleteVersion = isTrackOwnedByUser(track, params.userId);
+    const canDeleteVersion = canDeleteCatalogTrack(track);
     const tagLabel = isOwnerVersion
       ? "Minha versão"
       : isPrivate

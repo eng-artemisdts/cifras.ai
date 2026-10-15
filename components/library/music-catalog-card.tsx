@@ -8,6 +8,7 @@ import { musicCoverClass } from "@/lib/library/style-maps";
 import { cn } from "@/lib/utils";
 import {
   deleteMyVariationByTrackId,
+  libraryActionErrorMessage,
   removeTrackFromLibraryByTrackKey,
 } from "@/lib/library/beethoven-library-variations";
 import { EllipsisVertical, Eye, Music2, Pencil, Trash2 } from "lucide-react";
@@ -62,8 +63,8 @@ export function MusicCatalogCard({ item, onDeleted, className }: MusicCatalogCar
       setOpen(false);
       setConfirmOpen(false);
       onDeleted?.(item.id);
-    } catch {
-      setDeleteError("Não foi possível excluir agora. Tente novamente.");
+    } catch (error) {
+      setDeleteError(libraryActionErrorMessage(error, confirmMode));
     } finally {
       setDeleting(false);
     }

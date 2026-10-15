@@ -35,9 +35,27 @@ function isPublicBeethovenRead(method: string, segments: string[]): boolean {
 }
 
 /**
- * Leituras públicas no Nest Beethoven (sem JWT). O BFF antes bloqueava tudo com
- * `withApiAuthRequired`, o que fazia páginas como `/explorar` e `/cifras` falharem para
- * visitantes ou sessões expiradas.
+ * Token da sessão para leituras públicas, quando houver. Sem sessão (ou sessão expirada) a leitura
+ * segue como visitante — nunca falha por causa da autenticação.
+ */
+async function optionalAccessToken(): Promise<string | undefined> {
+  const audience = process.env.AUTH0_AUDIENCE?.trim();
+  if (!audience || !isAuth0Configured()) return undefined;
+  try {
+    const session = await getAuth0().getSession();
+    if (!session) return undefined;
+    const { token } = await getAuth0().getAccessToken({ audience });
+    return isAccessTokenLikelyJwt(token) ? token : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Leituras públicas no Nest Beethoven. Visitantes passam sem JWT (o BFF antes bloqueava tudo com
+ * `withApiAuthRequired`, o que fazia `/explorar` e `/cifras` falharem). Com sessão, o token segue
+ * junto para a Beethoven saber quem vê: variações privadas do dono, biblioteca e permissões
+ * `canEdit` / `canDelete`.
  */
 async function proxyPublicBeethovenRead(req: Request, ctx: RouteCtx): Promise<Response> {
   const resolved = await ctx.params;
@@ -58,6 +76,8 @@ async function proxyPublicBeethovenRead(req: Request, ctx: RouteCtx): Promise<Re
   const headers: Record<string, string> = {};
   const accept = req.headers.get("accept");
   if (accept) headers.accept = accept;
+  const token = await optionalAccessToken();
+  if (token) headers.authorization = `Bearer ${token}`;
 
   const upstream = await fetch(target, { method: req.method, headers });
 
@@ -66,6 +86,8 @@ async function proxyPublicBeethovenRead(req: Request, ctx: RouteCtx): Promise<Re
   if (passCt) {
     responseHeaders.set("content-type", passCt);
   }
+  /** Resposta personalizada para o utilizador: não pode ser reutilizada por cache partilhada. */
+  if (token) responseHeaders.set("cache-control", "private, no-store");
 
   return new NextResponse(upstream.body, {
     status: upstream.status,
