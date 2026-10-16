@@ -43,6 +43,8 @@ export function MusicCatalogCard({ item, onDeleted, className }: MusicCatalogCar
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [confirmMode, setConfirmMode] = useState<"delete-version" | "remove-library">("delete-version");
   const canManageVersion = item.canDeleteVersion === true && Boolean(item.trackKey?.trim());
+  /** Pode excluir e não é variação: é a cifra que o próprio usuário importou. */
+  const deletesImportedCifra = canManageVersion && item.isOwnerVersion !== true;
   const canManageLibraryItem = item.isOwnerVersion !== true && Boolean(item.accessHref || item.isSaved);
   const createVariationHref =
     item.isOwnerVersion !== true && item.trackKey?.trim()
@@ -161,7 +163,7 @@ export function MusicCatalogCard({ item, onDeleted, className }: MusicCatalogCar
                     className="inline-flex items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-red-300 transition-colors hover:bg-red-500/10 disabled:opacity-50"
                   >
                     <Trash2 className="size-3.5" />
-                    Excluir versão
+                    {deletesImportedCifra ? "Excluir música" : "Excluir versão"}
                   </button>
                 ) : null}
                 {canManageLibraryItem && item.isSaved && item.trackKey ? (
@@ -188,10 +190,19 @@ export function MusicCatalogCard({ item, onDeleted, className }: MusicCatalogCar
         <DialogContent className="w-[min(100vw-1.5rem,26rem)]">
           <DialogHeader>
             <DialogTitle>
-              {confirmMode === "delete-version" ? "Excluir versão?" : "Remover da biblioteca?"}
+              {confirmMode === "delete-version"
+                ? deletesImportedCifra
+                  ? "Excluir música?"
+                  : "Excluir versão?"
+                : "Remover da biblioteca?"}
             </DialogTitle>
             <DialogDescription>
-              {confirmMode === "delete-version" ? (
+              {confirmMode === "delete-version" && deletesImportedCifra ? (
+                <>
+                  A cifra de <span className="text-cifra-text">“{item.title}”</span> que você importou será excluída
+                  para todos os usuários, junto com as suas versões dela. Não é possível desfazer.
+                </>
+              ) : confirmMode === "delete-version" ? (
                 <>
                   Esta ação remove permanentemente sua versão de <span className="text-cifra-text">“{item.title}”</span> da
                   biblioteca.

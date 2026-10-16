@@ -41,8 +41,11 @@ export function libraryActionErrorMessage(
   const status = error instanceof LibraryActionError ? error.status : 0;
   if (status === 401) return "Sua sessão expirou. Entre de novo e tente outra vez.";
   if (action === "delete-version") {
-    if (status === 400) return "Esta é a cifra original e não pode ser excluída, só as versões criadas a partir dela.";
-    if (status === 403) return "Só quem criou esta versão pode excluí-la.";
+    if (status === 400) return "Não foi possível excluir esta cifra. Atualize a página e tente de novo.";
+    if (status === 403) return "Só quem criou esta cifra pode excluí-la.";
+    if (status === 409) {
+      return "Outras pessoas criaram versões a partir desta cifra, por isso ela não pode ser excluída.";
+    }
     if (status === 404) return "Esta versão já foi excluída. Atualize a página.";
     return "Não foi possível excluir a versão agora. Tente novamente.";
   }

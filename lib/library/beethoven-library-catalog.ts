@@ -41,9 +41,9 @@ function normalizeCatalogKeyPart(value: string | null | undefined): string {
 }
 
 /**
- * Só a variação do próprio utilizador pode ser excluída. `canDelete` vem da Beethoven; enquanto
- * uma Beethoven antiga não o envia, `isOwnerVersion` (variação + dono) dá a mesma resposta.
- * A cifra base que o utilizador importou nunca é «versão» dele.
+ * Quem criou a faixa pode excluí-la: a sua variação ou a cifra que importou (a Beethoven recusa
+ * a base se outras pessoas criaram versões dela). `canDelete` vem da Beethoven; uma Beethoven
+ * antiga não o envia, e então só a variação do próprio utilizador (`isOwnerVersion`) conta.
  */
 export function canDeleteCatalogTrack(track: Pick<CatalogTrack, "canDelete" | "isOwnerVersion">): boolean {
   return track.canDelete ?? track.isOwnerVersion === true;

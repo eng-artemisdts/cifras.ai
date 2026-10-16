@@ -18,7 +18,7 @@ function respondWith(tracks: unknown[]) {
 describe("biblioteca: quem pode excluir", () => {
   beforeEach(() => serverFetch.mockReset());
 
-  it("a cifra base que o utilizador importou não mostra «Excluir versão»", async () => {
+  it("com a Beethoven antiga (sem canDelete), a cifra importada não mostra excluir", async () => {
     respondWith([
       { id: "b1", trackKey: "url_base", name: "THE LONELIEST", artistName: "Måneskin", userId: ME, isOwnerVersion: false },
     ]);
@@ -41,6 +41,14 @@ describe("biblioteca: quem pode excluir", () => {
     ]);
   });
 
+  it("a cifra importada pode ser excluída quando a Beethoven permite", async () => {
+    respondWith([
+      { id: "b1", trackKey: "url_base", name: "THE LONELIEST", artistName: "Måneskin", isOwnerVersion: false, canDelete: true },
+    ]);
+    const { tracks } = await fetchLibraryCatalog({ userId: ME, tab: "musicas" });
+    expect(tracks[0]).toMatchObject({ canDeleteVersion: true, isOwnerVersion: false });
+  });
+
   it("segue o canDelete do servidor e, sem ele, o isOwnerVersion", () => {
     expect(canDeleteCatalogTrack({ canDelete: false, isOwnerVersion: true })).toBe(false);
     expect(canDeleteCatalogTrack({ isOwnerVersion: true })).toBe(true);
@@ -50,8 +58,9 @@ describe("biblioteca: quem pode excluir", () => {
 
 describe("biblioteca: mensagens de erro", () => {
   it("explica por que não excluiu, conforme o status", () => {
-    expect(libraryActionErrorMessage(new LibraryActionError("x", 400), "delete-version")).toMatch(/cifra original/);
+    expect(libraryActionErrorMessage(new LibraryActionError("x", 400), "delete-version")).toMatch(/Atualize a página/);
     expect(libraryActionErrorMessage(new LibraryActionError("x", 403), "delete-version")).toMatch(/Só quem criou/);
+    expect(libraryActionErrorMessage(new LibraryActionError("x", 409), "delete-version")).toMatch(/Outras pessoas/);
     expect(libraryActionErrorMessage(new LibraryActionError("x", 401), "remove-library")).toMatch(/sessão expirou/);
     expect(libraryActionErrorMessage(new Error("rede"), "delete-version")).toMatch(/Tente novamente/);
   });
