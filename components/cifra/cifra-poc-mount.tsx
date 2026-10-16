@@ -112,6 +112,7 @@ export type CifraPocMountProps = {
   trackArtist?: string;
   /** Ex.: selector de versão da cifra (Radix/shadcn) no painel lateral. */
   variationSidebarAccessory?: ReactNode;
+  /** Sem uso no leitor desde que a rolagem inteligente foi liberada para todos os planos. */
   billingPlan?: BillingPlan | null;
   className?: string;
 };
@@ -127,7 +128,6 @@ export function CifraPocMount({
   trackTitle,
   trackArtist,
   variationSidebarAccessory,
-  billingPlan,
   className,
 }: CifraPocMountProps) {
   const AUTO_SCROLL_BAR_POS_LS_KEY = "cifra-ai:auto-scroll-bar-pos";
@@ -151,7 +151,6 @@ export function CifraPocMount({
     return Math.max(200, Math.min(1200, Math.round(1200 - (s / 100) * 1000)));
   }
 
-  const isProUser = billingPlan === "pro";
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [trackDraft, setTrackDraft] = useState(() => ({
@@ -852,7 +851,6 @@ export function CifraPocMount({
               }))
             }
             isPrivate={payload.is_private === true}
-            isProUser={isProUser}
             scrollModeAutomaticRef={scrollModeAutomaticRef}
             scrollModeSmartRef={scrollModeSmartRef}
             autoScrollBtnRef={autoScrollBtnRef}

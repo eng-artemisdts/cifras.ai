@@ -28,8 +28,12 @@ import { spellChordForKey } from "@/lib/cifra/chord-spelling";
 
 const LS_AUTO_SCROLL_LEAD = "cifra-ai:autoScrollLeadSec";
 const LS_AUTO_SCROLL_DURATION_MS = "cifra-ai:autoScrollDurationMs";
-const LS_SCROLL_MODE = "cifra-ai:scrollMode";
-const LS_AUTO_SCROLL_ENABLED = "cifra-ai:autoScrollEnabled";
+/**
+ * Chaves `:v2`: o runtime anterior gravava «automatic» e «0» (desligado) em toda abertura, então
+ * os valores antigos não refletem escolha do utilizador e são ignorados.
+ */
+const LS_SCROLL_MODE = "cifra-ai:scrollMode:v2";
+const LS_AUTO_SCROLL_ENABLED = "cifra-ai:autoScrollEnabled:v2";
 const LS_SHOW_FLOATING_CHORD = "cifra-ai:showFloatingChord";
 const LS_SHOW_CURRENT_CHORD_DIAGRAM = "cifra-ai:showCurrentChordDiagram";
 const LS_FLOATING_CHORD_POS = "cifra-ai:floatingChordPos";
@@ -41,7 +45,8 @@ const SMART_SCROLL_ELEMENT_ALIGN = 0.5;
 /** Ignora ruído sub-pixel; mesmo alvo precisa disto para voltar a animar após drift. */
 const SMART_SCROLL_DEAD_ZONE_PX = 4;
 const SMART_SCROLL_RECENTER_SAME_LINE_PX = 14;
-const USER_SCROLL_INTERACTION_MS = 700;
+/** Depois de o utilizador rolar à mão, o seguimento espera este tempo antes de retomar. */
+const USER_SCROLL_INTERACTION_MS = 4000;
 
 function coalescePayload(raw) {
   const p = raw && typeof raw === "object" ? raw : {};
@@ -210,11 +215,6 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
         }
         node = node.parentElement;
       }
-
-      if (hasOverflowScrollStyle(scrollRoot)) {
-        cachedScrollContainer = scrollRoot;
-        return scrollRoot;
-      }
     }
 
     if (
@@ -225,7 +225,20 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
       return cachedScrollContainer;
     }
 
+    /**
+     * Layout em que a página inteira rola: o painel tem `overflow-y: auto` mas cresce com o
+     * conteúdo (nunca rola), então quem rola é a janela.
+     */
+    const pageScroller = document.scrollingElement;
+    if (pageScroller instanceof HTMLElement && scrollableAmount(pageScroller) > 1) {
+      return pageScroller;
+    }
+
     return null;
+  }
+  /** `true` quando o contêiner é a própria página (`document.scrollingElement`), não um painel. */
+  function isPageScroller(el: Element | null): boolean {
+    return Boolean(el) && el === document.scrollingElement;
   }
 
   let virtualT = 0;
@@ -323,17 +336,6 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     }
     virtualRafId = requestAnimationFrame(virtualStep);
   }
-  /** Avança o tempo localmente quando a rolagem está ligada mas o player está em pausa. */
-  function ensureSilentScrollClock() {
-    if (!autoScrollEnabled) return;
-    if (virtualPlaying) return;
-    if (playbackReady && playback.isPlaying()) return;
-    virtualT = Math.max(0, playback.getCurrentTime());
-    virtualPlaying = true;
-    lastVirtualPerfMs = 0;
-    virtualRafId = requestAnimationFrame(virtualStep);
-    updateTransportUi();
-  }
   function markProgrammaticScroll(durationMs = 150) {
     programmaticScrollUntilMs = Math.max(programmaticScrollUntilMs, performance.now() + durationMs);
   }
@@ -367,10 +369,10 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     const pane = pickScrollContainer();
     if (!pane || !(el instanceof HTMLElement) || !el.isConnected) return null;
     const rect = el.getBoundingClientRect();
-    const paneRect = pane.getBoundingClientRect();
+    const paneTop = isPageScroller(pane) ? 0 : pane.getBoundingClientRect().top;
     const align = Number.isFinite(elementAlignRatio) ? clamp(elementAlignRatio, 0, 1) : 0.5;
     const anchor = Number.isFinite(viewportAnchor) ? clamp(viewportAnchor, 0, 1) : 0.5;
-    const elTopInContent = rect.top - paneRect.top + pane.scrollTop;
+    const elTopInContent = rect.top - paneTop + pane.scrollTop;
     const elFocusY = elTopInContent + rect.height * align;
     let targetY = elFocusY - pane.clientHeight * anchor;
     const maxScroll = Math.max(0, pane.scrollHeight - pane.clientHeight);
@@ -455,9 +457,9 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     if (autoScrollDurEl) lsSet(LS_AUTO_SCROLL_DURATION_MS, autoScrollDurEl.value);
   }
   function initAutoScrollEnabledPref() {
-    // Regra de UX: após reload, iniciar sempre com auto scroll desligado.
-    autoScrollEnabled = false;
-    lsSet(LS_AUTO_SCROLL_ENABLED, "0");
+    // Segue a música por padrão; a escolha do utilizador fica no navegador e sobrevive à
+    // recriação do runtime (troca de player, painel lateral, status do Spotify).
+    autoScrollEnabled = lsGet(LS_AUTO_SCROLL_ENABLED) !== "0";
   }
   function persistAutoScrollEnabledPref() {
     lsSet(LS_AUTO_SCROLL_ENABLED, autoScrollEnabled ? "1" : "0");
@@ -502,10 +504,10 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
     return Boolean(scrollModeSmartEl && !scrollModeSmartEl.disabled);
   }
   function initScrollModeRadios() {
-    const smart = canUseSmartScrollMode() && lsGet(LS_SCROLL_MODE) === "smart";
+    // Padrão: seguir a linha em destaque; o modo proporcional ao tempo só se o utilizador o escolheu.
+    const smart = canUseSmartScrollMode() && lsGet(LS_SCROLL_MODE) !== "automatic";
     if (scrollModeSmartEl) scrollModeSmartEl.checked = smart;
     if (scrollModeAutomaticEl) scrollModeAutomaticEl.checked = !smart;
-    if (!smart) lsSet(LS_SCROLL_MODE, "automatic");
   }
   function isSmartScrollMode() {
     return canUseSmartScrollMode() && Boolean(scrollModeSmartEl?.checked);
@@ -609,6 +611,7 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
   }
   function applyAutoScroll(container, t) {
     if (!autoScrollEnabled) return;
+    if (!(virtualPlaying || (playbackReady && playback.isPlaying()))) return;
     if (performance.now() < userInteractingUntilMs) return;
     if (isSmartScrollMode()) applySmartScroll(container, t);
     else applyTimeBasedScroll(t);
@@ -805,7 +808,6 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
       applyCifraPlaybackHighlight(cifraContainer, t, payload.chords || [], payload.chordTimeOffsetSec ?? 0);
       applyAutoScroll(cifraContainer, t);
     }
-    ensureSilentScrollClock();
     updateTransportUi();
   }
 
@@ -892,7 +894,6 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
         const baseY = baseTimeBasedTargetY(root, t);
         timeScrollUserOffsetPx = root.scrollTop - baseY;
       }
-      ensureSilentScrollClock();
     }
     lastAutoScrollTarget = null;
     lastTimeBasedScrollTop = -1;
@@ -934,7 +935,9 @@ export function startCifraRuntimeV2(opts: StartCifraRuntimeOptions): () => void 
   };
   const onCapturedPaneScroll = (ev: Event) => {
     const pane = pickScrollContainer();
-    if (!pane || ev.target !== pane) return;
+    if (!pane) return;
+    const fromPane = ev.target === pane || (isPageScroller(pane) && ev.target === document);
+    if (!fromPane) return;
     onUserScrollIntent("scroll");
   };
 

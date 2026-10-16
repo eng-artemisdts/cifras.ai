@@ -31,7 +31,6 @@ export type CifraRightSidebarProps = {
   onCapoAtChange: (value: number) => void;
   /** Cifra marcada como privada (Pro). */
   isPrivate?: boolean;
-  isProUser?: boolean;
   scrollModeAutomaticRef: RefObject<HTMLInputElement | null>;
   scrollModeSmartRef: RefObject<HTMLInputElement | null>;
   autoScrollBtnRef: RefObject<HTMLButtonElement | null>;
@@ -55,7 +54,6 @@ export function CifraRightSidebar({
   capoAt,
   onCapoAtChange,
   isPrivate,
-  isProUser = false,
   scrollModeAutomaticRef,
   scrollModeSmartRef,
   autoScrollBtnRef,
@@ -205,54 +203,35 @@ export function CifraRightSidebar({
           </legend>
           <label className="flex cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1 hover:bg-white/4">
             <input
+              ref={scrollModeSmartRef}
+              type="radio"
+              name="cifra-scroll-mode"
+              value="smart"
+              defaultChecked
+              className="mt-0.5 size-3.5 shrink-0 accent-cifra-teal"
+            />
+            <span className="min-w-0">
+              <span className="block text-[11px] font-semibold text-cifra-text">Rolagem inteligente</span>
+              <span className="mt-0.5 block text-[10px] leading-snug text-cifra-muted">
+                Mantém a linha tocada no centro da tela enquanto a música toca.
+              </span>
+            </span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1 hover:bg-white/4">
+            <input
               ref={scrollModeAutomaticRef}
               type="radio"
               name="cifra-scroll-mode"
               value="automatic"
-              defaultChecked
               className="mt-0.5 size-3.5 shrink-0 accent-cifra-teal"
             />
             <span className="min-w-0">
               <span className="block text-[11px] font-semibold text-cifra-text">Rolagem automática</span>
               <span className="mt-0.5 block text-[10px] leading-snug text-cifra-muted">
-                A posição vertical segue o tempo da reprodução (com antecipação opcional).
+                A página desce em ritmo constante, conforme o tempo da música.
               </span>
             </span>
           </label>
-          {isProUser ? (
-            <label className="flex cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1 hover:bg-white/4">
-              <input
-                ref={scrollModeSmartRef}
-                type="radio"
-                name="cifra-scroll-mode"
-                value="smart"
-                className="mt-0.5 size-3.5 shrink-0 accent-cifra-teal"
-              />
-              <span className="min-w-0">
-                <span className="block text-[11px] font-semibold text-cifra-text">Rolagem inteligente</span>
-                <span className="mt-0.5 block text-[10px] leading-snug text-cifra-muted">
-                  Centra a vista na célula do acorde em destaque
-                </span>
-              </span>
-            </label>
-          ) : (
-            <div className="flex items-start gap-2.5 rounded-lg px-1 py-1">
-              <span className="mt-0.5 inline-flex size-3.5 shrink-0 items-center justify-center rounded-full border border-cifra-border/70 bg-cifra-surface-2 text-[8px] text-cifra-muted">
-                •
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[11px] font-semibold text-cifra-text">
-                  Rolagem inteligente{" "}
-                  <span className="rounded border border-cifra-gold/40 bg-cifra-gold/10 px-1 py-0.5 font-mono text-[8px] uppercase tracking-wide text-cifra-gold">
-                    PRO
-                  </span>
-                </span>
-                <span className="mt-0.5 block text-[10px] leading-snug text-cifra-muted">
-                  Centra a vista na célula do acorde em destaque
-                </span>
-              </span>
-            </div>
-          )}
         </fieldset>
 
         <div className="mt-3 flex items-center justify-between gap-3 border-t border-cifra-border pt-3">
