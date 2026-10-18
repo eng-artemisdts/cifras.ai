@@ -42,7 +42,7 @@ export function CifraCenterChrome({
   const planStyle = billingPlan === "free" || !billingPlan ? { backgroundColor: "#F0B42918" } : undefined;
 
   return (
-    <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col", className)}>
+    <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden", className)}>
       <header className="flex w-full shrink-0 items-start justify-between gap-3 border-b border-white/7 px-4 py-3 sm:items-center sm:gap-4 sm:px-6 sm:py-3.5 md:px-8">
         <div className="flex min-w-0 flex-1 flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-4">
           <div className="flex shrink-0 items-center gap-3">
@@ -104,8 +104,8 @@ export function CifraCenterChrome({
         </div>
       </header>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 py-2 sm:px-4 sm:py-3 md:px-5 md:py-4 lg:px-6">
-        <div className="flex min-h-[min(100%,calc(100dvh-6.5rem))] w-full min-w-0 flex-1 flex-col rounded-2xl border border-cifra-border bg-cifra-surface p-3 sm:min-h-[min(100%,calc(100dvh-7rem))] sm:p-4 md:p-5 lg:min-h-[min(100%,calc(100dvh-6.75rem))] lg:px-6 lg:py-6">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-3 py-2 sm:px-4 sm:py-3 md:px-5 md:py-4 lg:px-6">
+        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-cifra-border bg-cifra-surface p-3 sm:p-4 md:p-5 lg:px-6 lg:py-6">
           <h1 className="sr-only">{title}</h1>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
         </div>

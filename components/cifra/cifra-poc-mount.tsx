@@ -651,7 +651,7 @@ export function CifraPocMount({
   const hasStreamingPlayer = isClientMounted && Boolean(spotifyTrackId || youtubeVideoId);
 
   return (
-    <div className={cn("flex min-h-0 w-full min-w-0 flex-1 flex-col gap-2.5 sm:gap-3", className)}>
+    <div className={cn("flex min-h-0 w-full min-w-0 flex-1 flex-col gap-2.5 overflow-hidden sm:gap-3", className)}>
       <audio ref={audioRef} className="hidden" preload="metadata" />
       {hasStreamingPlayer ? (
         <div className="overflow-hidden rounded-xl border border-white/10 bg-[#181818] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">

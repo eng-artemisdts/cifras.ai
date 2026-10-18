@@ -1,14 +1,12 @@
 import type Stripe from "stripe";
 
 import type { BillingPlan } from "@/lib/billing/plan-types";
-import { stripePriceIdForPlan } from "@/lib/billing/stripe-server";
+import { stripePriceIdsForPlan } from "@/lib/billing/stripe-server";
 
 function priceIdToPlan(priceId: string | undefined): BillingPlan {
   if (!priceId) return "free";
-  const starter = stripePriceIdForPlan("starter");
-  const pro = stripePriceIdForPlan("pro");
-  if (pro && priceId === pro) return "pro";
-  if (starter && priceId === starter) return "starter";
+  if (stripePriceIdsForPlan("pro").includes(priceId)) return "pro";
+  if (stripePriceIdsForPlan("starter").includes(priceId)) return "starter";
   return "free";
 }
 

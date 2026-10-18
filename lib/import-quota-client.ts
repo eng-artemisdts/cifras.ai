@@ -6,7 +6,9 @@ export type ImportQuotaStatus = {
   limit: number;
   used: number;
   remaining: number;
-  windowDays: number;
+  /** `lifetime` = cota total (plano Grátis); `rolling` = janela deslizante de `windowDays`. */
+  window?: "lifetime" | "rolling";
+  windowDays: number | null;
   nextSlotAt: string | null;
 };
 
@@ -36,6 +38,14 @@ export function isImportQuotaExceededError(body: unknown): boolean {
     return (msg as Record<string, unknown>).code === "import_quota_exceeded";
   }
   return false;
+}
+
+/** Texto para quando a cota acabou, antes de chamar a API. */
+export function importQuotaExceededMessage(quota: ImportQuotaStatus | null): string {
+  if (quota?.window === "lifetime") {
+    return `Já usou as ${quota.limit} músicas grátis. Assine um plano para importar mais.`;
+  }
+  return "Atingiu o limite de importações do seu plano.";
 }
 
 export function formatImportQuotaResetLabel(nextSlotAt: string | null): string | null {

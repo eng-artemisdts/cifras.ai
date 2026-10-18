@@ -356,7 +356,7 @@ function formatUpstreamErrorMessage(json: unknown, fallback: string): string {
   if (code === "import_quota_exceeded") {
     const msg = nested?.message ?? root.message;
     if (typeof msg === "string" && msg.trim()) return msg;
-    return "Atingiu o limite semanal de importações do seu plano.";
+    return "Atingiu o limite de importações do seu plano.";
   }
   const m = root.message;
   if (Array.isArray(m)) return m.map(String).join("; ");

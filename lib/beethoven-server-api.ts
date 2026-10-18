@@ -1,32 +1,13 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { getRequestOriginFromHeaders } from "@/lib/app-base-url";
+import { resolveAppOrigin } from "@/lib/app-base-url";
 import {
-  logoutHrefWithReturnTo,
+  sessionExpiredLogoutHref,
   responseIndicatesSessionExpired,
 } from "@/lib/auth0-session-expired";
 
 import { beethovenProxyUrl } from "./beethoven-browser-client";
-
-function currentRequestPathFromHeaders(h: Headers): string | null {
-  /**
-   * Em RSC, `next-url` é o caminho da rota actual; cai-se em `referer` para Route Handlers.
-   * Sem path conhecido, deixa-se o destino por defeito do `appLoginHref` actuar.
-   */
-  const nextUrl = h.get("next-url");
-  if (nextUrl && nextUrl.startsWith("/")) return nextUrl;
-  const referer = h.get("referer");
-  if (referer) {
-    try {
-      const u = new URL(referer);
-      return `${u.pathname}${u.search}`;
-    } catch {
-      /* ignore */
-    }
-  }
-  return null;
-}
 
 /**
  * Server Components / Route Handlers: reencaminha cookies para o BFF no mesmo host.
@@ -51,12 +32,7 @@ export async function fetchBeethovenFromServer(path: string, init?: RequestInit)
   }
   const res = await fetch(url, { ...init, headers: nextHeaders });
   if (await responseIndicatesSessionExpired(res)) {
-    redirect(
-      logoutHrefWithReturnTo(
-        currentRequestPathFromHeaders(h),
-        getRequestOriginFromHeaders(h),
-      ),
-    );
+    redirect(sessionExpiredLogoutHref(resolveAppOrigin({ headers: h })));
   }
   return res;
 }

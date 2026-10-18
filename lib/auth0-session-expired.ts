@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 
-import {
-  sanitizeAuthReturnTo,
-  AUTH0_LOGOUT_PATH,
-  absoluteAppLoginHref,
-} from "@/lib/auth0-routes";
+import { resolveAppOrigin } from "@/lib/app-base-url";
+import { AUTH0_LOGOUT_PATH } from "@/lib/auth0-routes";
 
 /**
  * Código devolvido pelos proxies (Beethoven/Schubert) quando o `getAccessToken` falha por
@@ -57,14 +54,15 @@ export function sessionExpiredResponse(message?: string): NextResponse {
 }
 
 /**
- * URL para o `/auth/logout` do SDK. O `returnTo` tem de ser absoluto — o SDK envia-o como
- * `post_logout_redirect_uri` ao OIDC logout do Auth0.
+ * URL para o `/auth/logout` do SDK quando a sessão expirou. O `returnTo` é só a origem da app:
+ * o `/v2/logout` do Auth0 rejeita (página de erro do tenant) qualquer URL que não esteja em
+ * «Allowed Logout URLs», e lá está registada apenas a raiz — `/login?returnTo=...` falhava.
+ * Sem origem conhecida, o SDK usa o `appBaseUrl`, como no botão «Sair» do menu.
  */
-export function logoutHrefWithReturnTo(returnTo?: string | null, origin?: string): string {
-  const safeReturn = sanitizeAuthReturnTo(returnTo);
-  const params = new URLSearchParams();
-  params.set("returnTo", absoluteAppLoginHref(safeReturn, origin));
-  return `${AUTH0_LOGOUT_PATH}?${params.toString()}`;
+export function sessionExpiredLogoutHref(origin?: string): string {
+  const base = origin ?? resolveAppOrigin();
+  if (!base) return AUTH0_LOGOUT_PATH;
+  return `${AUTH0_LOGOUT_PATH}?${new URLSearchParams({ returnTo: base }).toString()}`;
 }
 
 /**

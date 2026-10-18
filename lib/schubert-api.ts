@@ -1,5 +1,5 @@
 import {
-  logoutHrefWithReturnTo,
+  sessionExpiredLogoutHref,
   responseIndicatesSessionExpired,
 } from "@/lib/auth0-session-expired";
 
@@ -63,8 +63,7 @@ export function schubertProxyUrl(path: string): string {
 
 function redirectSchubertBrowserToLogout(): Promise<never> {
   if (typeof window !== "undefined") {
-    const current = `${window.location.pathname}${window.location.search}`;
-    window.location.href = logoutHrefWithReturnTo(current);
+    window.location.href = sessionExpiredLogoutHref();
   }
   return new Promise<never>(() => {});
 }

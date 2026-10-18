@@ -27,6 +27,7 @@ import type { SchubertRecognizedSong } from "@/lib/schubert-identify-types";
 import { fetchSchubertFromBrowser, type SchubertTrackJson } from "@/lib/schubert-api";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { importQuotaExceededMessage } from "@/lib/import-quota-client";
 import { cn } from "@/lib/utils";
 
 function extractSpotifyTrackId(input: string): string | null {
@@ -170,7 +171,7 @@ export function SpotifyImportPanel({
 }: SpotifyImportPanelProps) {
   const { user } = useUser();
   const { registerIngestJob, blockNewIngestIfBusy } = useIngestJobs();
-  const { canImport, refreshQuota } = useImportQuota();
+  const { canImport, quota, refreshQuota } = useImportQuota();
   const router = useRouter();
   const pathname = usePathname();
   const returnToConnect = `${pathname || "/biblioteca/importar/spotify"}`;
@@ -347,7 +348,7 @@ export function SpotifyImportPanel({
       try {
         if (blockNewIngestIfBusy()) return;
         if (!canImport) {
-          setSpotifyIngestError("Atingiu o limite semanal de importações do seu plano.");
+          setSpotifyIngestError(importQuotaExceededMessage(quota));
           return;
         }
         const ingestResp = await postSpotifySourceIngest({ trackId: spotifyTrackId, meta: song });
@@ -405,7 +406,7 @@ export function SpotifyImportPanel({
         setSpotifyIngestBusy(false);
       }
     },
-    [blockNewIngestIfBusy, canImport, refreshQuota, registerIngestJob, router],
+    [blockNewIngestIfBusy, canImport, quota, refreshQuota, registerIngestJob, router],
   );
 
   const onConfirmSpotifyIngest = useCallback(async () => {

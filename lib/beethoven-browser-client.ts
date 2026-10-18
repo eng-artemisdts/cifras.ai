@@ -1,5 +1,5 @@
 import {
-  logoutHrefWithReturnTo,
+  sessionExpiredLogoutHref,
   responseIndicatesSessionExpired,
 } from "@/lib/auth0-session-expired";
 
@@ -12,14 +12,13 @@ export function beethovenProxyUrl(path: string): string {
 }
 
 /**
- * Em ambiente browser, força navegação para `/auth/logout` (limpa sessão e leva ao Universal
- * Login com `returnTo` para a entrada da app). Não retorna — a Promise nunca resolve enquanto a
- * navegação não acontece, o que evita que o caller continue a tratar a Response inválida.
+ * Em ambiente browser, força navegação para `/auth/logout` (limpa sessão e volta à raiz da app).
+ * Não retorna — a Promise nunca resolve enquanto a navegação não acontece, o que evita que o
+ * caller continue a tratar a Response inválida.
  */
 function redirectBrowserToLogout(): Promise<never> {
   if (typeof window !== "undefined") {
-    const current = `${window.location.pathname}${window.location.search}`;
-    window.location.href = logoutHrefWithReturnTo(current);
+    window.location.href = sessionExpiredLogoutHref();
   }
   return new Promise<never>(() => {});
 }

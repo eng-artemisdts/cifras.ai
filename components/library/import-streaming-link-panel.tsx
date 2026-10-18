@@ -18,6 +18,7 @@ import {
   SchubertIdentifyError,
   type ChordFoundPreview,
 } from "@/lib/schubert-identify-service";
+import { importQuotaExceededMessage } from "@/lib/import-quota-client";
 import { cn } from "@/lib/utils";
 
 export type ImportStreamingLinkPanelProps = {
@@ -57,7 +58,7 @@ function defaultPreviewForProvider(slug: StreamingLinkImportPanelConfig["slug"])
 export function ImportStreamingLinkPanel({ config, proEntitled = false, className }: ImportStreamingLinkPanelProps) {
   const router = useRouter();
   const { registerIngestJob, blockNewIngestIfBusy } = useIngestJobs();
-  const { canImport, refreshQuota } = useImportQuota();
+  const { canImport, quota, refreshQuota } = useImportQuota();
 
   const [url, setUrl] = useState("");
   const [linkBusy, setLinkBusy] = useState(false);
@@ -87,7 +88,7 @@ export function ImportStreamingLinkPanel({ config, proEntitled = false, classNam
       try {
         if (blockNewIngestIfBusy()) return;
         if (!canImport) {
-          setUrlIngestError("Atingiu o limite semanal de importações do seu plano.");
+          setUrlIngestError(importQuotaExceededMessage(quota));
           return;
         }
 
@@ -148,7 +149,7 @@ export function ImportStreamingLinkPanel({ config, proEntitled = false, classNam
         setUrlIngestBusy(false);
       }
     },
-    [blockNewIngestIfBusy, canImport, refreshQuota, registerIngestJob, router],
+    [blockNewIngestIfBusy, canImport, quota, refreshQuota, registerIngestJob, router],
   );
 
   const onConfirmUrlIngest = useCallback(async () => {

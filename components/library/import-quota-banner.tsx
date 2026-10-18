@@ -16,7 +16,16 @@ export type ImportQuotaBannerProps = {
   compact?: boolean;
 };
 
-function QuotaMeter({ used, limit }: { used: number; limit: number }) {
+function QuotaMeter({
+  used,
+  limit,
+  lifetime,
+}: {
+  used: number;
+  limit: number;
+  lifetime: boolean;
+}) {
+  const periodLabel = lifetime ? "no total" : "nos últimos 30 dias";
   const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
   const exhausted = used >= limit;
   return (
@@ -27,7 +36,7 @@ function QuotaMeter({ used, limit }: { used: number; limit: number }) {
         aria-valuenow={used}
         aria-valuemin={0}
         aria-valuemax={limit}
-        aria-label={`${used} de ${limit} importações usadas esta semana`}
+        aria-label={`${used} de ${limit} importações usadas ${periodLabel}`}
       >
         <div
           className={cn(
@@ -38,14 +47,14 @@ function QuotaMeter({ used, limit }: { used: number; limit: number }) {
         />
       </div>
       <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-cifra-muted">
-        {used}/{limit} esta semana
+        {used}/{limit} {periodLabel}
       </p>
     </div>
   );
 }
 
 /**
- * Indicador de quota semanal de importações — lê estado do `ImportQuotaProvider`.
+ * Indicador da cota de importações (vitalícia no Grátis, 30 dias nos pagos) — lê estado do `ImportQuotaProvider`.
  */
 export function ImportQuotaBanner({
   billingPlan = "free",
@@ -75,6 +84,7 @@ export function ImportQuotaBanner({
 
   const plan = quota.plan ?? billingPlan ?? "free";
   const exhausted = quota.remaining <= 0;
+  const lifetime = quota.window === "lifetime";
   const resetLabel = formatImportQuotaResetLabel(quota.nextSlotAt);
   const showUpgrade = plan !== "pro";
 
@@ -123,21 +133,24 @@ export function ImportQuotaBanner({
           <div className="space-y-0.5">
             <p className="text-[13px] font-semibold leading-snug text-cifra-text">
               {exhausted
-                ? "Limite semanal atingido"
+                ? lifetime
+                  ? "Músicas grátis esgotadas"
+                  : "Limite do plano atingido"
                 : `${quota.remaining} importação${quota.remaining === 1 ? "" : "ões"} disponível${quota.remaining === 1 ? "" : "eis"}`}
             </p>
             <p className="text-[11px] leading-relaxed text-cifra-muted">
-              Plano {importQuotaPlanLabel(plan)} · janela de {quota.windowDays} dias
+              Plano {importQuotaPlanLabel(plan)} ·{" "}
+              {lifetime ? `${quota.limit} músicas no total` : `janela de ${quota.windowDays ?? 30} dias`}
               {exhausted && resetLabel ? ` · próximo slot ${resetLabel}` : ""}
             </p>
           </div>
-          <QuotaMeter used={quota.used} limit={quota.limit} />
+          <QuotaMeter used={quota.used} limit={quota.limit} lifetime={lifetime} />
           {exhausted && showUpgrade ? (
             <Link
               href="/conta/assinatura"
               className="inline-flex text-[11px] font-medium text-cifra-gold underline-offset-2 hover:underline"
             >
-              Ver planos para mais importações
+              {lifetime ? "Assinar para importar mais músicas" : "Ver planos para mais importações"}
             </Link>
           ) : null}
         </div>

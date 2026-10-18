@@ -54,13 +54,13 @@ export function CifraSheetPageView({
   };
 
   return (
-    <div className="flex min-h-dvh flex-col bg-cifra-bg text-cifra-text lg:flex-row lg:items-stretch">
+    <div className="flex h-dvh flex-col overflow-hidden bg-cifra-bg text-cifra-text lg:flex-row lg:items-stretch">
       <AuthMarketingSidebar
         {...sidebarProps}
-        className="hidden min-h-0 shrink-0 lg:flex lg:min-h-dvh"
+        className="hidden min-h-0 shrink-0 lg:flex lg:h-full"
       />
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-h-dvh lg:border-l lg:border-white/7">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:border-l lg:border-white/7">
         <CifraCenterChrome
           user={user}
           billingPlan={billingPlan}

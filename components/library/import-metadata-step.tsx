@@ -14,6 +14,7 @@ import { cifraEditHref, resolveCifraSlugPairFromTrack } from "@/lib/cifra/cifra-
 import { mergeSongMeta, type ImportMetadataContext } from "@/lib/library/import-metadata-context";
 import { postTrackIngestWithMeta, SchubertIdentifyError } from "@/lib/schubert-identify-service";
 import type { SchubertTrackJson } from "@/lib/schubert-api";
+import { importQuotaExceededMessage } from "@/lib/import-quota-client";
 import { cn } from "@/lib/utils";
 
 /** Alinhado ao badge do frame `rk0Ri` (Pencil). */
@@ -85,7 +86,7 @@ export function ImportMetadataStep({
 }: ImportMetadataStepProps) {
   const router = useRouter();
   const { registerIngestJob, blockNewIngestIfBusy } = useIngestJobs();
-  const { canImport, refreshQuota } = useImportQuota();
+  const { canImport, quota, refreshQuota } = useImportQuota();
   const baseId = useId();
   const song = context.song;
   const isVariation = context.mode === "variation";
@@ -248,7 +249,7 @@ export function ImportMetadataStep({
 
       if (blockNewIngestIfBusy()) return;
       if (!canImport) {
-        setError("Atingiu o limite semanal de importações do seu plano.");
+        setError(importQuotaExceededMessage(quota));
         return;
       }
 
@@ -315,6 +316,7 @@ export function ImportMetadataStep({
     registerIngestJob,
     blockNewIngestIfBusy,
     canImport,
+    quota,
     refreshQuota,
   ]);
 

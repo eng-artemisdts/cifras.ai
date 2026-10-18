@@ -11,6 +11,11 @@ import { auth0LoginHref } from "@/lib/auth0-routes";
 import { isAuth0Configured } from "@/lib/auth0-env";
 import { isLocalBillingDevToolsEnabled } from "@/lib/billing/local-dev-tools";
 import {
+  PLAN_CATALOG,
+  formatPlanPrice,
+  importAllowanceLabel,
+} from "@/lib/billing/plan-catalog";
+import {
   fetchAuth0UserBillingSnapshot,
   isAuth0ManagementConfigured,
 } from "@/lib/billing/auth0-management";
@@ -25,21 +30,6 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Assinatura",
   description: "Plano e faturação no cifra.ai.",
-};
-
-const PLAN_LABEL: Record<BillingPlan, { title: string; blurb: string }> = {
-  free: {
-    title: "Grátis",
-    blurb: "Ideal para experimentar buscas e a biblioteca essencial.",
-  },
-  starter: {
-    title: "Starter",
-    blurb: "Importações e relatórios para o dia a dia da banda ou estúdio.",
-  },
-  pro: {
-    title: "Pro",
-    blurb: "Importações avançadas, variações ilimitadas e suporte prioritário.",
-  },
 };
 
 function planCardClass(plan: BillingPlan): string {
@@ -117,7 +107,7 @@ export default async function AssinaturaPage({ searchParams }: AssinaturaPagePro
     snapshot?.stripe_customer_id ?? stripeCustomerIdFromSessionUser(session.user),
   );
 
-  const planInfo = PLAN_LABEL[plan];
+  const planInfo = PLAN_CATALOG[plan];
   const liveFromAuth0 = Boolean(
     snapshot &&
     (snapshot.plan !== undefined ||
@@ -204,8 +194,14 @@ export default async function AssinaturaPage({ searchParams }: AssinaturaPagePro
                 <p className="text-xs font-semibold uppercase tracking-wide text-cifra-muted">
                   Plano atual
                 </p>
-                <p className="mt-2 font-serif text-3xl text-white sm:text-4xl">{planInfo.title}</p>
+                <p className="mt-2 font-serif text-3xl text-white sm:text-4xl">{planInfo.name}</p>
                 <p className="mt-3 text-sm leading-relaxed text-cifra-muted">{planInfo.blurb}</p>
+                <p className="mt-3 font-mono text-xs uppercase tracking-[0.12em] text-cifra-muted">
+                  {importAllowanceLabel(planInfo)}
+                  {planInfo.monthlyPriceBrl > 0
+                    ? ` · ${formatPlanPrice(planInfo.monthlyPriceBrl)}/mês`
+                    : ""}
+                </p>
               </div>
               <div
                 className={cn(
@@ -249,7 +245,9 @@ export default async function AssinaturaPage({ searchParams }: AssinaturaPagePro
           <div className="mt-10 motion-safe:animate-in motion-safe:fade-in motion-safe:delay-200 motion-safe:duration-700 motion-safe:fill-mode-both rounded-2xl border border-cifra-border bg-cifra-surface-2/40 p-6 sm:p-8">
             <h2 className="font-serif text-xl text-white sm:text-2xl">Subir de plano</h2>
             <p className="mt-2 max-w-lg text-sm text-cifra-muted">
-              Pagamento seguro. O plano Pro inclui 14 dias de teste quando disponível.
+              Pagamento seguro pela Stripe. Cancele quando quiser. Starter:{" "}
+              {importAllowanceLabel(PLAN_CATALOG.starter)}. Pro:{" "}
+              {importAllowanceLabel(PLAN_CATALOG.pro)}.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-stretch">
               {plan === "free" ? (
@@ -257,14 +255,15 @@ export default async function AssinaturaPage({ searchParams }: AssinaturaPagePro
                   plan="starter"
                   className="flex flex-1 items-center justify-center rounded-xl border border-cifra-teal/45 bg-cifra-teal/10 py-3.5 text-center text-sm font-semibold text-cifra-teal transition hover:border-cifra-teal hover:bg-cifra-teal/18"
                 >
-                  Assinar Starter
+                  Assinar Starter · {formatPlanPrice(PLAN_CATALOG.starter.monthlyPriceBrl)}/mês
                 </SubscribePlanButton>
               ) : null}
               <SubscribePlanButton
                 plan="pro"
                 className="flex flex-1 items-center justify-center rounded-xl bg-cifra-teal py-3.5 text-center text-sm font-semibold text-cifra-bg shadow-lg shadow-cifra-teal/20 transition hover:bg-cifra-teal-hover hover:shadow-cifra-teal/30"
               >
-                {plan === "free" ? "Pro — trial 14 dias" : "Subir para Pro"}
+                {plan === "free" ? "Assinar Pro" : "Subir para Pro"} ·{" "}
+                {formatPlanPrice(PLAN_CATALOG.pro.monthlyPriceBrl)}/mês
               </SubscribePlanButton>
             </div>
           </div>

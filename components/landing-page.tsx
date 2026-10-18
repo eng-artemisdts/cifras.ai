@@ -13,6 +13,7 @@ import {
 } from "@/components/landing/landing-ctas";
 import { LandingHeroDemo } from "@/components/landing/landing-hero-demo";
 import { ArtemisFooterBrand } from "@/components/layout/artemis-footer-brand";
+import { PLAN_CATALOG, formatPlanPrice } from "@/lib/billing/plan-catalog";
 
 const navLinks = [
   { href: "#recursos", label: "Recursos" },
@@ -271,17 +272,18 @@ export function LandingPage({ user = null }: LandingPageProps) {
               Planos para cada etapa da sua jornada musical
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-center text-cifra-muted motion-safe:animate-in motion-safe:fade-in motion-safe:delay-100 motion-safe:duration-600 motion-safe:fill-mode-both">
-              Comece grátis na comunidade. Evolua quando precisar de mais importações e recursos.
+              Comece com 2 músicas grátis. Todo o catálogo de cifras é aberto em qualquer plano.
             </p>
             <div className="mt-14 grid gap-6 lg:grid-cols-3">
               <div className="flex flex-col rounded-2xl border border-cifra-border bg-cifra-surface p-8 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-6 motion-safe:delay-150 motion-safe:duration-700 motion-safe:fill-mode-both motion-safe:ease-out transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-cifra-muted/40 motion-reduce:transition-none motion-reduce:hover:translate-y-0">
-                <p className="text-sm font-medium text-cifra-muted">Grátis</p>
-                <p className="mt-2 font-serif text-4xl text-white">R$ 0</p>
+                <p className="text-sm font-medium text-cifra-muted">{PLAN_CATALOG.free.name}</p>
+                <p className="mt-2 font-serif text-4xl text-white">
+                  {formatPlanPrice(PLAN_CATALOG.free.monthlyPriceBrl)}
+                </p>
                 <ul className="mt-8 flex flex-1 flex-col gap-3 text-sm text-cifra-muted">
-                  <li>Explorar e guardar favoritos</li>
-                  <li>Biblioteca pessoal</li>
-                  <li>Importação básica de áudio</li>
-                  <li>Suporte da comunidade</li>
+                  {PLAN_CATALOG.free.features.map((feature) => (
+                    <li key={feature}>{feature}</li>
+                  ))}
                 </ul>
                 <LandingPlanFreeSignupLink className="mt-8 block rounded-lg border border-cifra-border py-3 text-center text-sm font-semibold text-cifra-text transition-all duration-200 ease-out hover:border-cifra-teal/30 hover:bg-cifra-surface-2 active:scale-[0.99] motion-reduce:active:scale-100">
                   Entrar na comunidade
@@ -289,19 +291,18 @@ export function LandingPage({ user = null }: LandingPageProps) {
               </div>
               <div className="flex flex-col rounded-2xl border border-cifra-border bg-cifra-surface p-8 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-6 motion-safe:delay-200 motion-safe:duration-700 motion-safe:fill-mode-both motion-safe:ease-out transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-cifra-teal/30 motion-reduce:transition-none motion-reduce:hover:translate-y-0">
                 <p className="text-sm font-medium text-cifra-muted">
-                  Starter
+                  {PLAN_CATALOG.starter.name}
                 </p>
                 <p className="mt-2 font-serif text-4xl text-white">
-                  R$ 49
+                  {formatPlanPrice(PLAN_CATALOG.starter.monthlyPriceBrl)}
                   <span className="text-lg font-sans font-normal text-cifra-muted">
                     /mês
                   </span>
                 </p>
                 <ul className="mt-8 flex flex-1 flex-col gap-3 text-sm text-cifra-muted">
-                  <li>Tudo do plano Grátis</li>
-                  <li>Mais importações por mês</li>
-                  <li>Spotify e YouTube</li>
-                  <li>Exportação em PDF</li>
+                  {PLAN_CATALOG.starter.features.map((feature) => (
+                    <li key={feature}>{feature}</li>
+                  ))}
                 </ul>
                 <SubscribePlanButton
                   plan="starter"
@@ -314,24 +315,23 @@ export function LandingPage({ user = null }: LandingPageProps) {
                 <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-cifra-teal px-3 py-1 text-xs font-semibold text-cifra-bg shadow-sm shadow-cifra-teal/40">
                   Mais popular
                 </span>
-                <p className="text-sm font-medium text-cifra-muted">Pro</p>
+                <p className="text-sm font-medium text-cifra-muted">{PLAN_CATALOG.pro.name}</p>
                 <p className="mt-2 font-serif text-4xl text-white">
-                  R$ 149
+                  {formatPlanPrice(PLAN_CATALOG.pro.monthlyPriceBrl)}
                   <span className="text-lg font-sans font-normal text-cifra-muted">
                     /mês
                   </span>
                 </p>
                 <ul className="mt-8 flex flex-1 flex-col gap-3 text-sm text-cifra-muted">
-                  <li>Tudo do Starter</li>
-                  <li>TikTok e Instagram Reels</li>
-                  <li>Detecção de acordes avançada</li>
-                  <li>Variações ilimitadas e suporte prioritário</li>
+                  {PLAN_CATALOG.pro.features.map((feature) => (
+                    <li key={feature}>{feature}</li>
+                  ))}
                 </ul>
                 <SubscribePlanButton
                   plan="pro"
                   className="mt-8 w-full rounded-lg bg-cifra-teal py-3 text-center text-sm font-semibold text-cifra-bg shadow-md shadow-cifra-teal/25 transition-all duration-200 ease-out hover:bg-cifra-teal-hover hover:shadow-lg hover:shadow-cifra-teal/35 active:scale-[0.99] motion-reduce:active:scale-100"
                 >
-                  Experimentar 14 dias grátis
+                  Assinar Pro
                 </SubscribePlanButton>
               </div>
             </div>
@@ -402,9 +402,9 @@ export function LandingPage({ user = null }: LandingPageProps) {
                   </span>
                 </summary>
                 <p className="mt-4 text-sm leading-relaxed text-cifra-muted">
-                  O plano Grátis permite explorar a plataforma e gerar cifras com
-                  limites generosos. O plano Pro inclui 14 dias de teste para
-                  desbloquear importações avançadas e detecção mais precisa.
+                  Sim. O plano Grátis inclui 2 músicas geradas por IA, sem cartão de
+                  crédito, e acesso a todas as cifras que já estão no catálogo. Quando
+                  precisar de mais músicas novas, assine o Starter ou o Pro.
                 </p>
               </details>
             </div>

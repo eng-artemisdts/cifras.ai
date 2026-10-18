@@ -65,13 +65,9 @@ export async function POST(req: Request) {
     success_url: `${origin}/conta/assinatura?checkout=success`,
     cancel_url: `${origin}/conta/assinatura?checkout=cancel`,
     metadata: { auth0_sub: sub },
-    subscription_data:
-      plan === "pro"
-        ? {
-            trial_period_days: 14,
-            metadata: { auth0_sub: sub },
-          }
-        : { metadata: { auth0_sub: sub } },
+    // Sem trial: o plano Grátis (2 músicas) faz o papel de teste. Um trial do Pro liberava
+    // 35 importações sem receita (~R$ 62 de custo de IA por utilizador).
+    subscription_data: { metadata: { auth0_sub: sub } },
   });
 
   if (!checkout.url) {
